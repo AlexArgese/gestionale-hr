@@ -1,31 +1,40 @@
-# env (global)
+# env
 .env
 .env.local
 .env.production
 .env.staging
 .env.*
+.env.development.local
+.env.test.local
+.env.production.local
 
-# node
+# dependencies
 node_modules/
+.pnp
+.pnp.js
+
+# testing
+coverage/
+
+# production build
+build/
+frontend/build/
 
 # logs
 npm-debug.log*
 yarn-debug.log*
+yarn-error.log*
 pnpm-debug.log*
 
 # misc
 .DS_Store
+
+# backend
 backend/*firebase-adminsdk*.json
+backend/uploads/
+backend/out.pdf
 
 # dumps / export
 *.sql
 *.dump
 *.pdf
-
-# frontend build
-frontend/build/
-
-# uploads / generated
-backend/uploads/
-backend/out.pdf
-
