@@ -13,7 +13,9 @@ const allowedOrigins = [
   'http://localhost:3002',
   'http://localhost:8081',
   'http://192.168.182.51:8081',
-];
+  process.env.FRONTEND_URL, 
+].filter(Boolean);
+
 
 app.get('/health', (req, res) => {
   res.status(200).json({ ok: true });
