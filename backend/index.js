@@ -15,6 +15,11 @@ const allowedOrigins = [
   'http://192.168.182.51:8081',
 ];
 
+app.get('/health', (req, res) => {
+  res.status(200).json({ ok: true });
+});
+
+
 // ✅ CORS globale (senza app.options('*', ...))
 app.use(cors({
   origin(origin, cb) {
