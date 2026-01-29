@@ -277,6 +277,7 @@ async function startYousignForDocumento({ documentoId, utenteId, nomeFile, urlFi
       data: { type: "SIGN_DOCUMENT", documentoId },
     });
   }
+  await notifyFirmaRichiesta(utenteId, documentoId, nomeFile);
 
 
   return {
