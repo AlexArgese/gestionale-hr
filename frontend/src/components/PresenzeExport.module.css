@@ -1,0 +1,217 @@
+/* ===== ClockEasy — Presenze Export (CSS Module) ===== */
+
+.container{
+  padding: var(--s5);
+  background: var(--bg-page);
+  min-height: 100vh;
+  color: var(--txt);
+  box-sizing: border-box;
+}
+
+.header{
+  display:flex; align-items:center; justify-content:space-between; gap:12px;
+}
+.title{
+  margin:0;
+  font-size:28px;
+  font-weight:900;
+  color: var(--txt-strong);
+  letter-spacing:.2px;
+  display:flex; align-items:center; gap:8px;
+}
+.titleIcon{ font-size:22px; color: var(--brand-2); }
+
+.underline{
+  height:3px; border-radius:2px; background:var(--grad);
+  margin:10px 0 var(--s4); width:100%;
+}
+
+.card{
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-soft);
+  padding: 16px;
+}
+
+.sectionTitle{
+  margin: 0 0 8px;
+  color: var(--txt-strong);
+  font-weight: 900;
+  font-size: 18px;
+  display:flex; align-items:center; gap:8px;
+}
+.sectionIcon{ font-size:18px; color: var(--brand-2); }
+
+.group{ display:flex; flex-direction:column; gap:6px; margin-bottom: var(--s3); }
+.label{
+  font-size:12px; font-weight:800; color: var(--txt-muted);
+  display:flex; align-items:center; gap:6px;
+}
+.labelIcon{ color: var(--txt-muted); }
+
+/* Input con icona a sinistra (per i date picker) */
+.inputIcon{ position:relative; display:flex; align-items:center; }
+.icon{
+  position:absolute; left:12px; top:50%; transform:translateY(-50%);
+  color:var(--txt-muted); pointer-events:none;
+}
+.inputIcon input{ width:100%; padding-left:38px; min-height:38px; box-sizing:border-box; }
+
+.inline{ display:flex; align-items:center; gap:10px; }
+.help{ font-size:12px; color:var(--txt-muted); }
+
+/* Inputs (si appoggiano ai global .input/.textarea) */
+.textarea{ min-height: 100px; }
+
+/* Actions */
+.actions{
+  margin-top: var(--s4);
+  display:flex; align-items:center; justify-content:flex-end; gap:10px; flex-wrap:wrap;
+}
+.btnPrimary{
+  background: var(--brand-1);
+  border: 1px solid var(--brand-1);
+  color:#fff;
+  padding:10px 14px; border-radius:12px; font-weight:800; font-size:14px;
+  cursor:pointer; box-shadow: var(--shadow-sm);
+  transition: transform .12s ease, filter .12s ease;
+}
+.btnPrimary:hover{ filter:brightness(1.04); transform: translateY(-1px); }
+
+/* React-Select (scoped con classNamePrefix) */
+.selectWrap{ position:relative; }
+:global(.presenze-select__control){
+  border-radius: var(--radius-sm) !important;
+  border:1px solid var(--border) !important;
+  box-shadow:none !important;
+  min-height: 38px;
+}
+:global(.presenze-select__control:hover){
+  border-color: var(--brand-2) !important;
+}
+:global(.presenze-select__control--is-focused){
+  border-color: var(--brand-2) !important;
+  box-shadow: 0 0 0 3px rgba(106,87,211,.15) !important;
+}
+:global(.presenze-select__value-container){ padding: 2px 8px !important; }
+:global(.presenze-select__multi-value){
+  background:#F1F5F9 !important;
+  border:1px solid #E2E8F0 !important;
+  border-radius:999px !important;
+}
+:global(.presenze-select__multi-value__label){
+  color:#334155 !important;
+  font-weight:800 !important;
+  font-size:13px !important;
+}
+:global(.presenze-select__indicator-separator){ display:none !important; }
+
+/* ===== Layout superiore (toolbar date + solo presenti) ===== */
+
+.toolbar{
+  margin: var(--s4) 0 var(--s3);
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
+}
+
+.toolbarRow{
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s3);
+  align-items: flex-end;
+}
+
+.toolbarRange{
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--txt-muted);
+}
+
+.rangeLabelTitle{
+  font-weight: 700;
+}
+
+.rangeBadge{
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: rgba(148, 163, 184, 0.16);
+  border: 1px solid rgba(148, 163, 184, 0.4);
+  font-size: 12px;
+  color: var(--txt-strong);
+  white-space: nowrap;
+}
+
+/* ===== Layout due colonne (Export / Note) ===== */
+
+.layout{
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--s4);
+  margin-bottom: var(--s5);
+}
+
+@media (min-width: 960px){
+  .layout{
+    grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
+  }
+}
+
+/* ===== Card header/body raffinati ===== */
+
+.cardHeader{
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: var(--s3);
+}
+
+.cardBody{
+  display: flex;
+  flex-direction: column;
+}
+
+.cardTitleWrap{
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+/* Badge piccolo usato nelle card (intervallo attivo) */
+.rangeBadgeSmall{
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: rgba(148, 163, 184, 0.16);
+  border: 1px solid rgba(148, 163, 184, 0.4);
+  font-size: 11px;
+  color: var(--txt-muted);
+  white-space: nowrap;
+}
+
+/* Bottoni disabilitati più "soft" */
+
+.btnPrimary:disabled{
+  opacity: .5;
+  cursor: default;
+  transform: none;
+  filter: none;
+  box-shadow: none;
+}
+.btnPrimary:disabled:hover{
+  transform:none;
+  filter:none;
+}
+
+/* Se vuoi righe di campi più orizzontali */
+.groupRow{
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s3);
+}
+.groupRow > .group{
+  flex: 1 1 180px;
+}

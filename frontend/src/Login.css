@@ -1,0 +1,85 @@
+:root {
+    --color-primary: #D0933C;
+    --color-secondary: #6A57D3;
+    --color-dark: #1E1E2F;
+    --color-light: #F5F5F7;
+    --gradient: linear-gradient(135deg, #D0933C, #6A57D3);
+  }
+  
+  .login-container {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 100vh;
+    background: var(--color-light);
+  }
+  
+  /* Box del form */
+  .login-box {
+    background: white;
+    padding: 2rem 2.5rem;
+    border-radius: 12px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    width: 320px;
+    text-align: center;
+  }
+  
+  /* Logo */
+  .login-logo {
+    width: 300px;
+    margin-bottom: 1rem;
+  }
+  
+  /* Titolo */
+  .login-box h2 {
+    margin-bottom: 1.5rem;
+    font-size: 1.8rem;
+    font-weight: 800;
+    background: var(--gradient);
+    background-clip: text;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+  
+  /* Input */
+  .login-box input {
+    width: 100%;
+    padding: 0.6rem;
+    border: 1px solid #ccc;
+    border-radius: 8px;
+    font-size: 1rem;
+    margin-bottom: 1rem;
+    outline: none;
+    transition: border 0.3s ease;
+  }
+  
+  .login-box input:focus {
+    border-color: var(--color-secondary);
+  }
+  
+  /* Bottone login */
+  .login-box button {
+    width: 100%;
+    padding: 0.6rem;
+    border: none;
+    border-radius: 8px;
+    background: var(--gradient);
+    color: white;
+    font-weight: 600;
+    font-size: 1rem;
+    cursor: pointer;
+    transition: transform 0.2s ease;
+  }
+  
+  .login-box button:hover {
+    transform: scale(1.03);
+  }
+  
+  /* Errore */
+  .login-error {
+    margin-top: 1rem;
+    color: red;
+    font-size: 0.9rem;
+    font-weight: 600;
+  }
+  

@@ -1,0 +1,10 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Error</title>
+</head>
+<body>
+<pre>Cannot GET /wb/manager/attachments/%3CID_ALLEGATO%3E/download</pre>
+</body>
+</html>
