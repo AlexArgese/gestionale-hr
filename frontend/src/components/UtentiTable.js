@@ -2,9 +2,10 @@ import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import styles from "./UtentiTable.module.css";
 import { FiPlus, FiSearch, FiCheckCircle, FiSlash } from "react-icons/fi";
+import { API_BASE } from "../api";
 
 function UtentiTable({
-  fetchUrl = "http://localhost:3001/utenti",
+  fetchUrl = `${API_BASE}/utenti`,
   onAddUser,
   onRowClick,
 }) {
