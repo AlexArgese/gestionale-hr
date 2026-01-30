@@ -45,7 +45,7 @@ export default function DettaglioComunicazione({ canDelete = true }) {
     if (!idValido) return;
     setLoading(true);
     try {
-      const res = await fetchOrThrow(`${API}/comunicazioni/${id}/admin`, { credentials: "include" });
+      const res = await fetchOrThrow(`${API}/comunicazioni/${id}/admin`);
       const j = await res.json();
       setData(j);
     } catch (e) {
