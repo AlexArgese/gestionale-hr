@@ -41,7 +41,7 @@ export default function ComunicazioniPage() {
         <button
           type="button"
           className={styles.btnNuova}
-          onClick={() => navigate("/comunicazioni/nuova")}
+          onClick={() => navigate(`${API}/comunicazioni/nuova`)}
           title="Nuova comunicazione"
         >
           <FiPlus />&nbsp;Nuova
@@ -70,7 +70,7 @@ export default function ComunicazioniPage() {
           {filtered.map((c) => (
             <li key={c.id} className={styles.item}>
               <div className={styles.itemHead}>
-                <Link to={`/comunicazioni/${c.id}`} className={styles.itemTitle}>
+                <Link to={`${API}/comunicazioni/${c.id}`} className={styles.itemTitle}>
                   {c.titolo || "Senza titolo"}
                 </Link>
                 <span className={styles.date}>
@@ -85,7 +85,7 @@ export default function ComunicazioniPage() {
               </p>
 
               <div className={styles.itemActions}>
-                <Link to={`/comunicazioni/${c.id}`} className={styles.btnOutline}>
+                <Link to={`${API}/comunicazioni/${c.id}`} className={styles.btnOutline}>
                   Apri
                 </Link>
               </div>
