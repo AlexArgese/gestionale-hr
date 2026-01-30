@@ -3,7 +3,9 @@ import { useNavigate } from "react-router-dom";
 import { FiArrowLeft } from "react-icons/fi";
 import styles from "./NuovaComunicazione.module.css";
 
-const API = "http://localhost:3001";
+import { API_BASE } from "../api";
+
+const API = API_BASE;
 
 export default function NuovaComunicazione() {
   const navigate = useNavigate();

@@ -5,8 +5,9 @@ import Tesseract from "tesseract.js";
 import SelettoreDipendenti from "./SelettoreDipendenti";
 import ConfermaCaricamentoDocumenti from "./ConfermaCaricamentoDocumenti";
 import styles from "./DocumentiCaricaDirettoCF.module.css";
+import { API_BASE } from "../api";
 
-const API = "http://localhost:3001";
+const API = API_BASE;
 
 pdfjsLib.GlobalWorkerOptions.workerSrc =
   `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;

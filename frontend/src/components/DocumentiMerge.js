@@ -6,7 +6,9 @@ import SelettoreDipendenti from "./SelettoreDipendenti";
 import ConfermaCaricamentoDocumenti from "./ConfermaCaricamentoDocumenti";
 import styles from "./DocumentiMerge.module.css";
 
-const API = "http://localhost:3001";
+import { API_BASE } from "../api";
+
+const API = API_BASE;
 
 pdfjsLib.GlobalWorkerOptions.workerSrc =
   `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;

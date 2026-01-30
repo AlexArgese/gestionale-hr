@@ -1,6 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import './DocumentiUtente.css';
+import { API_BASE } from "../api";
 
+const API = API_BASE;
 /* fallback locale: se il fetch fallisce mostriamo comunque le opzioni */
 const TIPI_STATICI = [
   'Carta Identità',
@@ -21,7 +23,7 @@ export default function DocumentiUtente({ utenteId }) {
   /* --- lista documenti -------------------------------------------- */
   const caricaDocumenti = async () => {
     setLoading(true);
-    const res  = await fetch(`http://localhost:3001/documenti/utente/${utenteId}`);
+    const res  = await fetch(`${API}/documenti/utente/${utenteId}`);
     const list = await res.json();
 
     const grouped = {};
@@ -36,7 +38,7 @@ export default function DocumentiUtente({ utenteId }) {
   /* --- lista tipi disponibili ------------------------------------- */
   const caricaTipi = async () => {
     try {
-      const res   = await fetch('http://localhost:3001/documenti/tipi');
+      const res   = await fetch(`${API}/documenti/tipi`);
       const array = await res.json(); // sempre una lista
       if (Array.isArray(array) && array.length) setTipi(array);
     } catch {
@@ -60,7 +62,7 @@ export default function DocumentiUtente({ utenteId }) {
       fd.append('tipo_documento', tipoSel);
       fd.append('utente_id', utenteId);
   
-      const res = await fetch('http://localhost:3001/documenti/upload', {
+      const res = await fetch(`${API}/documenti/upload`, {
         method: 'POST',
         body: fd,
       });
@@ -97,7 +99,7 @@ export default function DocumentiUtente({ utenteId }) {
             {docs.map(d => (
               <li key={d.id}>
                 <a
-                  href={`http://localhost:3001/documenti/${d.id}/download`}
+                  href={`${API}/documenti/${d.id}/download`}
                   target="_blank"
                   rel="noopener noreferrer"
                 >

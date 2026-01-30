@@ -13,8 +13,11 @@ import styles from "./DocumentiUtente.module.css";
  *
  * Tutte con credentials: 'include' (requireAuth).
  */
+import { API_BASE } from "../api";
 
-function DocumentiUtente({ userId, baseUrl = "http://localhost:3001" }) {
+const API = API_BASE;
+
+function DocumentiUtente({ userId, baseUrl = API }) {
   const [docs, setDocs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState("");

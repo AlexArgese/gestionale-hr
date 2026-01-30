@@ -1,6 +1,8 @@
 import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { API_BASE } from "../api";
 
+const API = API_BASE;
 function SedeNuova() {
   const navigate = useNavigate();
 
@@ -24,14 +26,14 @@ function SedeNuova() {
         setError(null);
 
         // 1) Società (endpoint che già usi per altri form tipo utente nuovo)
-        const resSoc = await fetch("http://localhost:3001/societa", {
+        const resSoc = await fetch(`${API}/societa`, {
           headers: { Accept: "application/json, text/plain, */*" },
         });
         const socJson = await resSoc.json();
         if (alive) setSocietaList(Array.isArray(socJson) ? socJson : socJson.items || []);
 
         // 2) Utenti
-        const resU = await fetch("http://localhost:3001/utenti", {
+        const resU = await fetch(`${API}/utenti`, {
           headers: { Accept: "application/json, text/plain, */*" },
         });
         const utentiJson = await resU.json();
@@ -68,7 +70,7 @@ function SedeNuova() {
       setError(null);
 
       // 1) crea la sede
-      const res = await fetch("http://localhost:3001/sedi", {
+      const res = await fetch(`${API}/sedi`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -89,7 +91,7 @@ function SedeNuova() {
 
       // 2) collega gli utenti selezionati a questa sede
       if (selectedUtenti.length > 0) {
-        const res2 = await fetch(`http://localhost:3001/sedi/${sedeId}/utenti`, {
+        const res2 = await fetch(`${API}/sedi/${sedeId}/utenti`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",

@@ -6,13 +6,16 @@ import {
   FiMapPin, FiHome, FiPhone, FiHash, FiBriefcase, FiGrid
 } from "react-icons/fi";
 import DocumentiUtente from "./DocumentiUtente";
+import { API_BASE } from "../api";
+
+const API = API_BASE;
 
 function UtenteDettaglio({
-  fetchUrlBase = "http://localhost:3001/utenti",
+  fetchUrlBase = `${API}/utenti`,
   // Se vuoi ancora usare select, passa gli array via props:
   ruoliOptions = null,   // es. ["Impiegato","Operaio","Amministratore"]
   sediOptions  = null,   // es. ["Milano","Roma"]
-  societaUrl   = "http://localhost:3001/societa", // opzionale
+  societaUrl   = `${API}/societa`, // opzionale
 }) {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -179,7 +182,7 @@ function UtenteDettaglio({
     let alive = true;
     (async () => {
       try {
-        const res = await fetch("http://localhost:3001/sedi", {
+        const res = await fetch(`${API}/sedi`, {
           headers: { Accept: "application/json" },
         });
         const ok = res.ok && (res.headers.get("content-type") || "").includes("application/json");

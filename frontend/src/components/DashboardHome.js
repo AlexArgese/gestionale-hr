@@ -6,7 +6,9 @@ import {
 } from 'recharts';
 import { useNavigate } from 'react-router-dom';
 import styles from './DashboardHome.module.css';
+import { API_BASE } from "../api";
 
+const API = API_BASE;
 
 import { FiUsers, FiFileText, FiAlertCircle, FiDownload } from 'react-icons/fi';
 import { BsBriefcase } from 'react-icons/bs';
@@ -19,16 +21,16 @@ function DashboardHome() {
   const [avvisi, setAvvisi] = useState([]);
 
   useEffect(() => {
-    fetch('http://localhost:3001/dashboard/metriche')
+    fetch(`${API}/dashboard/metriche`)
       .then(res => res.ok ? res.json() : res.text().then(t => { throw new Error(t) }))
       .then(setMetriche)
       .catch(err => console.error('Metriche:', err.message));
 
-    fetch('http://localhost:3001/dashboard/distribuzione/societa')
+    fetch(`${API}/dashboard/distribuzione/societa`)
       .then(r => r.json())
       .then(data => Array.isArray(data) ? setDistribuzione(data) : setDistribuzione([]));
 
-    fetch('http://localhost:3001/dashboard/storico/assunzioni')
+    fetch(`${API}/dashboard/storico/assunzioni`)
       .then(r => r.json())
       .then(data => {
         if (Array.isArray(data)) {
@@ -43,7 +45,7 @@ function DashboardHome() {
         }
       });
 
-    fetch('http://localhost:3001/dashboard/avvisi/documenti')
+    fetch(`${API}/dashboard/avvisi/documenti`)
       .then(r => r.json())
       .then(data => Array.isArray(data) ? setAvvisi(data) : setAvvisi([]));
   }, []);
@@ -153,7 +155,7 @@ function DashboardHome() {
             onClick={() => {
               const tipo = document.getElementById('tipo-doc-download').value;
               if (!tipo) return alert('Seleziona un tipo documento');
-              window.open(`http://localhost:3001/dashboard/download-massivo/${tipo}`, '_blank');
+              window.open(`${API}/dashboard/download-massivo/${tipo}`, '_blank');
             }}
           >
             <FiDownload /> Scarica tutti

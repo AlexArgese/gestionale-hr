@@ -5,15 +5,18 @@ import {
   FiArrowLeft, FiSave, FiUser, FiAtSign, FiCalendar,
   FiMapPin, FiHome, FiPhone, FiHash, FiBriefcase, FiGrid
 } from "react-icons/fi";
+import { API_BASE } from "../api";
+
+const API = API_BASE;
 
 function UtenteNuovo({
-  postUrl = "http://localhost:3001/utenti",
+  postUrl = `${API}/utenti`,
   societaOptions = null,
   sediOptions = null,
   ruoliOptions = null,
-  societaUrl = "http://localhost:3001/societa",
-  sediUrl = "http://localhost:3001/sedi",
-  ruoliUrl = "http://localhost:3001/ruoli",
+  societaUrl = `${API}/societa`,
+  sediUrl = `${API}/sedi`,
+  ruoliUrl = `${API}/ruoli`,
 }) {
   const navigate = useNavigate();
 

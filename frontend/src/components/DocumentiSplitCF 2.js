@@ -5,7 +5,9 @@ import Tesseract from "tesseract.js";
 import { getAuth } from "firebase/auth";
 import SelettoreDipendenti from "./SelettoreDipendenti";
 import "./DocumentiSplitCF.css";
+import { API_BASE } from "../api";
 
+const API = API_BASE;
 /* Worker pdf.js via CDN (compatibile CRA/Webpack) */
 pdfjsLib.GlobalWorkerOptions.workerSrc =
   `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
@@ -78,12 +80,12 @@ export default function DocumentiSplitCF({ tipi = [] }) {
 
   /* Carica utenti (selettore) e utentiCF (mapping certo) */
   useEffect(() => {
-    fetch("http://localhost:3001/utenti")
+    fetch(`${API}/utenti`)
       .then(r => r.json())
       .then(setUtenti)
       .catch(console.error);
 
-    fetch("http://localhost:3001/utenti/cf/all")
+    fetch(`${API}/utenti/cf/all`)
       .then(r => r.json())
       .then(setUtentiCF)
       .catch(console.error);
@@ -298,7 +300,7 @@ export default function DocumentiSplitCF({ tipi = [] }) {
         fd.append("utente_id", utenteId);
         if (dataScadenza) fd.append("data_scadenza", dataScadenza);
 
-        const res = await fetch("http://localhost:3001/documenti/upload", {
+        const res = await fetch(`${API}/documenti/upload`, {
           method: "POST",
           body: fd,
           headers: { Authorization: `Bearer ${idToken}` },

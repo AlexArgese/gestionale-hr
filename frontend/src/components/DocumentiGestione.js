@@ -7,7 +7,9 @@ import styles from "./DocumentiGestione.module.css";
 pdfjsLib.GlobalWorkerOptions.workerSrc =
   `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
 
-const API = "http://localhost:3001";
+import { API_BASE } from "../api";
+
+const API = API_BASE;
 
 function isPdf(nameOrUrl = "") {
   return /\.pdf($|\?)/i.test(nameOrUrl);

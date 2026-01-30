@@ -6,8 +6,9 @@ import "./DocumentiGestione.css";
 /* Worker pdf.js via CDN (compatibile CRA/Webpack) */
 pdfjsLib.GlobalWorkerOptions.workerSrc =
   `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
+import { API_BASE } from "../api";
 
-const API = "http://localhost:3001";
+const API = API_BASE;
 
 function isPdf(nameOrUrl = "") {
   return /\.pdf($|\?)/i.test(nameOrUrl);

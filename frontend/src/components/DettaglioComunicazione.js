@@ -11,8 +11,9 @@ import {
   FiHeart,
 } from "react-icons/fi";
 import styles from "./DettaglioComunicazione.module.css";
+import { API_BASE } from "../api";
 
-const API = "http://localhost:3001";
+const API = API_BASE;
 
 async function fetchOrThrow(input, init) {
   const res = await fetch(input, init);

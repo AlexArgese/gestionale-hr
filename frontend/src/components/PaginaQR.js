@@ -1,5 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import './PaginaQR.css';
+import { API_BASE } from "../api";
+
+const API = API_BASE;
 
 function PaginaQR() {
   const [qrImage, setQrImage] = useState(null);
@@ -8,7 +11,7 @@ function PaginaQR() {
 
   const fetchQR = async () => {
     try {
-      const res = await fetch('http://localhost:3001/presenze/qr');
+      const res = await fetch(`${API}/presenze/qr`);
       if (!res.ok) throw new Error('Errore fetch QR');
       const data = await res.json();
       setQrImage(data.image);

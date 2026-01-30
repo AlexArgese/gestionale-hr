@@ -2,8 +2,9 @@ import React, { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { FiPlus, FiSearch } from "react-icons/fi";
 import styles from "./ComunicazioniPage.module.css";
+import { API_BASE } from "../api";
 
-const API = "http://localhost:3001";
+const API = API_BASE;
 
 export default function ComunicazioniPage() {
   const navigate = useNavigate();

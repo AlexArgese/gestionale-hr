@@ -1,6 +1,8 @@
 import React, { useEffect, useMemo, useState, useRef } from "react";
 import styles from "./SelettoreDipendenti.module.css";
+import { API_BASE } from "../api";
 
+const API = API_BASE;
 /**
  * Modal per scegliere 1/N dipendenti con:
  * - ricerca nome/cognome/email
@@ -32,7 +34,7 @@ export default function SelettoreDipendenti({
   const masterCheckboxRef = useRef(null);
 
   useEffect(() => {
-    fetch("http://localhost:3001/utenti")
+    fetch(`${API}/utenti`)
       .then((r) => r.json())
       .then(setUtenti)
       .catch(console.error);

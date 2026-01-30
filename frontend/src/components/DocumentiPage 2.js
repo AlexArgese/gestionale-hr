@@ -4,6 +4,9 @@ import DocumentiSplitCF from "./DocumentiSplitCF";
 import DocumentiMerge from "./DocumentiMerge";
 import DocumentiCaricaDirettoCF from "./DocumentiCaricaDirettoCF"
 import "./DocumentiPage.css";
+import { API_BASE } from "../api";
+
+const API = API_BASE;
 
 export default function DocumentiPage() {
   const [tipi, setTipi] = useState([]);
@@ -18,7 +21,7 @@ export default function DocumentiPage() {
   const [tab, setTab] = useState("carica"); // carica | split | merge
 
   useEffect(() => {
-    fetch("http://localhost:3001/documenti/tipi", {
+    fetch(`${API}/documenti/tipi`, {
       headers: { Authorization: localStorage.getItem("token") || "" },
     })
       .then((r) => r.json())
@@ -44,7 +47,7 @@ export default function DocumentiPage() {
 
       let targetIds = [];
       if (assegnazione === "tutti") {
-        const all = await fetch("http://localhost:3001/utenti").then((r) => r.json());
+        const all = await fetch(`${API}/utenti`).then((r) => r.json());
         targetIds = all.map((u) => u.id);
       } else if (assegnazione === "alcuni") {
         if (selectedIds.length === 0) {
@@ -69,7 +72,7 @@ export default function DocumentiPage() {
         fd.append("utente_id", String(utenteId));
         if (dataScadenza) fd.append("data_scadenza", dataScadenza);
 
-        const res = await fetch("http://localhost:3001/documenti/upload", {
+        const res = await fetch(`${API}/documenti/upload`, {
           method: "POST",
           body: fd,
           headers: { Authorization: token },

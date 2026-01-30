@@ -11,6 +11,9 @@ import {
   FiSave,
 } from 'react-icons/fi';
 import styles from './PresenzeExport.module.css';
+import { API_BASE } from "../api";
+
+const API = API_BASE;
 
 function PresenzeExport() {
   // Stato date + filtro "solo presenti"
@@ -34,7 +37,7 @@ function PresenzeExport() {
 
   // Caricamento opzioni da /utenti
   useEffect(() => {
-    fetch('http://localhost:3001/utenti')
+    fetch(`${API}/utenti`)
       .then((r) => r.json())
       .then((data) => {
         const societa = [...new Set(data.map((u) => u.societa_nome))]
@@ -94,7 +97,7 @@ function PresenzeExport() {
     if (ruolo) params.append('ruolo', ruolo.value);
 
     window.open(
-      `http://localhost:3001/presenze/export?${params.toString()}`,
+      `${API}/presenze/export?${params.toString()}`,
       '_blank'
     );
   };
@@ -121,7 +124,7 @@ function PresenzeExport() {
     );
     if (!conferma) return;
 
-    fetch('http://localhost:3001/presenze/note', {
+    fetch(`${API}/presenze/note`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),

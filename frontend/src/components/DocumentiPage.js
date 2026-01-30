@@ -8,7 +8,9 @@ import {
 import DocumentiSplitCF from "./DocumentiSplitCF";
 import DocumentiMerge from "./DocumentiMerge";
 import DocumentiCaricaDirettoCF from "./DocumentiCaricaDirettoCF";
+import { API_BASE } from "../api";
 
+const API = API_BASE;
 import styles from "./DocumentiPage.module.css";
 
 export default function DocumentiPage() {
@@ -23,7 +25,7 @@ export default function DocumentiPage() {
       try {
         setLoadingTipi(true);
         setErrorTipi("");
-        const res = await fetch("http://localhost:3001/documenti/tipi", {
+        const res = await fetch(`${API}/documenti/tipi`, {
           headers: { Authorization: localStorage.getItem("token") || "" },
         });
         if (!res.ok) {

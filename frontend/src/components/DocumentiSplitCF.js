@@ -7,7 +7,9 @@ import SelettoreDipendenti from "./SelettoreDipendenti";
 import ConfermaCaricamentoDocumenti from "./ConfermaCaricamentoDocumenti";
 import styles from "./DocumentiSplitCF.module.css";
 
-const API = "http://localhost:3001";
+import { API_BASE } from "../api";
+
+const API = API_BASE;
 
 /* Worker pdf.js via CDN (compatibile CRA/Webpack) */
 pdfjsLib.GlobalWorkerOptions.workerSrc =

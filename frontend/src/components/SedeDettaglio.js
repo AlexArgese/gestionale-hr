@@ -9,11 +9,14 @@ import {
   FiUser,
   FiSearch,
 } from "react-icons/fi";
+import { API_BASE } from "../api";
+
+const API = API_BASE;
 
 function SedeDettaglio({
-  fetchUrlBase = "http://localhost:3001/sedi",
-  societaUrl = "http://localhost:3001/societa",
-  utentiUrl = "http://localhost:3001/utenti",
+  fetchUrlBase = `${API}/sedi`,
+  societaUrl = `${API}/societa`,
+  utentiUrl = `${API}/utenti`,
 }) {
   const { id } = useParams();
   const navigate = useNavigate();
