@@ -13,7 +13,7 @@ export default function ComunicazioniPage() {
   const [q, setQ] = useState("");
 
   useEffect(() => {
-    fetch(`${API}/comunicazioni`, { credentials: "include" })
+    fetch(`${API}/comunicazioni`)
       .then((r) => {
         if (!r.ok) throw new Error(`HTTP ${r.status} @ /comunicazioni`);
         return r.json();
