@@ -8,10 +8,10 @@ import { useNavigate } from 'react-router-dom';
 import styles from './DashboardHome.module.css';
 import { API_BASE } from "../api";
 
-const API = API_BASE;
-
 import { FiUsers, FiFileText, FiAlertCircle, FiDownload } from 'react-icons/fi';
 import { BsBriefcase } from 'react-icons/bs';
+
+const API = API_BASE;
 
 function DashboardHome() {
   const navigate = useNavigate();

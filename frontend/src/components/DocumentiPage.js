@@ -10,9 +10,9 @@ import DocumentiMerge from "./DocumentiMerge";
 import DocumentiCaricaDirettoCF from "./DocumentiCaricaDirettoCF";
 import { API_BASE } from "../api";
 
-const API = API_BASE;
 import styles from "./DocumentiPage.module.css";
 
+const API = API_BASE;
 export default function DocumentiPage() {
   const [tipi, setTipi] = useState([]);
   const [tab, setTab] = useState("carica"); // carica | split | merge

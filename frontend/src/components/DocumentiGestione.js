@@ -2,12 +2,13 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { getAuth } from "firebase/auth";
 import * as pdfjsLib from "pdfjs-dist";
 import styles from "./DocumentiGestione.module.css";
+import { API_BASE } from "../api";
 
 /* Worker pdf.js via CDN (compatibile CRA/Webpack) */
 pdfjsLib.GlobalWorkerOptions.workerSrc =
   `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
 
-import { API_BASE } from "../api";
+
 
 const API = API_BASE;
 
