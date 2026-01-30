@@ -14,6 +14,7 @@ const allowedOrigins = [
   'http://localhost:8081',
   'http://192.168.182.51:8081',
   process.env.FRONTEND_URL, 
+  'https://gestionale-hr-zorh.vercel.app',
 ].filter(Boolean);
 
 
@@ -25,10 +26,13 @@ app.get('/health', (req, res) => {
 // ✅ CORS globale (senza app.options('*', ...))
 app.use(cors({
   origin(origin, cb) {
-    if (!origin) return cb(null, true);              // curl, app mobile, ecc.
-    return allowedOrigins.includes(origin)
-      ? cb(null, true)
-      : cb(new Error('Not allowed by CORS: ' + origin));
+    if (!origin) return cb(null, true);
+
+    const isVercel = /^https:\/\/.*\.vercel\.app$/.test(origin);
+
+    if (allowedOrigins.includes(origin) || isVercel) return cb(null, true);
+
+    return cb(new Error('Not allowed by CORS: ' + origin));
   },
   credentials: true,
   methods: ['GET','POST','PUT','PATCH','DELETE','OPTIONS'],    // 👈 aggiunto PATCH
