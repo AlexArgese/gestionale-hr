@@ -3,6 +3,7 @@
 .env.local
 .env.production
 .env.staging
+.env.*
 
 # node
 node_modules/
@@ -15,3 +16,16 @@ pnpm-debug.log*
 # misc
 .DS_Store
 backend/*firebase-adminsdk*.json
+
+# dumps / export
+*.sql
+*.dump
+*.pdf
+
+# frontend build
+frontend/build/
+
+# uploads / generated
+backend/uploads/
+backend/out.pdf
+
