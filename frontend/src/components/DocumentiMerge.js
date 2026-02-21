@@ -258,7 +258,7 @@ export default function DocumentiMerge({ tipi = [] }) {
         thumb: mergedThumbs[0] || null,
       };
     });
-  }, [computeTargetIds, assegnaMode, selectedIds, utentiById, mergedThumbs]);
+  }, [computeTargetIds, utentiById, mergedThumbs]);
 
   async function handleConfermaUpload({ require_signature, signature_placements } = {}) {
     try {

@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { PDFDocument } from "pdf-lib";
 import * as pdfjsLib from "pdfjs-dist";
 import Tesseract from "tesseract.js";
@@ -597,24 +597,24 @@ export default function DocumentiSplitCF({ tipi = [] }) {
     setViewerImg(canvas.toDataURL("image/jpeg", 0.92));
   };
 
-  const closeViewer = () => {
+  const closeViewer = useCallback(() => {
     setViewerOpen(false);
     setViewerImg(null);
     setViewerPageIdx(null);
-  };
+  }, []);
 
-  const nextPage = () => {
+  const nextPage = useCallback(async () => {
     if (viewerPageIdx == null || !pdfRef.current) return;
     const max = pdfRef.current.numPages - 1;
     const n = Math.min(max, viewerPageIdx + 1);
     if (n !== viewerPageIdx) openViewer(n);
-  };
+  }, [viewerPageIdx, openViewer]);
 
-  const prevPage = () => {
+  const prevPage = useCallback(async () => {
     if (viewerPageIdx == null || !pdfRef.current) return;
     const n = Math.max(0, viewerPageIdx - 1);
     if (n !== viewerPageIdx) openViewer(n);
-  };
+  }, [viewerPageIdx, openViewer]);
 
   useEffect(() => {
     const onKey = (e) => {
