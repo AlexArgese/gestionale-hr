@@ -77,7 +77,6 @@ app.use('/static', staticRoutes);
 app.use('/documenti', documentiRoutes);
 app.use('/dashboard', dashboardRoutes);
 app.use('/comunicazioni', comunicazioniRoutes);
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 app.use('/presenze', presenzeRoutes);
 app.use('/auth', authRoutes);
 app.use('/profilo', profileRoutes);
