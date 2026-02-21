@@ -17,12 +17,20 @@ const storage = multer.memoryStorage();
 const uploadSingle  = multer({ storage }).single('file');
 const uploadManyPdf = multer({ storage }).array('files', 20);
 const yousignClient = require('../services/yousignClient');
-const { creaChiaveS3, caricaBufferSuS3, urlFirmatoGet, eliminaDaS3 } = require("../lib/s3");
+const { creaChiaveS3, caricaBufferSuS3, scaricaBufferDaS3, urlFirmatoGet, eliminaDaS3 } = require("../lib/s3");
 
+const os = require("os");
+const { scaricaBufferDaS3 } = require("../lib/s3");
 
 /* ==================================================================== */
 /*  Helpers                                                             */
 /* ==================================================================== */
+function normalizzaChiaveS3(pathDb) {
+  if (!pathDb) return null;
+  if (pathDb.startsWith("s3://")) return pathDb.replace("s3://", "");
+  return pathDb; // es: uploads/documenti/...
+}
+
 
 /** normalizza il tipo: trim + MAIUSCOLO */
 function normalizeTipo(tipo) {
@@ -128,16 +136,27 @@ async function startYousignForDocumento({ documentoId, utenteId, nomeFile, urlFi
   }
 
   // 2) path assoluto file
-  const absPath = path.join(__dirname, "..", urlFile);
-  if (!fs.existsSync(absPath)) {
+  // ✅ scarico da S3 e creo un file temporaneo (Yousign vuole un path)
+  let tempPath = null;
+  try {
+    const key = normalizzaChiaveS3(urlFile);
+    const buf = await scaricaBufferDaS3({ chiave: key });
+
+    tempPath = path.join(
+      os.tmpdir(),
+      `clockeasy_${documentoId}_${Date.now()}_${path.basename(key)}`
+    );
+
+    fs.writeFileSync(tempPath, buf);
+  } catch (e) {
     await pool.query(
-      `UPDATE documenti
-         SET yousign_status = $1
-       WHERE id = $2`,
+      `UPDATE documenti SET yousign_status = $1 WHERE id = $2`,
       ["file_not_found", documentoId]
     );
     return { ok: false, reason: "file_not_found" };
   }
+
+  const absPath = tempPath;
 
   // 3) flow yousign
   const sr = await yousignClient.createSignatureRequest({
@@ -269,6 +288,8 @@ async function startYousignForDocumento({ documentoId, utenteId, nomeFile, urlFi
   await notifyFirmaRichiesta(utenteId, documentoId, nomeFile);
 
 
+  try { if (tempPath && fs.existsSync(tempPath)) fs.unlinkSync(tempPath); } catch {}
+
   return {
     ok: true,
     signatureRequestId: sr.id,
@@ -314,21 +335,32 @@ router.post("/:id/sync-signed", requireAuth, async (req, res) => {
     );
 
     // path dell'originale (quello attualmente in url_file)
-    const absOriginal = path.join(__dirname, "..", d.url_file);
-    if (!fs.existsSync(absOriginal)) {
-      return res.status(404).json({ error: "File originale non trovato sul server" });
+    // ✅ chiave S3 dell'originale
+    const keyOriginale = normalizzaChiaveS3(d.url_file);
+    if (!keyOriginale) {
+      return res.status(404).json({ error: "Chiave documento non valida" });
     }
 
-    // (opzionale ma consigliato) backup del non firmato
-    const ORIGINAL_BACKUP_DIR = path.join(__dirname, "..", "uploads", "documenti", "original_backup");
-    if (!fs.existsSync(ORIGINAL_BACKUP_DIR)) fs.mkdirSync(ORIGINAL_BACKUP_DIR, { recursive: true });
+    // (opzionale ma consigliato) backup del non firmato su S3
+    try {
+      const origBuf = await scaricaBufferDaS3({ chiave: keyOriginale });
+      const backupKey = `uploads/documenti/original_backup/${docId}_ORIG_${Date.now()}_${path.basename(keyOriginale)}`;
+      await caricaBufferSuS3({
+        chiave: backupKey,
+        buffer: origBuf,
+        contentType: "application/pdf",
+      });
+    } catch (e) {
+      console.warn("Backup originale su S3 fallito:", e?.message || e);
+    }
 
-    const origBase = path.basename(absOriginal);
-    const backupPath = path.join(ORIGINAL_BACKUP_DIR, `${docId}_ORIG_${Date.now()}_${origBase}`);
-    fs.copyFileSync(absOriginal, backupPath);
+    // ✅ sovrascrivi l'originale su S3 con il firmato
+    await caricaBufferSuS3({
+      chiave: keyOriginale,
+      buffer: pdfBuf,
+      contentType: "application/pdf",
+    });
 
-    // ✅ sovrascrivi l'originale con il firmato
-    fs.writeFileSync(absOriginal, pdfBuf);
 
     await pool.query(
       `UPDATE documenti
@@ -393,7 +425,7 @@ router.post('/upload', requireAuth, (req, res) => {
       });
 
       // 2) nel DB salvo la chiave S3 al posto del path locale
-      const relPath = `s3://${chiaveS3}`;
+      const relPath = chiaveS3;
 
 
       const inserted = await insertDocumentoRows({
@@ -724,28 +756,15 @@ router.get('/:id/download', requireAuth, async (req, res) => {
     if (!q.rows.length) return res.status(404).json({ error: 'Documento non trovato' });
 
     const { nome_file, url_file, url_file_signed } = q.rows[0];
-    const chosenPath = url_file_signed || url_file;
+    const chosen = url_file_signed || url_file;
 
-    // 1) Se è già s3://... -> redirect S3
-    if (chosenPath && chosenPath.startsWith("s3://")) {
-      const chiave = chosenPath.replace("s3://", "");
-      const url = await urlFirmatoGet({ chiave, scadeSecondi: 120 });
-      return res.redirect(url);
-    }
+    const chiave = normalizzaChiaveS3(chosen);
+    if (!chiave) return res.status(404).json({ error: 'File non trovato' });
 
-    // 2) Prova locale
-    const abs = path.join(__dirname, "..", chosenPath);
-    if (fs.existsSync(abs)) {
-      return res.download(abs, nome_file);
-    }
+    // Presigned URL (il browser scarica da S3)
+    const url = await urlFirmatoGet({ chiave, scadeSecondi: 120 });
 
-    // 3) Fallback: prova S3 con chiave = chosenPath (uploads/documenti/...)
-    if (chosenPath && chosenPath.startsWith("uploads/")) {
-      const url = await urlFirmatoGet({ chiave: chosenPath, scadeSecondi: 120 });
-      return res.redirect(url);
-    }
-
-    return res.status(404).json({ error: 'File non trovato' });
+    return res.redirect(url);
   } catch (err) {
     console.error('GET /documenti/:id/download', err);
     res.status(500).json({ error: 'Errore download' });
@@ -785,31 +804,15 @@ router.get('/:id/view', requireAuth, async (req, res) => {
     if (!q.rows.length) return res.status(404).json({ error: 'Documento non trovato' });
 
     const { nome_file, url_file, url_file_signed } = q.rows[0];
-    const chosenPath = url_file_signed || url_file;
+    const chosen = url_file_signed || url_file;
 
-    // 1) Se è già s3://... -> redirect S3
-    if (chosenPath && chosenPath.startsWith("s3://")) {
-      const chiave = chosenPath.replace("s3://", "");
-      const url = await urlFirmatoGet({ chiave, scadeSecondi: 120 });
-      return res.redirect(url);
-    }
+    const chiave = normalizzaChiaveS3(chosen);
+    if (!chiave) return res.status(404).json({ error: 'File non trovato' });
 
-    // 2) Prova locale
-    const abs = path.join(__dirname, "..", chosenPath);
-    if (fs.existsSync(abs)) {
-      const ctype = mime.lookup(abs) || 'application/octet-stream';
-      res.setHeader('Content-Type', ctype);
-      res.setHeader('Content-Disposition', `inline; filename="${nome_file}"`);
-      return res.sendFile(abs);
-    }
+    const url = await urlFirmatoGet({ chiave, scadeSecondi: 120 });
 
-    // 3) Fallback: prova S3 con chiave = chosenPath (uploads/documenti/...)
-    if (chosenPath && chosenPath.startsWith("uploads/")) {
-      const url = await urlFirmatoGet({ chiave: chosenPath, scadeSecondi: 120 });
-      return res.redirect(url);
-    }
-
-    return res.status(404).json({ error: 'File non trovato' });
+    // inline view
+    return res.redirect(url);
   } catch (err) {
     console.error('GET /documenti/:id/view', err);
     res.status(500).json({ error: 'Errore view' });
@@ -835,8 +838,6 @@ router.delete('/:id', requireAuth, async (req, res) => {
     }
 
     const { url_file, url_file_signed } = q.rows[0];
-    const absOriginal = path.join(__dirname, '..', url_file);
-    const absSigned = url_file_signed ? path.join(__dirname, '..', url_file_signed) : null;
 
     // (opzionale) pulizia firme
     try {
@@ -847,14 +848,28 @@ router.delete('/:id', requireAuth, async (req, res) => {
 
     await pool.query('DELETE FROM documenti WHERE id = $1', [id]);
 
-    if (fs.existsSync(absOriginal)) fs.unlinkSync(absOriginal);
-    if (absSigned && fs.existsSync(absSigned)) fs.unlinkSync(absSigned);
+    // ✅ elimina sempre da S3
+    const chiave1 = normalizzaChiaveS3(url_file);
+    const chiave2 = url_file_signed ? normalizzaChiaveS3(url_file_signed) : null;
 
-    res.json({ message: 'Documento eliminato' });
+    try {
+      if (chiave1) await eliminaDaS3({ chiave: chiave1 });
+    } catch (e) {
+      console.warn("Elimina S3 originale fallito:", e?.message || e);
+    }
+
+    try {
+      if (chiave2) await eliminaDaS3({ chiave: chiave2 });
+    } catch (e) {
+      console.warn("Elimina S3 firmato fallito:", e?.message || e);
+    }
+
+    return res.json({ message: 'Documento eliminato' });
   } catch (err) {
     console.error('DELETE /documenti/:id', err);
     res.status(500).json({ error: 'Errore eliminazione documento' });
   }
 });
+
 
 module.exports = router;
