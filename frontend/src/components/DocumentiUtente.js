@@ -32,18 +32,17 @@ function DocumentiUtente({ userId, baseUrl = API }) {
   const tipiUrl     = `${baseUrl}/documenti/tipi`;
   const uploadUrl   = `${baseUrl}/documenti/upload`;
   const deleteUrl   = (docId) => `${baseUrl}/documenti/${docId}`;
-  const staticView  = (relPath) => `${baseUrl}/${relPath}`; // es: uploads/documenti/xxx.pdf
+  const viewUrl = (docId) => `${baseUrl}/documenti/${docId}/view`;
 
   // mappa record -> shape UI
   const mapDoc = (d) => {
-    const rel = d?.url_file_signed || d?.url_file; // ✅ preferisci il firmato
     return {
       id: d?.id,
       name: d?.nome_file || "documento",
       tipo: d?.tipo_documento || "Altro",
       created_at: d?.data_upload || null,
       scadenza: d?.data_scadenza || null,
-      viewHref: rel ? staticView(rel) : undefined,
+      viewHref: d?.id ? viewUrl(d.id) : undefined,
       isSigned: !!d?.url_file_signed,
       yousignStatus: d?.yousign_status || null,
     };
