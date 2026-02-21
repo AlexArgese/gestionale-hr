@@ -26,7 +26,7 @@ export default function SelettoreDipendenti({
   const [searchTerm, setSearchTerm] = useState("");
   const [filtroSocieta, setFiltroSocieta] = useState("");
   const [filtroSede, setFiltroSede] = useState("");
-  const [filtroRuolo, setFiltroRuolo] = useState("");
+  const [filtroRuolo] = useState("");
   const [filtroAttivo, setFiltroAttivo] = useState("");
   const [ordinamento, setOrdinamento] = useState("alfabetico");
   const [selected, setSelected] = useState(new Set(preselectedIds));
@@ -62,11 +62,6 @@ export default function SelettoreDipendenti({
     });
     return [...set];
   }, [utenti]);
-
-  const ruoliUniche = useMemo(
-    () => [...new Set(utenti.map((u) => u.ruolo).filter(Boolean))],
-    [utenti]
-  );
 
   const filtered = useMemo(() => {
     let res = [...utenti];

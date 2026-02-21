@@ -629,7 +629,7 @@ export default function DocumentiSplitCF({ tipi = [] }) {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [viewerOpen, viewerPageIdx]);
+  }, [viewerOpen, viewerPageIdx, nextPage, prevPage, closeViewer]);
 
   const toggleBulk = (pageIdx) => {
     setBulkSelection((prev) => {
