@@ -136,7 +136,6 @@ export default function WbManagerPanel({ apiBase }) {
 
   // autoscroll chat quando arrivano messaggi
   useEffect(() => {
-    if (!detail) return;
     threadEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
   }, [detail?.messages?.length, detail?.report?.id]);
 
@@ -254,7 +253,7 @@ export default function WbManagerPanel({ apiBase }) {
 
       const cd = res.headers.get('Content-Disposition') || res.headers.get('content-disposition') || '';
       let filename = fallbackName;
-      const m = /filename\*?=(?:UTF-8''|")?([^\";]+)/i.exec(cd);
+      const m = /filename\*?=(?:UTF-8''|")?([^";]+)/i.exec(cd);
       if (m && m[1]) {
         try {
           filename = decodeURIComponent(m[1].replace(/"/g, ''));

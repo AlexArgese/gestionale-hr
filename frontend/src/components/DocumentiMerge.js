@@ -218,7 +218,7 @@ export default function DocumentiMerge({ tipi = [] }) {
       targetIds = Array.from(new Set(selectedIds.map(String)));
     }
     return targetIds;
-  }, [assegnaMode, selectedIds]);
+  }, [assegnaMode, selectedIds, utenti]);
 
   // riepilogo testo assegnazione (per modale)
   const targetSummary = useMemo(() => {
