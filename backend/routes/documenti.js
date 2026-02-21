@@ -13,22 +13,11 @@ const requireAuth = require('../middleware/requireAuth');
 const mime = require('mime-types');
 
 /* ---------- Multer ---------- */
-const storage = multer.diskStorage({
-  destination(_, __, cb) {
-    const dir = path.join(__dirname, '../uploads/documenti');
-    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-    cb(null, dir);
-  },
-  filename(_, file, cb) {
-    const ts   = Date.now();
-    const ext  = path.extname(file.originalname);
-    const base = path.basename(file.originalname, ext);
-    cb(null, `${base}_${ts}${ext}`);
-  },
-});
+const storage = multer.memoryStorage();
 const uploadSingle  = multer({ storage }).single('file');
 const uploadManyPdf = multer({ storage }).array('files', 20);
 const yousignClient = require('../services/yousignClient');
+const { creaChiaveS3, caricaBufferSuS3, urlFirmatoGet, eliminaDaS3 } = require("../lib/s3");
 
 
 /* ==================================================================== */
@@ -391,7 +380,21 @@ router.post('/upload', requireAuth, (req, res) => {
 
       const { targetUserId, autoreId } = await resolveTargetUserId(req);
 
-      const relPath = `uploads/documenti/${req.file.filename}`;
+      // 1) carica su S3
+      const chiaveS3 = creaChiaveS3({
+        utenteId: targetUserId,
+        tipoDocumento: tipoNorm,
+        nomeFile: req.file.originalname,
+      });
+      await caricaBufferSuS3({
+        chiave: chiaveS3,
+        buffer: req.file.buffer,
+        contentType: req.file.mimetype,
+      });
+
+      // 2) nel DB salvo la chiave S3 al posto del path locale
+      const relPath = `s3://${chiaveS3}`;
+
 
       const inserted = await insertDocumentoRows({
         utenteIds: [targetUserId],
@@ -410,8 +413,10 @@ router.post('/upload', requireAuth, (req, res) => {
         require_signature: !!require_signature,
       });
 
+      const isS3 = relPath.startsWith("s3://");
+
       // fire-and-forget Yousign
-      if (require_signature) {
+      if (require_signature && !isS3) {
         startYousignForDocumento({
           documentoId: inserted[0].id,
           utenteId: targetUserId,
@@ -716,19 +721,31 @@ router.get('/:id/download', requireAuth, async (req, res) => {
       [req.params.id]
     );
 
-    if (q.rows.length === 0)
-      return res.status(404).json({ error: 'Documento non trovato' });
+    if (!q.rows.length) return res.status(404).json({ error: 'Documento non trovato' });
 
     const { nome_file, url_file, url_file_signed } = q.rows[0];
-
-    // 👉 se esiste il firmato uso quello, altrimenti l’originale
     const chosenPath = url_file_signed || url_file;
-    const abs = path.join(__dirname, '..', chosenPath);
 
-    if (!fs.existsSync(abs))
-      return res.status(404).json({ error: 'File non trovato' });
+    // 1) Se è già s3://... -> redirect S3
+    if (chosenPath && chosenPath.startsWith("s3://")) {
+      const chiave = chosenPath.replace("s3://", "");
+      const url = await urlFirmatoGet({ chiave, scadeSecondi: 120 });
+      return res.redirect(url);
+    }
 
-    res.download(abs, nome_file);
+    // 2) Prova locale
+    const abs = path.join(__dirname, "..", chosenPath);
+    if (fs.existsSync(abs)) {
+      return res.download(abs, nome_file);
+    }
+
+    // 3) Fallback: prova S3 con chiave = chosenPath (uploads/documenti/...)
+    if (chosenPath && chosenPath.startsWith("uploads/")) {
+      const url = await urlFirmatoGet({ chiave: chosenPath, scadeSecondi: 120 });
+      return res.redirect(url);
+    }
+
+    return res.status(404).json({ error: 'File non trovato' });
   } catch (err) {
     console.error('GET /documenti/:id/download', err);
     res.status(500).json({ error: 'Errore download' });
@@ -769,14 +786,30 @@ router.get('/:id/view', requireAuth, async (req, res) => {
 
     const { nome_file, url_file, url_file_signed } = q.rows[0];
     const chosenPath = url_file_signed || url_file;
+
+    // 1) Se è già s3://... -> redirect S3
+    if (chosenPath && chosenPath.startsWith("s3://")) {
+      const chiave = chosenPath.replace("s3://", "");
+      const url = await urlFirmatoGet({ chiave, scadeSecondi: 120 });
+      return res.redirect(url);
+    }
+
+    // 2) Prova locale
     const abs = path.join(__dirname, "..", chosenPath);
+    if (fs.existsSync(abs)) {
+      const ctype = mime.lookup(abs) || 'application/octet-stream';
+      res.setHeader('Content-Type', ctype);
+      res.setHeader('Content-Disposition', `inline; filename="${nome_file}"`);
+      return res.sendFile(abs);
+    }
 
-    if (!fs.existsSync(abs)) return res.status(404).json({ error: 'File non trovato' });
+    // 3) Fallback: prova S3 con chiave = chosenPath (uploads/documenti/...)
+    if (chosenPath && chosenPath.startsWith("uploads/")) {
+      const url = await urlFirmatoGet({ chiave: chosenPath, scadeSecondi: 120 });
+      return res.redirect(url);
+    }
 
-    const ctype = mime.lookup(abs) || 'application/octet-stream';
-    res.setHeader('Content-Type', ctype);
-    res.setHeader('Content-Disposition', `inline; filename="${nome_file}"`);
-    res.sendFile(abs);
+    return res.status(404).json({ error: 'File non trovato' });
   } catch (err) {
     console.error('GET /documenti/:id/view', err);
     res.status(500).json({ error: 'Errore view' });
