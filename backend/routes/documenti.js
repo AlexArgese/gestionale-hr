@@ -17,10 +17,9 @@ const storage = multer.memoryStorage();
 const uploadSingle  = multer({ storage }).single('file');
 const uploadManyPdf = multer({ storage }).array('files', 20);
 const yousignClient = require('../services/yousignClient');
+const os = require("os");
 const { creaChiaveS3, caricaBufferSuS3, scaricaBufferDaS3, urlFirmatoGet, eliminaDaS3 } = require("../lib/s3");
 
-const os = require("os");
-const { scaricaBufferDaS3 } = require("../lib/s3");
 
 /* ==================================================================== */
 /*  Helpers                                                             */
@@ -297,8 +296,6 @@ async function startYousignForDocumento({ documentoId, utenteId, nomeFile, urlFi
   };
 }
 
-const SIGNED_DIR = path.join(__dirname, "..", "uploads", "documenti", "signed");
-if (!fs.existsSync(SIGNED_DIR)) fs.mkdirSync(SIGNED_DIR, { recursive: true });
 
 router.post("/:id/sync-signed", requireAuth, async (req, res) => {
   try {
@@ -376,7 +373,6 @@ router.post("/:id/sync-signed", requireAuth, async (req, res) => {
       documentoId: docId,
       url_file: d.url_file,               // stesso path di prima
       replaced: true,
-      backup_original: `uploads/documenti/original_backup/${path.basename(backupPath)}`
     });
   } catch (e) {
     console.error("sync-signed error:", e.response?.data || e);
@@ -445,10 +441,9 @@ router.post('/upload', requireAuth, (req, res) => {
         require_signature: !!require_signature,
       });
 
-      const isS3 = relPath.startsWith("s3://");
 
       // fire-and-forget Yousign
-      if (require_signature && !isS3) {
+      if (require_signature) {
         startYousignForDocumento({
           documentoId: inserted[0].id,
           utenteId: targetUserId,
@@ -494,18 +489,32 @@ router.post('/upload-multi', requireAuth, (req, res) => {
         return res.status(400).json({ error: 'utente_ids richiesto' });
       }
 
-      // verifica che tutti gli id esistano
       const uniq = [...new Set(ids.map(n => Number(n)).filter(n => Number.isInteger(n) && n > 0))];
       if (uniq.length !== ids.length) {
         return res.status(400).json({ error: 'utente_ids non validi' });
       }
+
       const check = await pool.query('SELECT id FROM utenti WHERE id = ANY($1::int[])', [uniq]);
       if (check.rows.length !== uniq.length) {
         return res.status(404).json({ error: 'Alcuni utenti non esistono' });
       }
 
-      const autoreId = await resolveAutoreId(req); // può essere null
-      const relPath = `uploads/documenti/${req.file.filename}`;
+      const autoreId = await resolveAutoreId(req);
+
+      // ✅ carico 1 sola volta su S3 in una "cartella condivisa"
+      const chiaveS3 = creaChiaveS3({
+        utenteId: 0, // shared
+        tipoDocumento: tipoNorm,
+        nomeFile: req.file.originalname,
+      });
+
+      await caricaBufferSuS3({
+        chiave: chiaveS3,
+        buffer: req.file.buffer,
+        contentType: req.file.mimetype,
+      });
+
+      const relPath = chiaveS3;
 
       await insertDocumentoRows({
         utenteIds: uniq,
@@ -518,6 +527,10 @@ router.post('/upload-multi', requireAuth, (req, res) => {
       });
 
       res.json({ message: `Documento assegnato a ${uniq.length} dipendenti.` });
+
+      if (require_signature) {
+        console.warn("[Yousign] upload-multi con firma: da gestire caso multi (scelta business).");
+      }
     } catch (e) {
       console.error('upload-multi:', e);
       res.status(500).json({ error: e.message || 'Errore interno server' });
@@ -534,6 +547,7 @@ router.post('/split', requireAuth, (req, res) => {
       if (err) throw err;
       const { file } = req;
       if (!file) return res.status(400).json({ error: 'File mancante' });
+
       if (path.extname(file.originalname).toLowerCase() !== '.pdf') {
         return res.status(400).json({ error: 'Lo split è disponibile solo per PDF' });
       }
@@ -553,12 +567,10 @@ router.post('/split', requireAuth, (req, res) => {
       }
       if (!ranges) return res.status(400).json({ error: 'ranges richiesto' });
 
-      const absPath = path.join(__dirname, '..', 'uploads', 'documenti', file.filename);
-      const pdfBytes = fs.readFileSync(absPath);
-      const srcPdf = await PDFDocument.load(pdfBytes);
+      // ✅ carico PDF sorgente da buffer (memoryStorage)
+      const srcPdf = await PDFDocument.load(file.buffer);
       const total = srcPdf.getPageCount();
 
-      // parse ranges es: 1-2,3,4-6 -> [[1,2],[3,3],[4,6]]
       const parts = String(ranges)
         .split(',')
         .map(s => s.trim())
@@ -572,24 +584,41 @@ router.post('/split', requireAuth, (req, res) => {
         });
 
       const caricato_da = await resolveAutoreId(req);
-      const base = path.basename(file.filename, path.extname(file.filename));
 
+      // ✅ per ogni parte: genera pdf bytes -> carica su S3 -> inserisci su DB
       for (let i=0; i<parts.length; i++) {
         const [from, to] = parts[i];
-        const outPdf = await PDFDocument.create();
-        const pages = await outPdf.copyPages(srcPdf, Array.from({length: to-from+1}, (_,k)=> from-1+k));
-        pages.forEach(p => outPdf.addPage(p));
-        const outBytes = await outPdf.save();
 
-        const outName = `${base}_part${i+1}.pdf`;
-        const relPath = `uploads/documenti/${outName}`;
-        fs.writeFileSync(path.join(__dirname, '..', relPath), outBytes);
+        const outPdf = await PDFDocument.create();
+        const pages = await outPdf.copyPages(
+          srcPdf,
+          Array.from({ length: to - from + 1 }, (_,k) => (from - 1 + k))
+        );
+        pages.forEach(p => outPdf.addPage(p));
+
+        const outBytes = await outPdf.save();
+        const outBuffer = Buffer.from(outBytes);
+
+        const nomeParte = `${path.basename(file.originalname, ".pdf")}_part${i+1}.pdf`;
+
+        // chiave S3 "shared" (oppure per utente, se vuoi copie separate)
+        const chiaveS3 = creaChiaveS3({
+          utenteId: 0,
+          tipoDocumento: tipoNorm,
+          nomeFile: nomeParte,
+        });
+
+        await caricaBufferSuS3({
+          chiave: chiaveS3,
+          buffer: outBuffer,
+          contentType: "application/pdf",
+        });
 
         await insertDocumentoRows({
           utenteIds: ids,
           tipo: tipoNorm,
-          nome_file: `${file.originalname} (part ${i+1} ${from}-${to})`,
-          relPath,
+          nome_file: `${file.originalname} (parte ${i+1} ${from}-${to})`,
+          relPath: chiaveS3,
           caricato_da,
           data_scadenza,
           require_signature,
@@ -597,6 +626,10 @@ router.post('/split', requireAuth, (req, res) => {
       }
 
       res.json({ message: `Creati ${parts.length} documenti e assegnati a ${ids.length} dipendenti.` });
+
+      if (require_signature) {
+        console.warn("[Yousign] split con firma: da definire strategia (di solito firma solo alcune parti).");
+      }
     } catch (e) {
       console.error('split:', e);
       res.status(500).json({ error: e.message || 'Errore interno server' });
@@ -611,8 +644,10 @@ router.post('/merge', requireAuth, (req, res) => {
   uploadManyPdf(req, res, async (err) => {
     try {
       if (err) throw err;
+
       const files = req.files || [];
       if (files.length < 2) return res.status(400).json({ error: 'Seleziona almeno 2 PDF' });
+
       for (const f of files) {
         if (path.extname(f.originalname).toLowerCase() !== '.pdf') {
           return res.status(400).json({ error: 'Tutti i file devono essere PDF' });
@@ -634,31 +669,47 @@ router.post('/merge', requireAuth, (req, res) => {
       }
 
       const merged = await PDFDocument.create();
+
       for (const f of files) {
-        const bytes = fs.readFileSync(path.join(__dirname, '..', 'uploads', 'documenti', f.filename));
-        const pdf   = await PDFDocument.load(bytes);
+        const pdf = await PDFDocument.load(f.buffer);
         const pages = await merged.copyPages(pdf, pdf.getPageIndices());
         pages.forEach(p => merged.addPage(p));
       }
-      const mergedBytes = await merged.save();
 
-      const firstBase = path.basename(files[0].filename, path.extname(files[0].filename));
-      const outName = `${firstBase}_MERGED_${Date.now()}.pdf`;
-      const relPath = `uploads/documenti/${outName}`;
-      fs.writeFileSync(path.join(__dirname, '..', relPath), mergedBytes);
+      const mergedBytes = await merged.save();
+      const mergedBuffer = Buffer.from(mergedBytes);
+
+      const nomeUnito = `MERGE_${Date.now()}_${files.map(f => path.basename(f.originalname, ".pdf")).join("_")}.pdf`;
+
+      const chiaveS3 = creaChiaveS3({
+        utenteId: 0,
+        tipoDocumento: tipoNorm,
+        nomeFile: nomeUnito,
+      });
+
+      await caricaBufferSuS3({
+        chiave: chiaveS3,
+        buffer: mergedBuffer,
+        contentType: "application/pdf",
+      });
 
       const caricato_da = await resolveAutoreId(req);
+
       await insertDocumentoRows({
         utenteIds: ids,
         tipo: tipoNorm,
-        nome_file: files.map(f=>f.originalname).join(' + '),
-        relPath,
+        nome_file: files.map(f => f.originalname).join(' + '),
+        relPath: chiaveS3,
         caricato_da,
         data_scadenza,
         require_signature,
       });
 
       res.json({ message: `Documento unito e assegnato a ${ids.length} dipendenti.` });
+
+      if (require_signature) {
+        console.warn("[Yousign] merge con firma: ok, ma definire se parte firma automatica.");
+      }
     } catch (e) {
       console.error('merge:', e);
       res.status(500).json({ error: e.message || 'Errore interno server' });
