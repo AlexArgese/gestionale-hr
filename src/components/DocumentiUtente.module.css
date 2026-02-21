@@ -1,0 +1,171 @@
+/* ===== DocumentiUtente.module.css ===== */
+
+/* Sezione: NO card sul container (coerente con DettaglioUtente) */
+.container {
+  margin-top: 18px;        /* distacco dalla card sopra */
+}
+
+/* Titolo + underline uguali al resto */
+.head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.icon { width: 18px; height: 18px; color: var(--brand-1, #D0933C); }
+.title { margin: 0; font-size: 18px; color: var(--txt-strong, #0F172A); }
+
+.underline {
+  height: 2px;
+  background: var(--grad, linear-gradient(90deg,#D0933C,#6A57D3));
+  border-radius: 2px;
+  margin: 10px 0 16px;
+}
+
+/* Ogni gruppo e l'upload SONO le card (come nelle altre pagine) */
+.details {
+  background: var(--bg-card, #fff);
+  border-radius: var(--radius, 16px);
+  box-shadow: var(--shadow-soft, 0 8px 28px rgba(15,23,42,.06));
+  margin-bottom: 12px;
+  overflow: hidden;
+  border: 1px solid var(--border, #E5E7EB);
+}
+
+.summary {
+  list-style: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 12px 14px;
+  cursor: pointer;
+  user-select: none;
+  font-weight: 600;
+  color: var(--txt, #334155);
+}
+.details[open] .summary { border-bottom: 1px solid var(--border, #E5E7EB); }
+
+.chev {
+  display: inline-flex;
+  align-items: center;
+  transition: transform .2s ease;
+}
+.details[open] .chev { transform: rotate(180deg); }
+
+.list { margin: 0; padding: 8px; list-style: none; }
+
+.item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: 8px;
+}
+.item + .item { margin-top: 4px; }
+.item:hover { background: #F8FAFC; }
+
+.link {
+  color: var(--txt-strong, #0F172A);
+  text-decoration: none;
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 60%;
+}
+.link:hover { text-decoration: underline; }
+
+.meta {
+  color: var(--txt-muted, #64748B);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+/* Bottone elimina */
+.delBtn {
+  margin-left: auto;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  padding: 6px;
+  border-radius: 8px;
+  transition: background .15s ease, transform .05s ease;
+}
+.delBtn:hover { background: rgba(220, 38, 38, 0.08); }
+.delBtn:active { transform: scale(0.98); }
+.delBtn :global(svg) { width: 16px; height: 16px; color: #DC2626; }
+
+/* Upload: è una card a sé */
+.upload {
+  margin-bottom: 16px;
+  background: var(--bg-card, #fff);
+  border: 1px solid var(--border, #E5E7EB);
+  border-radius: var(--radius, 16px);
+  padding: 12px;
+  box-shadow: var(--shadow-sm, 0 2px 8px rgba(15,23,42,.06));
+}
+
+.controlsRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.hiddenFile { display: none; }
+
+/* Barra chip file selezionati */
+.filesBar {
+  margin-top: 10px;
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+.helper {
+  color: var(--txt-muted, #64748B);
+  font-size: 13px;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  background: #F3F4F6;
+  border: 1px solid #E5E7EB;
+  border-radius: 999px;
+  max-width: 100%;
+}
+
+.name {
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 500;
+  color: var(--txt, #334155);
+  cursor: default;
+}
+
+.chipSelect {
+  border: 1px solid #E5E7EB;
+  background: #fff;
+  border-radius: 999px;
+  padding: 4px 8px;
+  font-size: 13px;
+  outline: none;
+}
+
+.chipBtn {
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 999px;
+  transition: background .15s ease;
+}
+.chipBtn:hover { background: rgba(0,0,0,.06); }
+.chipBtn :global(svg) { width: 14px; height: 14px; }
+
+.meta, .helper { letter-spacing: .2px; }

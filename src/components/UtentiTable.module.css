@@ -1,0 +1,267 @@
+/* ===== ClockEasy — Utenti (LIST) — CSS Module, same layout as Comunicazioni ===== */
+
+/* Page */
+.container{
+  padding: var(--s5);
+  background: var(--bg-page);
+  min-height: 100vh;
+  color: var(--txt);
+  box-sizing: border-box;
+}
+
+/* Header: titolo a sx + CTA a dx */
+.header{
+  display:flex; align-items:center; justify-content:space-between; gap:12px;
+  margin-bottom: 0;
+}
+.title{
+  font-size:28px; font-weight:900; color:var(--txt-strong);
+  margin:0;
+}
+.headerCta{
+  display:flex; align-items:center; gap:10px; flex-wrap:wrap;
+}
+.addBtn{ display:inline-flex; align-items:center; gap:8px; }
+
+/* Underline */
+.underline{
+  height:3px; border-radius:2px; background:var(--grad);
+  margin:10px 0 var(--s4); width:100%;
+}
+
+/* Toolbar (search + filtri) */
+.toolbar{
+  display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap;
+  margin-bottom: var(--s3);
+}
+.searchWrap{
+  position:relative; flex:1 1 300px; max-width:560px;
+}
+.searchIcon{
+  position:absolute; left:12px; top:50%; transform: translateY(-50%);
+  color:var(--txt-muted);
+}
+.search{ width:100%; padding:10px 12px 10px 38px; }
+
+/* Filtri a destra della toolbar (si riposizionano su mobile) */
+.filters{
+  display:flex; gap:10px; flex-wrap:wrap;
+}
+
+/* Card tabella */
+.tableCard{ overflow:hidden; }
+
+/* Tabella */
+.table{ width:100%; border-collapse: collapse; }
+.thead{
+  position:sticky; top:0; z-index:1; background:#fff;
+  box-shadow: 0 1px 0 var(--border);
+}
+.th, .td{
+  padding: 10px 12px; text-align:left; font-size:14px; color:var(--txt);
+  border-bottom:1px solid var(--border); vertical-align: middle;
+}
+.row{ cursor:pointer; }
+.row:hover{ background:#F8FAFC; }
+
+/* Badge stato (coerente col resto del sistema) */
+.badgeOk{
+  background:#ECFDF5; color:#065F46; border:1px solid #BBF7D0;
+  border-radius:999px; padding:3px 8px; font-size:12px; font-weight:800;
+  display:inline-flex; align-items:center; gap:6px;
+}
+.badgeNo{
+  background:#FFE8E8; color:#8A1F1F; border:1px solid #FECACA;
+  border-radius:999px; padding:3px 8px; font-size:12px; font-weight:800;
+  display:inline-flex; align-items:center; gap:6px;
+}
+
+/* Stati vuoti/errore */
+.empty{ color: var(--txt-muted); text-align: center; padding: 16px; }
+
+/* ===== PAGINAZIONE NUOVA ===== */
+
+.paginationBar{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  padding:10px 14px;
+  border-top:1px solid var(--border);
+  border-bottom:1px solid var(--border);
+  background: #fff;
+  gap:20px;
+}
+
+/* SEZIONE SX (select) */
+.paginationLeft{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  font-size:14px;
+  color:var(--txt-muted);
+}
+
+.pageSizeLabel{
+  font-size:13px;
+}
+
+.pageSizeSelect{
+  padding:6px 10px;
+  border-radius:8px;
+  border:1px solid var(--border);
+  background:#fff;
+  font-size:13px;
+  color:var(--txt);
+}
+
+/* SEZIONE CENTRALE (info) */
+.paginationCenter{
+  flex:1;
+  display:flex;
+  justify-content:center;
+  gap:10px;
+  font-size:14px;
+  font-weight:500;
+  color:var(--txt-muted);
+}
+
+.dot{
+  opacity:0.6;
+}
+
+/* SEZIONE DESTRA (frecce) */
+.paginationControls{
+  display:flex;
+  align-items:center;
+  gap:8px;
+}
+
+.pageBtn{
+  padding:5px 10px;
+  border-radius:8px;
+  border:1px solid var(--border);
+  background:#fff;
+  font-size:13px;
+  font-weight:600;
+  cursor:pointer;
+  transition: 0.15s ease;
+}
+
+.pageBtn:hover:not(:disabled){
+  background:#F1F5F9;
+}
+
+.pageBtn:disabled{
+  opacity:0.4;
+  cursor:default;
+}
+
+/* ===== SUBNAV DIPENDENTI / SEDI (riusa lo stile della pagina) ===== */
+
+.subnav{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  margin-bottom: var(--s4);
+}
+
+.subnavTab{
+  border:none;
+  background:transparent;
+  padding:6px 14px;
+  border-radius:999px;
+  font-size:14px;
+  font-weight:600;
+  color:var(--txt-muted);
+  cursor:pointer;
+  transition: background 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.subnavTab:hover{
+  background:#F1F5F9;
+}
+
+.subnavTabActive{
+  background:#E0ECFF;
+  color:#0B74FF;
+  box-shadow:0 0 0 1px rgba(11, 116, 255, 0.18);
+}
+
+
+
+/* Responsive */
+@media (max-width: 780px){
+  .paginationBar{
+    flex-direction:column;
+    align-items:flex-start;
+    gap:12px;
+  }
+  .paginationCenter{
+    justify-content:flex-start;
+  }
+}
+
+/* Responsive */
+@media (max-width: 980px){
+  .title{ font-size:24px; }
+  .table{ min-width: 760px; }
+}
+
+/* ===== SOTTOMENU DIPENDENTI / SEDI (stile navbar) ===== */
+
+/* wrapper per allineare al layout principale */
+.subnavBar{
+  max-width: var(--maxw);
+  margin: 0 auto;
+  padding: var(--s5) var(--s5) 0;
+}
+
+/* riga con i "link" */
+.subnav{
+  display:flex;
+  align-items:flex-end;
+  gap:18px;
+  border-bottom:1px solid #EEF2F7;
+}
+
+/* "link" stile navbar-links a */
+.subnavLink{
+  position:relative;
+  border:none;
+  background:transparent;
+  padding:6px 2px;
+  font-size:14px;
+  font-weight:800;
+  color:#0F172A;
+  cursor:pointer;
+  transition: color .12s ease;
+}
+
+.subnavLink:hover{
+  color:#111827;
+}
+
+/* underline gradiente come la navbar */
+.subnavLink::after{
+  content:"";
+  position:absolute;
+  left:0;
+  right:0;
+  bottom:-8px;
+  height:3px;
+  border-radius:999px;
+  background: transparent;
+  transition: background .15s ease, opacity .15s ease;
+  opacity:0;
+}
+
+.subnavLink:hover::after{
+  background: var(--grad);
+  opacity:.35;
+}
+
+/* tab attivo = underline pieno */
+.subnavLinkActive::after{
+  background: var(--grad);
+  opacity:1;
+}

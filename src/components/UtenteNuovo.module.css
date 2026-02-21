@@ -1,0 +1,94 @@
+/* ===== ClockEasy — UtenteNuovo (CSS Module, unified) ===== */
+
+/* Pagina */
+.container{
+  padding: var(--s5);
+  background: var(--bg-page);
+  min-height: 100vh;
+  color: var(--txt);
+  box-sizing: border-box;
+}
+
+/* Back + header */
+.header{
+  display:flex; align-items:center; justify-content:space-between; gap:12px;
+}
+.title{
+  font-size:28px; font-weight:900; color:var(--txt-strong);
+  letter-spacing:.2px; margin:0;
+}
+.headerCta{ display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+.backBtn{ display:inline-flex; align-items:center; gap:8px; }
+
+.underline{
+  height:3px; border-radius:2px; background:var(--grad);
+  margin:10px 0 var(--s4); width:100%;
+}
+
+/* Card form */
+.card{
+  background:var(--bg-card);
+  border:1px solid var(--border);
+  border-radius:var(--radius);
+  box-shadow:var(--shadow-soft);
+  padding:16px;
+  box-sizing:border-box;
+}
+
+/* Grid campi */
+.grid{
+  display:grid;
+  gap:14px;
+  grid-template-columns: 1fr 1fr;
+}
+@media (max-width: 900px){
+  .grid{ grid-template-columns: 1fr; }
+}
+
+/* Campo */
+.group{ display:flex; flex-direction:column; gap:6px; }
+.label{ font-size:12px; font-weight:800; color:var(--txt-muted); }
+.stretch{ width:100%; box-sizing:border-box; }
+
+/* Input con icona a sx */
+.inputIcon{ position: relative; display:flex; align-items:center; }
+.inputIcon :global(.input),
+.inputIcon :global(select.select){
+  width:100%;
+  padding-left:38px;
+  min-height:38px;
+  box-sizing:border-box;
+}
+.icon{
+  position:absolute; left:12px; top:50%; transform:translateY(-50%);
+  color:var(--txt-muted); pointer-events:none;
+}
+
+/* Row inline (checkbox) */
+.inline{ display:flex; align-items:center; gap:10px; }
+.note{ font-size:12px; color:var(--txt-muted); }
+
+/* Azioni form */
+.actions{
+  margin-top: var(--s4);
+  display:flex; align-items:center; justify-content:flex-end;
+  gap:10px; flex-wrap:wrap;
+}
+
+/* Varianti bottoni coerenti col brand */
+.btnPrimary{
+  background: var(--brand-1) !important;
+  border-color: var(--brand-1) !important;
+  color: #fff !important;
+}
+.btnPrimary:hover{ opacity:.9; }
+
+.btnOutline{
+  background: #fff !important;
+  border-color: var(--border) !important;
+  color: var(--txt) !important;
+}
+
+/* Messaggi */
+.error{ color:#8A1F1F; background:#FFE8E8; border:1px solid #FECACA; padding:10px 12px; border-radius:12px; }
+.success{ color:#065F46; background:#ECFDF5; border:1px solid #BBF7D0; padding:10px 12px; border-radius:12px; }

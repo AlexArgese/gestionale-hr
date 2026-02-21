@@ -1,0 +1,195 @@
+/* ===== ClockEasy — Comunicazione (DETAIL) — CSS Module ===== */
+:root{
+  --brand-1:#D0933C; --brand-2:#6A57D3;
+  --grad:linear-gradient(90deg, var(--brand-1), var(--brand-2));
+
+  --txt-strong:#0F172A; --txt:#334155; --txt-muted:#64748B;
+
+  --bg-page:#F6F8FA; --bg-card:#FFFFFF;
+
+  --border:#E5E7EB; --radius:16px; --radius-sm:12px;
+  --shadow-soft:0 8px 28px rgba(15,23,42,.06);
+  --shadow-sm:0 2px 8px rgba(15,23,42,.06);
+
+  --s1:6px; --s2:10px; --s3:14px; --s4:18px; --s5:24px;
+}
+
+.container{
+  padding: var(--s5);
+  background: var(--bg-page);
+  min-height: 100vh;
+  color: var(--txt);
+  box-sizing: border-box;
+}
+
+/* Header: titolo a sx + back a dx */
+.header{
+  display:flex; align-items:center; justify-content:space-between; gap:12px;
+  margin-bottom: 0;
+}
+.title{
+  font-size:28px; font-weight:900; color:var(--txt-strong); margin:0;
+}
+.backBtn{
+  display:inline-flex; align-items:center; gap:8px;
+  padding:10px 14px;
+  border-radius:12px; font-weight:800; font-size:14px;
+  background:#fff; 
+  color: var(--brand-2);              /* testo blu */
+  border:1px solid var(--brand-2);   /* bordo blu */
+  white-space:nowrap;                /* testo su una sola riga */
+  cursor:pointer;
+  transition: background .12s ease, transform .12s ease;
+}
+.backBtn:hover{ 
+  background:rgba(106,87,211,.08);   /* blu molto chiaro al hover */
+  transform: translateY(-1px); 
+}
+
+/* Variante danger per azioni distruttive */
+.btnDanger{
+  background:#fff;
+  color:#B91C1C;                    /* rosso forte */
+  border:1px solid #FECACA;         /* bordo rosso chiaro */
+  padding:10px 14px;
+  border-radius:14px;
+  font-weight:800;
+  font-size:14px;
+  cursor:pointer;
+  transition: background .12s ease, transform .12s ease;
+}
+.btnDanger:hover{
+  background:#FEE2E2;               /* rosso chiarissimo */
+  transform: translateY(-1px);
+}
+
+
+.underline{
+  height:3px; border-radius:2px; background:var(--grad);
+  margin:10px 0 var(--s4); width:100%;
+}
+
+/* Card */
+.card{
+  background:var(--bg-card);
+  border:1px solid var(--border);
+  border-radius:var(--radius);
+  box-shadow:var(--shadow-soft);
+  padding:16px;
+}
+
+/* Meta */
+.metaRow{
+  display:flex; align-items:center; gap:10px; flex-wrap:wrap;
+  color:var(--txt-muted); font-size:13px; margin-bottom:8px;
+}
+.metaBadge{
+  display:inline-flex; align-items:center; gap:6px;
+  background:#F1F5F9; color:#334155; border:1px solid #E2E8F0;
+  border-radius:999px; padding:4px 8px; font-weight:800; font-size:12px;
+}
+
+/* Body */
+.content{ font-size:15px; line-height:1.6; color:var(--txt); white-space:pre-wrap; }
+
+/* Allegato */
+.attachWrap{ margin-top: 16px; }
+.attachTitle{ font-weight:900; color:var(--txt-strong); margin:6px 0 10px; }
+.attachBox{
+  border:1px solid var(--border); border-radius:12px; overflow:hidden;
+  background:#fff; box-shadow:var(--shadow-sm);
+  transition: box-shadow .12s ease, transform .12s ease;
+}
+.attachBox:hover{ box-shadow:0 10px 28px rgba(15,23,42,.08); transform:translateY(-2px); }
+.attachBox iframe, .attachBox img{ width:100%; height:520px; display:block; }
+
+/* Destinatari */
+.destWrap{ margin-top:16px; }
+.destTitle{ font-weight:900; color:var(--txt-strong); margin:6px 0 8px; }
+.destList{ list-style:none; padding:0; margin:0; }
+.destItem{
+  background:#fff; border:1px solid var(--border);
+  border-radius:10px; padding:8px 10px; box-shadow:var(--shadow-sm);
+  transition: background .12s ease;
+}
+.destItem + .destItem{ margin-top:6px; }
+.destItem:hover{ background:#F9FAFB; }
+
+/* Azioni fondo card (se presenti) */
+.actions{
+  margin-top: var(--s4);
+  display:flex; align-items:center; justify-content:flex-end; gap:10px; flex-wrap:wrap;
+}
+.btnPrimary{
+  background: var(--brand-1) !important;
+  border-color: var(--brand-1) !important;
+  color:#fff !important;
+  padding:10px 14px; border-radius:14px; font-weight:800; font-size:14px;
+  border:1px solid transparent; cursor:pointer;
+  box-shadow:var(--shadow-sm);
+  transition: filter .12s ease, transform .12s ease;
+}
+.btnPrimary:hover{ filter:brightness(1.04); transform: translateY(-1px); }
+.btnOutline{
+  background:#fff !important;
+  border-color: var(--border) !important;
+  color: var(--txt) !important;
+  padding:10px 14px; border-radius:14px; font-weight:800; font-size:14px;
+  border:1px solid var(--border); cursor:pointer;
+  transition: background .12s ease;
+}
+.btnOutline:hover{ background:#F9FAFB; }
+
+/* Commenti */
+.comments{
+  margin-top: var(--s4);
+  background: var(--bg-card);
+  border:1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-soft);
+  padding: 14px 16px;
+}
+.commentsTitle{
+  display:flex; align-items:center; gap:8px;
+  margin:2px 0 10px 0; color:var(--txt-strong); font-size:18px; font-weight:900;
+}
+.commentsList{ list-style:none; padding:0; margin:0; }
+.commentItem{
+  border:1px solid var(--border); border-radius:12px; padding:10px 12px;
+  background:#fff; box-shadow:var(--shadow-sm);
+}
+.commentItem + .commentItem{ margin-top: 8px; }
+.commentMeta{ font-size:12px; color:var(--txt-muted); margin-bottom:4px; }
+.commentBody{ font-size:14px; color:var(--txt); white-space:pre-wrap; }
+
+.sep{ height:1px; background:#EAECEF; margin: 14px 0; }
+
+/* Tabs */
+.tabs{
+  display: flex;
+  gap: 8px;
+  margin-bottom: var(--s4);
+  flex-wrap: wrap;
+}
+.tab, .tabActive{
+  padding: 8px 14px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: #fff;
+  font-weight: 700;
+  font-size: 14px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.tabActive{
+  background: var(--brand-1);
+  border-color: var(--brand-1);
+  color: #fff;
+}
+
+/* Responsive */
+@media (max-width: 860px){
+  .title{ font-size:24px; }
+}
