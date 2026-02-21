@@ -58,14 +58,36 @@ router.post("/webhook", express.json({ type: "*/*" }), async (req, res) => {
     // scarica il PDF firmato
     const pdfBuf = await yousignClient.downloadSignatureRequestDocument(signatureRequestId, yousignDocId);
 
-    // sovrascrivi il file originale su disco
-    const absOriginal = path.join(__dirname, "..", d.url_file);
-    if (!fs.existsSync(absOriginal)) {
-      console.warn("[YOUSIGN] file originale non trovato:", absOriginal);
-      return res.json({ ok: true, warning: "original_file_missing" });
+    const { caricaBufferSuS3, scaricaBufferDaS3 } = require("../lib/s3");
+
+    const keyOriginale = d.url_file?.startsWith("s3://")
+      ? d.url_file.replace("s3://", "")
+      : d.url_file;
+
+    if (!keyOriginale) {
+      return res.json({ ok: true, warning: "missing_s3_key" });
     }
 
-    fs.writeFileSync(absOriginal, pdfBuf);
+    // (opzionale) backup originale
+    try {
+      const origBuf = await scaricaBufferDaS3({ chiave: keyOriginale });
+      const backupKey = `uploads/documenti/original_backup/${d.id}_ORIG_${Date.now()}_${path.basename(keyOriginale)}`;
+      await caricaBufferSuS3({
+        chiave: backupKey,
+        buffer: origBuf,
+        contentType: "application/pdf",
+      });
+    } catch (e) {
+      console.warn("Backup originale fallito:", e?.message || e);
+    }
+
+    // 🔥 sovrascrivi su S3 il file originale con quello firmato
+    await caricaBufferSuS3({
+      chiave: keyOriginale,
+      buffer: pdfBuf,
+      contentType: "application/pdf",
+    });
+
 
     // marca firmato
     await pool.query(
