@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { getAuth } from "firebase/auth";
 import * as pdfjsLib from "pdfjs-dist";
 import styles from "./DocumentiGestione.module.css";
@@ -255,16 +255,16 @@ export default function DocumentiGestione() {
     }
   };
 
-  const nextPage = async () => {
+  const nextPage = useCallback(async () => {
     if (!pdfInstanceRef.current) return;
     const n = Math.min(viewerTotal, viewerPage + 1);
     if (n !== viewerPage) await renderCurrentPage(n);
-  };
-  const prevPage = async () => {
+  }, [viewerTotal, viewerPage, renderCurrentPage]);
+  const prevPage = useCallback(async () => {
     if (!pdfInstanceRef.current) return;
     const n = Math.max(1, viewerPage - 1);
     if (n !== viewerPage) await renderCurrentPage(n);
-  };
+  }, [viewerPage, renderCurrentPage]);
 
   // scorciatoie tastiera
   useEffect(() => {
@@ -276,7 +276,7 @@ export default function DocumentiGestione() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [viewerOpen, viewerPage, viewerTotal]);
+  }, [viewerOpen, closeViewer, nextPage, prevPage]);
 
   return (
     <div className={styles.container}>

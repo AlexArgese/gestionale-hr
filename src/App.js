@@ -13,7 +13,6 @@ import NuovaComunicazione from './components/NuovaComunicazione';
 import PaginaQR from './components/PaginaQR';
 import Login from './Login';
 import DocumentiPage from './components/DocumentiPage';
-import DocumentiGestione from './components/DocumentiGestione';
 import SedeNuova from './components/SedeNuova';
 import SedeDettaglio from './components/SedeDettaglio';
 import './styles/globals.css';

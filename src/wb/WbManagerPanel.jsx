@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useState, useRef, useCallback } from "react";
 import { auth } from '../firebase';
 import styles from './WbManager.module.css';
 
@@ -101,7 +101,7 @@ export default function WbManagerPanel({ apiBase }) {
     }
   };
 
-  const loadAttachments = async (id) => {
+  const loadAttachments = useCallback(async (id) => {
     if (!id) return;
     setErr('');
     try {
@@ -111,17 +111,17 @@ export default function WbManagerPanel({ apiBase }) {
     } catch (e) {
       setErr('Errore allegati: ' + e.message);
     }
-  };
+  }, [apiFetch]);
 
   useEffect(() => {
     loadList();
-  }, []);
+  }, [loadList]);
 
   useEffect(() => {
     if (!selectedId) return;
     loadDetail(selectedId);
     loadAttachments(selectedId);
-  }, [selectedId]);
+  }, [selectedId, loadDetail, loadAttachments]);
 
   // autoscroll chat quando arrivano messaggi
   useEffect(() => {
