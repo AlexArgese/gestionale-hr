@@ -616,6 +616,7 @@ export default function DocumentiSplitCF({ tipi = [] }) {
     if (n !== viewerPageIdx) openViewer(n);
   }, [viewerPageIdx, openViewer]);
 
+
   useEffect(() => {
     const onKey = (e) => {
       if (!viewerOpen) return;

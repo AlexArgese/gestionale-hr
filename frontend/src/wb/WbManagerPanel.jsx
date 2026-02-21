@@ -26,12 +26,6 @@ const STATI = [
   'closed_other',
 ];
 
-async function getToken() {
-  const u = auth.currentUser;
-  if (!u) throw new Error('Non autenticato');
-  return await u.getIdToken();
-}
-
 export default function WbManagerPanel({ apiBase }) {
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState('');
@@ -52,54 +46,71 @@ export default function WbManagerPanel({ apiBase }) {
 
   const threadEndRef = useRef(null);
 
-  const apiFetch = useCallback(async (path, opts = {}) => {
-    const token = await getToken();
-    const res = await fetch(`${apiBase}${path}`, {
-      ...options,
-      headers: { ...(options.headers || {}), Authorization: `Bearer ${token}` },
-    });
-    if (!res.ok) {
-      let detail = '';
-      try {
-        const j = await res.json();
-        detail = j.error || j.detail || j.message || '';
-      } catch {
+  const getToken = useCallback(async () => {
+    const u = auth.currentUser;
+    if (!u) throw new Error("Non autenticato");
+    return await u.getIdToken();
+  }, []);
+
+  const apiFetch = useCallback(
+    async (path, opts = {}) => {
+      const token = await getToken();
+
+      const res = await fetch(`${apiBase}${path}`, {
+        ...opts,
+        headers: { ...(opts.headers || {}), Authorization: `Bearer ${token}` },
+      });
+
+      if (!res.ok) {
+        let detailTxt = "";
         try {
-          detail = await res.text();
-        } catch {}
+          const j = await res.json();
+          detailTxt = j.error || j.detail || j.message || "";
+        } catch {
+          try {
+            detailTxt = await res.text();
+          } catch {}
+        }
+        throw new Error(`${res.status} ${res.statusText} ${detailTxt}`.trim());
       }
-      throw new Error(`${res.status} ${res.statusText} ${detail}`.trim());
-    }
-    const ct = res.headers.get('content-type') || '';
-    if (ct.includes('application/json')) return res.json();
-    return res.text();
-  }, [apiBase, getToken]); 
+
+      const ct = res.headers.get("content-type") || "";
+      if (ct.includes("application/json")) return res.json();
+      return res.text();
+    },
+    [apiBase, getToken]
+  );
+
 
   const fmt = (iso) => (iso ? new Date(iso).toLocaleString() : '—');
 
-  const loadList = async () => {
-    setErr('');
+  const loadList = useCallback(async () => {
+    setErr("");
     try {
-      const j = await apiFetch('/wb/manager/reports');
+      const j = await apiFetch("/wb/manager/reports");
       setReports(j.reports || []);
     } catch (e) {
-      setErr('Errore caricamento lista: ' + e.message);
+      setErr("Errore caricamento lista: " + e.message);
     } finally {
       setLoading(false);
     }
-  };
+  }, [apiFetch]);
 
-  const loadDetail = async (id) => {
-    if (!id) return;
-    setErr('');
-    try {
-      const j = await apiFetch(`/wb/manager/reports/${id}`);
-      setDetail(j);
-      setStatusDraft(j.report?.status || '');
-    } catch (e) {
-      setErr('Errore dettaglio: ' + e.message);
-    }
-  };
+  const loadDetail = useCallback(
+    async (id) => {
+      if (!id) return;
+      setErr("");
+      try {
+        const j = await apiFetch(`/wb/manager/reports/${id}`);
+        setDetail(j);
+        setStatusDraft(j.report?.status || "");
+      } catch (e) {
+        setErr("Errore dettaglio: " + e.message);
+      }
+    },
+    [apiFetch]
+  );
+
 
   const loadAttachments = useCallback(async (id) => {
     if (!id) return;
@@ -313,11 +324,6 @@ export default function WbManagerPanel({ apiBase }) {
     }
     return msgs;
   }, [detail]);
-
-  const selectedReport = useMemo(() => {
-    if (!selectedId) return null;
-    return reports.find((r) => r.id === selectedId) || null;
-  }, [reports, selectedId]);
 
   return (
     <div className={styles.wb}>
