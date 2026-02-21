@@ -579,7 +579,7 @@ export default function DocumentiSplitCF({ tipi = [] }) {
   };
 
   /* Viewer grande */
-  const openViewer = async (pageIdx) => {
+  const openViewer = useCallback(async (pageIdx) => {
     if (!pdfRef.current) return;
     setViewerPageIdx(pageIdx);
     setViewerOpen(true);
@@ -595,7 +595,7 @@ export default function DocumentiSplitCF({ tipi = [] }) {
       viewport: viewport.clone({ scale: 1.6 * ratio }),
     }).promise;
     setViewerImg(canvas.toDataURL("image/jpeg", 0.92));
-  };
+  }, []);
 
   const closeViewer = useCallback(() => {
     setViewerOpen(false);

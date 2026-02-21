@@ -52,7 +52,7 @@ export default function WbManagerPanel({ apiBase }) {
 
   const threadEndRef = useRef(null);
 
-  const apiFetch = async (path, options = {}) => {
+  const apiFetch = useCallback(async (path, opts = {}) => {
     const token = await getToken();
     const res = await fetch(`${apiBase}${path}`, {
       ...options,
@@ -73,7 +73,7 @@ export default function WbManagerPanel({ apiBase }) {
     const ct = res.headers.get('content-type') || '';
     if (ct.includes('application/json')) return res.json();
     return res.text();
-  };
+  }, [apiBase, getToken]); 
 
   const fmt = (iso) => (iso ? new Date(iso).toLocaleString() : '—');
 

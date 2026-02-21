@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { getAuth } from "firebase/auth";
 import { PDFDocument } from "pdf-lib";
 import * as pdfjsLib from "pdfjs-dist";
@@ -207,7 +207,7 @@ export default function DocumentiMerge({ tipi = [] }) {
   }
 
   // calcola i target in base a assegnazione + selezioni
-  const computeTargetIds = () => {
+  const computeTargetIds = useCallback(() => {
     let targetIds = [];
     if (assegnaMode === "all") {
       targetIds = utenti
@@ -218,7 +218,7 @@ export default function DocumentiMerge({ tipi = [] }) {
       targetIds = Array.from(new Set(selectedIds.map(String)));
     }
     return targetIds;
-  };
+  }, [assegnaMode, selectedIds]);
 
   // riepilogo testo assegnazione (per modale)
   const targetSummary = useMemo(() => {
