@@ -147,8 +147,13 @@ async function addSignatureField(signatureRequestId, signerId, documentId, field
     page: Number.isFinite(safeField.page) ? safeField.page : 1, // 1-based
     x: Number.isFinite(safeField.x) ? safeField.x : 100,
     y: Number.isFinite(safeField.y) ? safeField.y : 100,
-    width: Number.isFinite(safeField.width) ? safeField.width : 180,
-    height: Number.isFinite(safeField.height) ? safeField.height : 60,
+    width: Number.isFinite(safeField.width)
+      ? Math.max(85, safeField.width)
+      : 180,
+    height: Number.isFinite(safeField.height)
+      ? Math.max(37, safeField.height)
+      : 60,
+
   };
 
   return request(
