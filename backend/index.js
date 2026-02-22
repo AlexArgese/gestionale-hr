@@ -15,6 +15,7 @@ const allowedOrigins = [
   'http://192.168.182.51:8081',
   process.env.FRONTEND_URL, 
   'https://gestionale-hr-zorh.vercel.app',
+  'https://clockeasy.it'
 ].filter(Boolean);
 
 
