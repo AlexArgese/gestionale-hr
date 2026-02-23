@@ -532,6 +532,64 @@ router.post('/', upload.array('allegato'), async (req, res) => {
   } finally {
     client.release();
   }
+});// GET preview allegato (inline) - primo allegato (attachments) o legacy
+router.get('/:id/view', async (req, res) => {
+  try {
+    // 1) Prima prova dalla tabella comunicazione_attachments (primo allegato)
+    const a = await pool.query(
+      `SELECT file_url, mime_type
+       FROM comunicazione_attachments
+       WHERE comunicazione_id = $1
+       ORDER BY id ASC
+       LIMIT 1`,
+      [req.params.id]
+    );
+
+    let rel = null;
+    let mime = null;
+
+    if (a.rows.length) {
+      rel = a.rows[0].file_url;
+      mime = a.rows[0].mime_type || null;
+    } else {
+      // 2) Fallback legacy: campo allegato_url su comunicazioni
+      const c = await pool.query(
+        `SELECT allegato_url FROM comunicazioni WHERE id = $1`,
+        [req.params.id]
+      );
+      rel = c.rows[0]?.allegato_url || null;
+    }
+
+    if (!rel) return res.status(404).send('File non trovato');
+
+    const abs = path.join(__dirname, '..', rel);
+    if (!fs.existsSync(abs)) return res.status(404).send('File non trovato');
+
+    // mime fallback da estensione se manca
+    if (!mime) {
+      const ext = path.extname(abs).toLowerCase();
+      if (ext === '.pdf') mime = 'application/pdf';
+      else if (ext === '.png') mime = 'image/png';
+      else if (ext === '.jpg' || ext === '.jpeg') mime = 'image/jpeg';
+      else if (ext === '.webp') mime = 'image/webp';
+      else mime = 'application/octet-stream';
+    }
+
+    // ✅ inline = anteprima nel browser / iframe
+    res.setHeader('Content-Type', mime);
+
+    // nome file “carino”
+    const filename = path.basename(abs).replace(/"/g, '');
+    res.setHeader('Content-Disposition', `inline; filename="${filename}"`);
+
+    // (opzionale ma consigliato) cache disabilitata per admin
+    res.setHeader('Cache-Control', 'no-store');
+
+    return res.sendFile(abs);
+  } catch (err) {
+    console.error('GET /comunicazioni/:id/view', err);
+    res.status(500).json({ error: 'Errore preview' });
+  }
 });
 
 // GET download allegato singolo (legacy + fallback su attachments)

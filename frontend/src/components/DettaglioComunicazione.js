@@ -112,7 +112,8 @@ export default function DettaglioComunicazione({ canDelete = true }) {
 
   // fallback legacy
   const hasAttachment = !!firstAttachment || !!comm.allegato_url;
-  const attachUrl = hasAttachment ? `${API}/comunicazioni/${id}/download` : null;
+  const previewUrl = hasAttachment ? `${API}/comunicazioni/${id}/view` : null;
+  const downloadUrl = hasAttachment ? `${API}/comunicazioni/${id}/download` : null;
 
   const fileName = (firstAttachment?.file_url || comm.allegato_url || "").toLowerCase();
   const isPdf = fileName.endsWith(".pdf") || (firstAttachment?.mime_type === "application/pdf");
@@ -170,23 +171,19 @@ export default function DettaglioComunicazione({ canDelete = true }) {
           <div className={styles.content}>{comm.contenuto || ""}</div>
 
           {/* Allegato */}
-          {hasAttachment && (
-            <div className={styles.attachWrap}>
-              <div className={styles.attachTitle}>Allegato</div>
-              <div className={styles.attachBox}>
-                {isPdf ? (
-                  <iframe title="allegato" src={attachUrl} />
-                ) : (
-                  <img alt="allegato" src={attachUrl} />
-                )}
-              </div>
-              <div className={styles.actions} style={{ marginTop: 12 }}>
-                <a className={styles.btnPrimary} href={attachUrl}>
-                  <FiDownload /> Scarica allegato
-                </a>
-              </div>
-            </div>
+          {isPdf ? (
+            <iframe
+              title="allegato"
+              src={previewUrl}
+              style={{ width: '100%', height: 600, border: 'none' }}
+            />
+          ) : (
+            <img alt="allegato" src={previewUrl} />
           )}
+
+          <a className={styles.btnPrimary} href={downloadUrl}>
+            <FiDownload /> Scarica allegato
+          </a>
 
           {/* Azioni admin */}
           <div className={styles.actions}>
