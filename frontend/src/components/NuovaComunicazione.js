@@ -13,6 +13,7 @@ export default function NuovaComunicazione() {
   // form core
   const [titolo, setTitolo] = useState("");
   const [contenuto, setContenuto] = useState("");
+  const [sendEmail, setSendEmail] = useState(false);
 
   // allegati multipli
   const [files, setFiles] = useState([]); // Array<File>
@@ -68,6 +69,7 @@ export default function NuovaComunicazione() {
       const fd = new FormData();
       fd.append("titolo", titolo);
       fd.append("contenuto", contenuto);
+      fd.append("send_email", sendEmail ? "1" : "0");
 
       // allegati multipli => stesso field name ripetuto (multer li raccoglie)
       for (const f of files) {
@@ -245,6 +247,21 @@ export default function NuovaComunicazione() {
               </div>
             </>
           )}
+        </div>
+        
+        <div className={styles.group} style={{ gridColumn: "1 / -1" }}>
+          <label className={styles.label}>Notifiche</label>
+          <div className={styles.inline}>
+            <input
+              id="sendEmail"
+              type="checkbox"
+              checked={sendEmail}
+              onChange={(e) => setSendEmail(e.target.checked)}
+            />
+            <label htmlFor="sendEmail" className={styles.note}>
+              Invia anche via email
+            </label>
+          </div>
         </div>
 
         {/* Azioni */}

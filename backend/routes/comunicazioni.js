@@ -7,6 +7,108 @@ const fs = require('fs');
 const pool = require('../db');
 const requireAuth = require('../middleware/requireAuth');
 
+const nodemailer = require('nodemailer');
+
+const mailTransporter = process.env.SMTP_HOST
+  ? nodemailer.createTransport({
+      host: process.env.SMTP_HOST,
+      port: Number(process.env.SMTP_PORT || 587),
+      secure: String(process.env.SMTP_SECURE || 'false') === 'true', // true solo per 465
+      auth: process.env.SMTP_USER
+        ? { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS }
+        : undefined,
+    })
+  : null;
+
+function parseBool(v) {
+  if (typeof v === 'boolean') return v;
+  if (typeof v === 'number') return v === 1;
+  if (typeof v === 'string') return ['1', 'true', 'yes', 'on'].includes(v.toLowerCase());
+  return false;
+}
+
+let _cachedSedeColumn = null; // 'sede_id' oppure 'sede' oppure null
+
+async function detectSedeColumn(client) {
+  if (_cachedSedeColumn !== null) return _cachedSedeColumn;
+
+  const q = await client.query(
+    `SELECT column_name
+     FROM information_schema.columns
+     WHERE table_schema='public' AND table_name='utenti'
+       AND column_name IN ('sede_id','sede')`
+  );
+  const cols = q.rows.map(r => r.column_name);
+
+  if (cols.includes('sede_id')) _cachedSedeColumn = 'sede_id';
+  else if (cols.includes('sede')) _cachedSedeColumn = 'sede';
+  else _cachedSedeColumn = null;
+
+  return _cachedSedeColumn;
+}
+
+async function resolveRecipients({ destinatariIds, societaId, sedeId, client }) {
+  // Ritorna { ids: number[], emails: string[] } in base ai filtri
+  // - se destinatariIds presente => usa quelli
+  // - altrimenti filtra per societaId + sedeId (se presenti)
+  const sedeCol = sedeId ? await detectSedeColumn(client) : null;
+
+  let where = `WHERE stato_attivo=TRUE`;
+  const params = [];
+
+  if (Array.isArray(destinatariIds) && destinatariIds.length) {
+    params.push(destinatariIds);
+    where += ` AND id = ANY($${params.length})`;
+  } else {
+    if (societaId) {
+      params.push(societaId);
+      where += ` AND societa_id = $${params.length}`;
+    }
+    if (sedeId && sedeCol) {
+      params.push(sedeId);
+      where += ` AND ${sedeCol} = $${params.length}`;
+    }
+    // se sedeId c'è ma non esiste colonna sede/sede_id => ignoro sedeId
+  }
+
+  const q = await client.query(
+    `SELECT id, email
+     FROM utenti
+     ${where}
+       AND email IS NOT NULL`,
+    params
+  );
+
+  return {
+    ids: q.rows.map(r => r.id),
+    emails: q.rows.map(r => r.email),
+  };
+}
+
+
+
+async function sendCommunicationEmail({ emails, titolo, contenuto }) {
+  if (!mailTransporter) throw new Error('SMTP non configurato (SMTP_HOST mancante)');
+  if (!emails.length) return;
+
+  const subject = `[ClockEasy] ${titolo || 'Nuova comunicazione'}`;
+
+  // semplice e robusto (evita HTML fancy)
+  const text =
+`${titolo || 'Nuova comunicazione'}
+
+${contenuto || ''}
+
+— ClockEasy`;
+
+  await mailTransporter.sendMail({
+    from: process.env.SMTP_FROM || process.env.SMTP_USER,
+    to: process.env.SMTP_FROM || process.env.SMTP_USER,
+    bcc: emails,
+    subject,
+    text,
+  });
+}
 /* ------------------------------------------
    Multer: upload allegato SINGOLO (legacy)
    Salva sotto /uploads
@@ -284,20 +386,58 @@ router.get('/', async (req, res) => {
 
 /* POST nuova comunicazione (MULTI allegati su comunicazione_attachments) */
 router.post('/', upload.array('allegato'), async (req, res) => {
-  const { titolo, contenuto, societa_id, creato_da, destinatari } = req.body;
+  const {
+    titolo,
+    contenuto,
+    societa_id,
+    creato_da,
+    destinatari,
+    invia_a_tutti,
+    sede_id,
+    send_email
+  } = req.body;
+
   const files = Array.isArray(req.files) ? req.files : [];
 
+  const shouldSendEmail = parseBool(send_email);
+  const sendToAll = parseBool(invia_a_tutti);
+
+  const societaIdNum = societa_id ? Number(societa_id) : null;
+  const sedeIdVal = sede_id ? (isNaN(Number(sede_id)) ? sede_id : Number(sede_id)) : null;
+
   let destinatariJson = null;
+
+  // 1) se arriva destinatari esplicito (JSON) lo rispettiamo
   if (destinatari) {
     try { destinatariJson = JSON.parse(destinatari); }
     catch { return res.status(400).json({ error: 'destinatari non è un JSON valido' }); }
   }
 
   const client = await pool.connect();
+  let comm = null;
+  let recipientEmails = [];
+
   try {
     await client.query('BEGIN');
 
-    // 1) Inserisci la comunicazione (lascia allegato_url NULL: retrocompatibilità)
+    // 2) se NON invio a tutti e NON ho destinatari espliciti,
+    //    allora genero destinatari dalla combinazione societaId + sedeId
+    if (!sendToAll && (!Array.isArray(destinatariJson) || destinatariJson.length === 0)) {
+      const r = await resolveRecipients({
+        destinatariIds: null,
+        societaId: societaIdNum,
+        sedeId: sedeIdVal,
+        client
+      });
+      destinatariJson = r.ids; // <-- fondamentale per far arrivare in APP solo a loro
+      if (shouldSendEmail) recipientEmails = r.emails;
+    }
+
+    // 3) se invio a tutti: destinatari NULL (come prima)
+    if (sendToAll) {
+      destinatariJson = null;
+    }
+
     const commRes = await client.query(
       `INSERT INTO comunicazioni (titolo, contenuto, societa_id, creato_da, destinatari)
        VALUES ($1, $2, $3, $4, $5)
@@ -305,14 +445,14 @@ router.post('/', upload.array('allegato'), async (req, res) => {
       [
         titolo,
         contenuto,
-        societa_id ? Number(societa_id) : null,
+        societaIdNum,
         creato_da ? Number(creato_da) : null,
         destinatariJson
       ]
     );
-    const comm = commRes.rows[0];
 
-    // 2) Inserisci gli allegati nella tabella dedicata
+    comm = commRes.rows[0];
+
     for (const f of files) {
       await client.query(
         `INSERT INTO comunicazione_attachments (comunicazione_id, file_url, mime_type, width, height)
@@ -321,7 +461,28 @@ router.post('/', upload.array('allegato'), async (req, res) => {
       );
     }
 
+    // 4) se invio a tutti e send_email=true, calcolo ora email con filtri (societa + sede se presente)
+    if (shouldSendEmail && sendToAll) {
+      const r = await resolveRecipients({
+        destinatariIds: null,
+        societaId: societaIdNum,
+        sedeId: sedeIdVal,
+        client
+      });
+      recipientEmails = r.emails;
+    }
+
     await client.query('COMMIT');
+
+    // invio mail DOPO commit
+    if (shouldSendEmail) {
+      try {
+        await sendCommunicationEmail({ emails: recipientEmails, titolo, contenuto });
+      } catch (mailErr) {
+        console.error('Email comunicazione fallita:', mailErr);
+      }
+    }
+
     res.json(comm);
   } catch (err) {
     await client.query('ROLLBACK');
@@ -331,8 +492,6 @@ router.post('/', upload.array('allegato'), async (req, res) => {
     client.release();
   }
 });
-
-
 
 // GET download allegato singolo (legacy + fallback su attachments)
 router.get('/:id/download', async (req, res) => {
