@@ -5,8 +5,19 @@ const pool = require('../db');
 const ExcelJS = require('exceljs');
 const QRCode = require('qrcode');
 const crypto = require('crypto');
+const requireAuth = require('../middleware/requireAuth');
 
 const validTokens = {};
+
+// ✅ Pulizia automatica ogni 30 secondi
+setInterval(() => {
+  const now = Date.now();
+  for (const token in validTokens) {
+    if (validTokens[token].expiresAt < now) {
+      delete validTokens[token];
+    }
+  }
+}, 30 * 1000);
 
 function generateToken() {
   return crypto.randomBytes(16).toString('hex');
@@ -176,7 +187,7 @@ router.get('/export', async (req, res) => {
 
 router.get('/qr', async (req, res) => {
   const token = generateToken();
-  const expiresAt = Date.now() + 15 * 60 * 1000; // 15 min
+  const expiresAt = Date.now() + 5 * 1000; // 5sec
   validTokens[token] = { expiresAt };
 
   const qrPayload = JSON.stringify({ token });
@@ -185,16 +196,23 @@ router.get('/qr', async (req, res) => {
   res.json({ image: qrImage, token });
 });
 
-router.post('/timbratura', async (req, res) => {
-  const { token, utente_id } = req.body;
+router.post('/timbratura', requireAuth, async (req, res) => {
+  const { token } = req.body;
 
   const record = validTokens[token];
   if (!record || Date.now() > record.expiresAt) {
     return res.status(400).json({ error: 'Token scaduto o non valido' });
   }
 
+  delete validTokens[token]; // ✅ token usa-e-getta
+
+  const utente_id = req.user.id; // ✅ preso dal login, non dal client
+  if (!utente_id) {
+    return res.status(401).json({ error: 'Utente non autenticato' });
+  }
+
   const now = new Date();
-  const oggi = localDateStr(now); // ✅ locale
+  const oggi = localDateStr(now);
 
   const existing = await pool.query(
     `SELECT * FROM presenze WHERE utente_id = $1 AND data = $2`,
@@ -216,8 +234,12 @@ router.post('/timbratura', async (req, res) => {
   res.json({ message: 'Timbratura registrata!' });
 });
 
-router.get('/oggi', async (req, res) => {
-  const { utente_id } = req.query;
+router.get('/oggi', requireAuth, async (req, res) => {
+  const utente_id = req.user.id;
+
+  if (!utente_id) {
+    return res.status(401).json({ error: 'Non autenticato' });
+  }
   const oggi = localDateStr(new Date()); // ✅ locale
 
   const r = await pool.query(
@@ -238,9 +260,11 @@ router.get('/oggi', async (req, res) => {
 /*                               RANGE PER APP                                */
 /* -------------------------------------------------------------------------- */
 
-router.get('/range', async (req, res) => {
+router.get('/range', requireAuth, async (req, res) => {
   try {
-    const { utente_id, start, end } = req.query;
+    const { start, end } = req.query;
+    const utente_id = req.user.id;
+
     if (!utente_id || !start || !end) {
       return res.status(400).json({ error: 'Parametri mancanti' });
     }

@@ -6,7 +6,7 @@ const API = API_BASE;
 
 function PaginaQR() {
   const [qrImage, setQrImage] = useState(null);
-  const [timeLeft, setTimeLeft] = useState(15 * 60); // 15 minuti in secondi
+  const [timeLeft, setTimeLeft] = useState(5); // 5 sec
   const [error, setError] = useState(null);
 
   const fetchQR = async () => {
@@ -16,7 +16,7 @@ function PaginaQR() {
       const data = await res.json();
       setQrImage(data.image);
       setError(null);
-      setTimeLeft(15 * 60); // reset timer
+      setTimeLeft(5); // reset timer
     } catch (err) {
       console.error('Errore nel caricamento QR:', err);
       setError('⚠️ Impossibile caricare il QR code. Riprova tra poco.');
@@ -25,7 +25,7 @@ function PaginaQR() {
 
   useEffect(() => {
     fetchQR();
-    const qrInterval = setInterval(fetchQR, 15 * 60 * 1000); // ogni 15 minuti
+    const qrInterval = setInterval(fetchQR, 5 * 1000); // ogni 5 sec
     const timerInterval = setInterval(() => {
       setTimeLeft(prev => (prev > 0 ? prev - 1 : 0));
     }, 1000);
