@@ -392,6 +392,7 @@ router.post('/', upload.array('allegato'), async (req, res) => {
     societa_id,
     creato_da,
     destinatari,
+    utente_ids,
     invia_a_tutti,
     sede_id,
     send_email
@@ -413,12 +414,52 @@ router.post('/', upload.array('allegato'), async (req, res) => {
     catch { return res.status(400).json({ error: 'destinatari non è un JSON valido' }); }
   }
 
+  // ✅ selezione manuale (array di ID) — priorità alta
+  let manualIds = null;
+  if (utente_ids) {
+    try { manualIds = JSON.parse(utente_ids); }
+    catch { return res.status(400).json({ error: 'utente_ids non è un JSON valido' }); }
+
+    if (!Array.isArray(manualIds)) {
+      return res.status(400).json({ error: 'utente_ids deve essere un array' });
+    }
+
+    manualIds = [...new Set(
+      manualIds
+        .map(n => Number(n))
+        .filter(n => Number.isInteger(n) && n > 0)
+    )];
+
+    if (manualIds.length === 0) {
+      return res.status(400).json({ error: 'utente_ids vuoto o non valido' });
+    }
+  }
+
   const client = await pool.connect();
   let comm = null;
   let recipientEmails = [];
 
   try {
     await client.query('BEGIN');
+
+    // ✅ PRIORITÀ: se l’admin seleziona utenti manualmente, usiamo quelli
+    if (!sendToAll && Array.isArray(manualIds) && manualIds.length) {
+      const q = await client.query(
+        `SELECT id, email
+        FROM utenti
+        WHERE id = ANY($1::int[]) AND stato_attivo=TRUE`,
+        [manualIds]
+      );
+
+      const idsOk = q.rows.map(r => r.id);
+      if (idsOk.length === 0) {
+        await client.query('ROLLBACK');
+        return res.status(404).json({ error: 'Nessun utente valido tra utente_ids' });
+      }
+
+      destinatariJson = idsOk; // ✅ app: arriva solo a loro
+      if (shouldSendEmail) recipientEmails = q.rows.map(r => r.email).filter(Boolean);
+    }
 
     // 2) se NON invio a tutti e NON ho destinatari espliciti,
     //    allora genero destinatari dalla combinazione societaId + sedeId
