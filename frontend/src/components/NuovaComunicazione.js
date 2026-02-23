@@ -222,6 +222,34 @@ export default function NuovaComunicazione() {
               </label>
             </div>
           </div>
+          {!inviaATutti && (
+            <div className={styles.inline} style={{ marginTop: 8 }}>
+              <input
+                id="manualMode"
+                type="checkbox"
+                checked={manualMode}
+                onChange={(e) => {
+                  const v = e.target.checked;
+                  setManualMode(v);
+                  if (v) { setSocietaId(""); setSedeId(""); }
+                }}
+              />
+              <label htmlFor="manualMode" className={styles.note}>
+                Seleziona manualmente i dipendenti
+              </label>
+
+              {manualMode && (
+                <button
+                  type="button"
+                  className={styles.btnOutline}
+                  onClick={() => setShowPicker(true)}
+                  style={{ marginLeft: 12 }}
+                >
+                  Scegli dipendenti ({selectedIds.length})
+                </button>
+              )}
+            </div>
+          )}
 
           {!inviaATutti && (
             <>
@@ -274,35 +302,6 @@ export default function NuovaComunicazione() {
             </label>
           </div>
         </div>
-
-        {!inviaATutti && (
-          <div className={styles.inline} style={{ marginTop: 8 }}>
-            <input
-              id="manualMode"
-              type="checkbox"
-              checked={manualMode}
-              onChange={(e) => {
-                const v = e.target.checked;
-                setManualMode(v);
-                if (v) { setSocietaId(""); setSedeId(""); }
-              }}
-            />
-            <label htmlFor="manualMode" className={styles.note}>
-              Seleziona manualmente i dipendenti
-            </label>
-
-            {manualMode && (
-              <button
-                type="button"
-                className={styles.btnOutline}
-                onClick={() => setShowPicker(true)}
-                style={{ marginLeft: 12 }}
-              >
-                Scegli dipendenti ({selectedIds.length})
-              </button>
-            )}
-          </div>
-        )}
 
         {/* Azioni */}
         <div className={styles.actions}>
