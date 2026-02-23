@@ -595,6 +595,14 @@ router.get('/:id/admin', requireAuth, async (req, res) => {
     const commRes = await pool.query('SELECT * FROM comunicazioni WHERE id=$1', [id]);
     if (!commRes.rows.length) return res.status(404).json({ error: 'Comunicazione non trovata' });
     const comm = commRes.rows[0];
+    const attRes = await pool.query(
+      `SELECT id, file_url, mime_type
+      FROM comunicazione_attachments
+      WHERE comunicazione_id = $1
+      ORDER BY id ASC`,
+      [id]
+    );
+    const attachments = attRes.rows;
 
     // Destinatari
     const destinatari = Array.isArray(comm.destinatari) ? comm.destinatari : [];
@@ -653,6 +661,7 @@ router.get('/:id/admin', requireAuth, async (req, res) => {
 
     res.json({
       comunicazione: comm,
+      attachments,
       destinatari: destinatariRows,
       letti,
       non_letti: nonLetti,

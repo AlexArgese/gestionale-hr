@@ -104,10 +104,18 @@ export default function DettaglioComunicazione({ canDelete = true }) {
   const pubDate = comm.data_pubblicazione
     ? new Date(comm.data_pubblicazione).toLocaleString()
     : "";
-  const hasAttachment = !!comm.allegato_url;
+  // 🔥 prima prova nuovi allegati (tabella comunicazione_attachments)
+  const firstAttachment =
+    Array.isArray(data.attachments) && data.attachments.length
+      ? data.attachments[0]
+      : null;
+
+  // fallback legacy
+  const hasAttachment = !!firstAttachment || !!comm.allegato_url;
   const attachUrl = hasAttachment ? `${API}/comunicazioni/${id}/download` : null;
-  const fileName = (comm.allegato_url || "").toLowerCase();
-  const isPdf = fileName.endsWith(".pdf");
+
+  const fileName = (firstAttachment?.file_url || comm.allegato_url || "").toLowerCase();
+  const isPdf = fileName.endsWith(".pdf") || (firstAttachment?.mime_type === "application/pdf");
 
   return (
     <div className={styles.container}>
