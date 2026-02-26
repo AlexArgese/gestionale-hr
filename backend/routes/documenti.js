@@ -922,5 +922,50 @@ router.delete('/:id', requireAuth, async (req, res) => {
   }
 });
 
+// GET /documenti/:id/presigned  -> { url: "https://...presigned..." }
+router.get('/:id/presigned', requireAuth, async (req, res) => {
+  try {
+    const docId = Number(req.params.id);
+    if (!Number.isInteger(docId) || docId <= 0) {
+      return res.status(400).json({ error: "ID documento non valido" });
+    }
+
+    // 1) recupero doc
+    const q = await pool.query(
+      `SELECT id, utente_id, nome_file, url_file, url_file_signed
+         FROM documenti
+        WHERE id = $1
+        LIMIT 1`,
+      [docId]
+    );
+    if (!q.rows.length) return res.status(404).json({ error: "Documento non trovato" });
+
+    const d = q.rows[0];
+
+    // 2) autorizzazione: doc deve appartenere all’utente loggato
+    // (coerente con il resto del file: risolvi userId da email)
+    const u = await pool.query('SELECT id FROM utenti WHERE email = $1 LIMIT 1', [req.user.email]);
+    if (!u.rows.length) return res.status(404).json({ error: "Utente non trovato" });
+    const myUserId = u.rows[0].id;
+
+    // se vuoi permettere anche admin/HR, qui va gestito un ruolo.
+    if (Number(d.utente_id) !== Number(myUserId)) {
+      return res.status(403).json({ error: "Non autorizzato" });
+    }
+
+    // 3) scelgo firmato se presente
+    const chosen = d.url_file_signed || d.url_file;
+    const chiave = normalizzaChiaveS3(chosen);
+    if (!chiave) return res.status(404).json({ error: "File non trovato" });
+
+    const signedUrl = await urlFirmatoGet({ chiave, scadeSecondi: 120 });
+
+    return res.json({ url: signedUrl, nome_file: d.nome_file });
+  } catch (err) {
+    console.error("GET /documenti/:id/presigned", err);
+    res.status(500).json({ error: "Errore presigned" });
+  }
+});
+
 
 module.exports = router;
