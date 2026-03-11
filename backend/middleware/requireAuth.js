@@ -13,11 +13,18 @@ module.exports = async function requireAuth(req, res, next) {
 
       // Recupera il ruolo dal DB utenti
       const result = await pool.query(
-        'SELECT id, ruolo FROM utenti WHERE email = $1 AND stato_attivo = true',
+        `
+        SELECT id, ruolo, app_access_revoked
+        FROM utenti
+        WHERE email = $1 AND stato_attivo = true
+        `,
         [decoded.email]
       );
 
       if (result.rows.length) {
+        if (result.rows[0].app_access_revoked) {
+          return res.status(403).json({ error: 'Account eliminato' });
+        }
         req.user.ruolo = result.rows[0].ruolo || 'employee';
         req.user.id = result.rows[0].id;
       } else {
