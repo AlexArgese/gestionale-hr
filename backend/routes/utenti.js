@@ -131,6 +131,49 @@ router.post('/', async (req, res) => {
   }
 });
 
+router.delete('/delete-my-account', requireAuth, async (req, res) => {
+  const client = await pool.connect();
+
+  try {
+    const firebaseUid = req.user.uid;
+    const userId = req.user.id;
+
+    if (!userId) {
+      return res.status(404).json({ error: 'Utente non trovato' });
+    }
+
+    await client.query('BEGIN');
+
+    await client.query(
+      `
+      UPDATE utenti
+      SET
+        app_access_revoked = TRUE,
+        app_account_deleted_at = NOW(),
+        updated_at = NOW()
+      WHERE id = $1
+      `,
+      [userId]
+    );
+
+    await client.query('COMMIT');
+
+    await admin.auth().deleteUser(firebaseUid);
+
+    return res.json({
+      message: 'Account eliminato con successo',
+    });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error('DELETE /utenti/delete-my-account', err);
+    return res.status(500).json({ message: 'Errore eliminazione account' });
+  } finally {
+    client.release();
+  }
+});
+
+module.exports = router;
+
 /* =========================================================================
    GET singolo utente
    (DEVE stare dopo /cf/all, altrimenti cattura "cf" come :id)
@@ -214,45 +257,3 @@ router.put('/:id', async (req, res) => {
   }
 });
 
-router.delete('/delete-my-account', requireAuth, async (req, res) => {
-  const client = await pool.connect();
-
-  try {
-    const firebaseUid = req.user.uid;
-    const userId = req.user.id;
-
-    if (!userId) {
-      return res.status(404).json({ error: 'Utente non trovato' });
-    }
-
-    await client.query('BEGIN');
-
-    await client.query(
-      `
-      UPDATE utenti
-      SET
-        app_access_revoked = TRUE,
-        app_account_deleted_at = NOW(),
-        updated_at = NOW()
-      WHERE id = $1
-      `,
-      [userId]
-    );
-
-    await client.query('COMMIT');
-
-    await admin.auth().deleteUser(firebaseUid);
-
-    return res.json({
-      message: 'Account eliminato con successo',
-    });
-  } catch (err) {
-    await client.query('ROLLBACK');
-    console.error('DELETE /utenti/delete-my-account', err);
-    return res.status(500).json({ error: 'Errore eliminazione account' });
-  } finally {
-    client.release();
-  }
-});
-
-module.exports = router;
