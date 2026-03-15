@@ -55,6 +55,12 @@ router.get('/export', async (req, res) => {
     if (sede)    { filters.push('u.sede = $' + (values.length + 1)); values.push(sede); }
     if (ruolo)   { filters.push('u.ruolo = $' + (values.length + 1)); values.push(ruolo); }
 
+    const utente_id = req.query.utente_id ? Number(req.query.utente_id) : null;
+    if (utente_id) {
+      filters.push('u.id = $' + (values.length + 1));
+      values.push(utente_id);
+    }
+
     const filterSql = filters.length ? 'WHERE ' + filters.join(' AND ') : '';
 
     const utentiQuery = `
