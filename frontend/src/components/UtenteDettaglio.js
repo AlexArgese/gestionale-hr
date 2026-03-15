@@ -6,6 +6,7 @@ import {
   FiMapPin, FiHome, FiPhone, FiHash, FiBriefcase, FiGrid
 } from "react-icons/fi";
 import DocumentiUtente from "./DocumentiUtente";
+import PresenzeExportUtente from "./PresenzeExportUtente";
 import { API_BASE } from "../api";
 
 const API = API_BASE;
@@ -469,6 +470,11 @@ function UtenteDettaglio({
           </button>
         </div>
       </div>
+
+      <PresenzeExportUtente
+        userId={id}
+        nome={form ? `${form.nome} ${form.cognome}` : ""}
+      />
 
       {/* --- SEZIONE: Documenti utente (senza card wrapper) --- */}
       <DocumentiUtente userId={id} />
