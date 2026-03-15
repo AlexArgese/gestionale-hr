@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { FiArrowLeft } from "react-icons/fi";
 import styles from "./NuovaComunicazione.module.css";
+import SelettoreDipendenti from "./SelettoreDipendenti";
 
 import { API_BASE } from "../api";
 
@@ -13,6 +14,10 @@ export default function NuovaComunicazione() {
   // form core
   const [titolo, setTitolo] = useState("");
   const [contenuto, setContenuto] = useState("");
+  const [sendEmail, setSendEmail] = useState(false);
+  const [manualMode, setManualMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState([]);
+  const [showPicker, setShowPicker] = useState(false);
 
   // allegati multipli
   const [files, setFiles] = useState([]); // Array<File>
@@ -44,8 +49,9 @@ export default function NuovaComunicazione() {
 
   const canSubmit = useMemo(() => {
     if (!titolo.trim() || !contenuto.trim()) return false;
+    if (!inviaATutti && manualMode && selectedIds.length === 0) return false;
     return true;
-  }, [titolo, contenuto]);
+  }, [titolo, contenuto, inviaATutti, manualMode, selectedIds]);
 
   const onFilesChange = (e) => {
     const list = Array.from(e.target.files || []);
@@ -68,6 +74,7 @@ export default function NuovaComunicazione() {
       const fd = new FormData();
       fd.append("titolo", titolo);
       fd.append("contenuto", contenuto);
+      fd.append("send_email", sendEmail ? "1" : "0");
 
       // allegati multipli => stesso field name ripetuto (multer li raccoglie)
       for (const f of files) {
@@ -77,8 +84,12 @@ export default function NuovaComunicazione() {
       // destinatari
       fd.append("invia_a_tutti", inviaATutti ? "1" : "0");
       if (!inviaATutti) {
-        if (societaId) fd.append("societa_id", societaId);
-        if (sedeId) fd.append("sede_id", sedeId);
+        if (manualMode) {
+          fd.append("utente_ids", JSON.stringify(selectedIds));
+        } else {
+          if (societaId) fd.append("societa_id", societaId);
+          if (sedeId) fd.append("sede_id", sedeId);
+        }
       }
 
       const res = await fetch(`${API}/comunicazioni`, {
@@ -204,13 +215,41 @@ export default function NuovaComunicazione() {
                 id="inviaATutti"
                 type="checkbox"
                 checked={inviaATutti}
-                onChange={(e) => setInviaATutti(e.target.checked)}
+                onChange={(e) => { setInviaATutti(e.target.checked); if (e.target.checked) setManualMode(false); }}
               />
               <label htmlFor="inviaATutti" className={styles.note}>
                 Invia a tutti gli utenti attivi
               </label>
             </div>
           </div>
+          {!inviaATutti && (
+            <div className={styles.inline} style={{ marginTop: 8 }}>
+              <input
+                id="manualMode"
+                type="checkbox"
+                checked={manualMode}
+                onChange={(e) => {
+                  const v = e.target.checked;
+                  setManualMode(v);
+                  if (v) { setSocietaId(""); setSedeId(""); }
+                }}
+              />
+              <label htmlFor="manualMode" className={styles.note}>
+                Seleziona manualmente i dipendenti
+              </label>
+
+              {manualMode && (
+                <button
+                  type="button"
+                  className={styles.btnOutline}
+                  onClick={() => setShowPicker(true)}
+                  style={{ marginLeft: 12 }}
+                >
+                  Scegli dipendenti ({selectedIds.length})
+                </button>
+              )}
+            </div>
+          )}
 
           {!inviaATutti && (
             <>
@@ -221,6 +260,7 @@ export default function NuovaComunicazione() {
                   className={styles.select}
                   value={societaId}
                   onChange={(e) => setSocietaId(e.target.value)}
+                  disabled={manualMode}
                 >
                   <option value="">Tutte</option>
                   {societa.map(s => (
@@ -236,6 +276,7 @@ export default function NuovaComunicazione() {
                   className={styles.select}
                   value={sedeId}
                   onChange={(e) => setSedeId(e.target.value)}
+                  disabled={manualMode}
                 >
                   <option value="">Tutte</option>
                   {sedi.map((s, i) => (
@@ -245,6 +286,21 @@ export default function NuovaComunicazione() {
               </div>
             </>
           )}
+        </div>
+
+        <div className={styles.group} style={{ gridColumn: "1 / -1" }}>
+          <label className={styles.label}>Notifiche</label>
+          <div className={styles.inline}>
+            <input
+              id="sendEmail"
+              type="checkbox"
+              checked={sendEmail}
+              onChange={(e) => setSendEmail(e.target.checked)}
+            />
+            <label htmlFor="sendEmail" className={styles.note}>
+              Invia anche via email
+            </label>
+          </div>
         </div>
 
         {/* Azioni */}
@@ -265,6 +321,17 @@ export default function NuovaComunicazione() {
           </button>
         </div>
       </form>
+      {showPicker && (
+        <SelettoreDipendenti
+          allowMultiple={true}
+          preselectedIds={selectedIds}
+          onClose={() => setShowPicker(false)}
+          onConfirm={(ids) => {
+            setSelectedIds(ids || []);
+            setShowPicker(false);
+          }}
+        />
+      )}
     </div>
   );
 }
