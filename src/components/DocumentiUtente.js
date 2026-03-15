@@ -1,171 +1,169 @@
-import React, { useEffect, useMemo, useRef, useState, useCallback } from "react";
-import { FiFile, FiChevronDown, FiTrash2, FiUpload, FiPaperclip, FiChevronRight } from "react-icons/fi";
+// frontend/src/DocumentiUtente.js
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import { FiFile, FiChevronDown, FiTrash2, FiUpload, FiPaperclip } from "react-icons/fi";
 import styles from "./DocumentiUtente.module.css";
+
+/**
+ * Rotte usate:
+ *  - GET    /documenti/utente/:id          (lista)
+ *  - GET    /documenti/tipi                (tipi ufficiali)
+ *  - POST   /documenti/upload              (multipart: file, utente_id, tipo_documento, data_scadenza?)
+ *  - DELETE /documenti/:docId
+ *  - VIEW   static /uploads/documenti/<filename>  (apertura inline in nuova scheda)
+ *
+ * Tutte con credentials: 'include' (requireAuth).
+ */
 import { API_BASE } from "../api";
 
 const API = API_BASE;
 
-const fmtData = (v) => {
-  if (!v) return "";
-  try { return new Date(v).toLocaleDateString("it-IT", { day: "2-digit", month: "2-digit", year: "numeric" }); }
-  catch { return ""; }
-};
-const getYear = (v) => {
-  if (!v) return "—";
-  try { return String(new Date(v).getFullYear()); }
-  catch { return "—"; }
-};
-
-export default function DocumentiUtente({ userId, baseUrl = API }) {
-  const [docs, setDocs]       = useState([]);
+function DocumentiUtente({ userId, baseUrl = API }) {
+  const [docs, setDocs] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [err, setErr]         = useState("");
-  const [tipi, setTipi]       = useState([]);
-  const [selFiles, setSelFiles] = useState([]);
+  const [err, setErr] = useState("");
+
+  const [tipi, setTipi] = useState([]); // da /documenti/tipi
+
+  // upload state
+  const [selFiles, setSelFiles] = useState([]); // [{file, tipo_documento:"", data_scadenza:""}]
   const fileInputRef = useRef(null);
 
-  /* stato apertura categorie e anni */
-  const [openCats, setOpenCats]   = useState({});
-  const [openYears, setOpenYears] = useState({});
+  const listUrl     = `${baseUrl}/documenti/utente/${userId}`;
+  const tipiUrl     = `${baseUrl}/documenti/tipi`;
+  const uploadUrl   = `${baseUrl}/documenti/upload`;
+  const deleteUrl   = (docId) => `${baseUrl}/documenti/${docId}`;
+  const viewUrl = (docId) => `${baseUrl}/documenti/${docId}/view`;
 
-  /* drag & drop */
-  const [dragging, setDragging]       = useState(null);
-  const [dragOverCat, setDragOverCat] = useState(null);
+  // mappa record -> shape UI
+  const mapDoc = (d) => {
+    return {
+      id: d?.id,
+      name: d?.nome_file || "documento",
+      tipo: d?.tipo_documento || "Altro",
+      created_at: d?.data_upload || null,
+      scadenza: d?.data_scadenza || null,
+      viewHref: d?.id ? viewUrl(d.id) : undefined,
+      isSigned: !!d?.url_file_signed,
+      yousignStatus: d?.yousign_status || null,
+    };
+  };
 
-  const listUrl   = `${baseUrl}/documenti/utente/${userId}`;
-  const tipiUrl   = `${baseUrl}/documenti/tipi`;
-  const uploadUrl = `${baseUrl}/documenti/upload`;
-  const deleteUrl = (id) => `${baseUrl}/documenti/${id}`;
-  const viewUrl   = (id) => `${baseUrl}/documenti/${id}/view`;
-  const patchUrl  = (id) => `${baseUrl}/documenti/${id}`;
 
-  const mapDoc = (d) => ({
-    id: d.id,
-    name: d.nome_file || "documento",
-    tipo: (d.tipo_documento || "Altro").toUpperCase().trim(),
-    date: d.data_upload || null,
-    scadenza: d.data_scadenza || null,
-    viewHref: d.id ? viewUrl(d.id) : undefined,
-  });
-
-  const fetchDocs = useCallback(async () => {
+  const fetchDocs = async () => {
     try {
-      setLoading(true); setErr("");
-      const r = await fetch(listUrl, { headers: { Accept: "application/json" }, credentials: "include" });
-      if (!r.ok) throw new Error(`HTTP ${r.status}`);
-      const data = await r.json();
-      setDocs((Array.isArray(data) ? data : data?.items || []).map(mapDoc));
-    } catch (e) { setErr(e.message); }
-    finally { setLoading(false); }
-  }, [listUrl]);
+      setLoading(true);
+      setErr("");
+      const res = await fetch(listUrl, {
+        headers: { Accept: "application/json" },
+        credentials: "include",
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      setDocs((Array.isArray(data) ? data : (data?.items || [])).map(mapDoc));
+    } catch (e) {
+      setErr(e.message || "Errore caricamento documenti");
+    } finally {
+      setLoading(false);
+    }
+  };
 
-  const fetchTipi = useCallback(async () => {
+  const fetchTipi = async () => {
     try {
-      const r = await fetch(tipiUrl, { headers: { Accept: "application/json" }, credentials: "include" });
-      if (!r.ok) return;
-      const arr = await r.json();
+      const res = await fetch(tipiUrl, { headers: { Accept: "application/json" }, credentials: "include" });
+      if (!res.ok) return;
+      const arr = await res.json();
       if (Array.isArray(arr) && arr.length) setTipi(arr);
     } catch {}
-  }, [tipiUrl]);
+  };
 
-  useEffect(() => { fetchTipi(); fetchDocs(); }, [userId, baseUrl]);
+  useEffect(() => {
+    fetchTipi();
+    fetchDocs();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userId, baseUrl]);
 
-  /* raggruppamento cat → anno → docs */
+  // grouping per tipo_documento
   const grouped = useMemo(() => {
     const g = {};
     for (const d of docs) {
-      const cat  = d.tipo || "ALTRO";
-      const year = getYear(d.date);
-      if (!g[cat]) g[cat] = {};
-      if (!g[cat][year]) g[cat][year] = [];
-      g[cat][year].push(d);
-    }
-    for (const cat of Object.keys(g)) {
-      g[cat] = Object.fromEntries(
-        Object.entries(g[cat]).sort(([a], [b]) => b.localeCompare(a))
-      );
+      const key = d.tipo || "Altro";
+      if (!g[key]) g[key] = [];
+      g[key].push(d);
     }
     return g;
   }, [docs]);
 
-  const toggleCat  = (cat)       => setOpenCats(p  => ({ ...p, [cat]: !p[cat] }));
-  const toggleYear = (cat, year) => setOpenYears(p => ({ ...p, [`${cat}|${year}`]: !p[`${cat}|${year}`] }));
-  const isCatOpen  = (cat)       => !!openCats[cat];
-  const isYearOpen = (cat, year) => openYears[`${cat}|${year}`] !== false; // default aperto
-
-  /* upload */
   const onPickFiles = (ev) => {
     const files = Array.from(ev.target.files || []);
     if (!files.length) return;
-    setSelFiles(p => [...p, ...files.map(f => ({ file: f, tipo_documento: "", data_scadenza: "" }))]);
+    // nessun default: l’utente deve scegliere il tipo
+    const withMeta = files.map((f) => ({ file: f, tipo_documento: "", data_scadenza: "" }));
+    setSelFiles((prev) => [...prev, ...withMeta]);
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
-  const allHaveTipo = selFiles.length > 0 && selFiles.every(x => x.tipo_documento.trim());
+
+  const changeChipTipo = (idx, val) => {
+    setSelFiles((prev) => prev.map((x, i) => (i === idx ? { ...x, tipo_documento: val } : x)));
+  };
+  const changeChipScadenza = (idx, val) => {
+    setSelFiles((prev) => prev.map((x, i) => (i === idx ? { ...x, data_scadenza: val } : x)));
+  };
+  const removeChip = (idx) => setSelFiles((prev) => prev.filter((_x, i) => i !== idx));
+
+  const allHaveTipo = selFiles.length > 0 && selFiles.every((x) => String(x.tipo_documento || "").trim() !== "");
 
   const uploadAll = async () => {
-    if (!allHaveTipo) return;
-    const summary = selFiles.map(it => `• ${it.file.name} — ${it.tipo_documento}`).join("\n");
-    if (!window.confirm(`Confermi il caricamento di ${selFiles.length} file?\n\n${summary}`)) return;
+    if (!allHaveTipo) return; // safety
+
+    // 🔔 Conferma prima dell’upload
+    const summary = selFiles
+      .map((it) => `• ${it.file.name} — ${it.tipo_documento}${it.data_scadenza ? ` (scad. ${it.data_scadenza})` : ""}`)
+      .join("\n");
+    const ok = window.confirm(`Confermi il caricamento di ${selFiles.length} file?\n\n${summary}`);
+    if (!ok) return;
+
     try {
       setErr("");
+      // /documenti/upload accetta 1 file per volta → invio in serie
       for (const item of selFiles) {
         const fd = new FormData();
         fd.append("file", item.file);
         fd.append("utente_id", String(userId));
         fd.append("tipo_documento", item.tipo_documento);
         if (item.data_scadenza) fd.append("data_scadenza", item.data_scadenza);
-        const r = await fetch(uploadUrl, { method: "POST", body: fd, credentials: "include" });
-        if (!r.ok) { const t = await r.text().catch(() => ""); throw new Error(t || `Upload fallito (${r.status})`); }
+
+        const res = await fetch(uploadUrl, {
+          method: "POST",
+          body: fd,
+          credentials: "include",
+        });
+        if (!res.ok) {
+          const txt = await res.text().catch(() => "");
+          throw new Error(txt || `Upload fallito (${res.status})`);
+        }
       }
       setSelFiles([]);
       fetchDocs();
-    } catch (e) { setErr(e.message); }
+    } catch (e) {
+      setErr(e.message || "Errore upload");
+    }
   };
 
   const deleteDoc = async (doc) => {
-    if (!window.confirm(`Eliminare "${doc.name}"?`)) return;
+    if (!window.confirm(`Eliminare il documento "${doc.name}"?`)) return;
     try {
       setErr("");
-      const r = await fetch(deleteUrl(doc.id), { method: "DELETE", credentials: "include" });
-      if (!r.ok) throw new Error(`HTTP ${r.status}`);
-      setDocs(p => p.filter(d => d.id !== doc.id));
-    } catch (e) { setErr(e.message); }
-  };
-
-  /* drag & drop */
-  const onDragStart = (e, docId) => { setDragging(docId); e.dataTransfer.effectAllowed = "move"; };
-  const onDragEnd   = () => { setDragging(null); setDragOverCat(null); };
-
-  const onCatDragOver  = (e, cat) => { e.preventDefault(); e.dataTransfer.dropEffect = "move"; setDragOverCat(cat); };
-  const onCatDragLeave = () => setDragOverCat(null);
-
-  const onCatDrop = async (e, newCat) => {
-    e.preventDefault();
-    setDragOverCat(null);
-    if (!dragging) return;
-    const doc = docs.find(d => d.id === dragging);
-    if (!doc || doc.tipo === newCat) return;
-
-    setDocs(p => p.map(d => d.id === dragging ? { ...d, tipo: newCat } : d)); // ottimistic
-
-    try {
-      const r = await fetch(patchUrl(dragging), {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({ tipo_documento: newCat }),
-      });
-      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      const res = await fetch(deleteUrl(doc.id), { method: "DELETE", credentials: "include" });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      setDocs((prev) => prev.filter((d) => d.id !== doc.id));
     } catch (e) {
-      setErr(`Errore aggiornamento categoria: ${e.message}`);
-      setDocs(p => p.map(d => d.id === dragging ? { ...d, tipo: doc.tipo } : d)); // rollback
+      setErr(e.message || "Errore eliminazione");
     }
-    setDragging(null);
   };
 
   return (
     <div className={styles.container}>
-      {/* Titolo */}
+      {/* Titolo sezione */}
       <div className={styles.head}>
         <FiFile className={styles.icon} />
         <h3 className={styles.title}>Documenti</h3>
@@ -175,10 +173,17 @@ export default function DocumentiUtente({ userId, baseUrl = API }) {
       {err && <div className="small" style={{ color: "#8A1F1F", marginBottom: 8 }}>{err}</div>}
       {loading && <div className="small">Caricamento documenti…</div>}
 
-      {/* Upload */}
+      {/* UPLOAD */}
       <div className={styles.upload}>
         <div className={styles.controlsRow}>
-          <input ref={fileInputRef} className={styles.hiddenFile} id="filepick" type="file" multiple onChange={onPickFiles} />
+          <input
+            ref={fileInputRef}
+            className={styles.hiddenFile}
+            id="filepick"
+            type="file"
+            multiple
+            onChange={onPickFiles}
+          />
           <label htmlFor="filepick" className="btn btn-outline">
             <FiUpload /> Seleziona file
           </label>
@@ -187,29 +192,41 @@ export default function DocumentiUtente({ userId, baseUrl = API }) {
           </button>
         </div>
 
+        {/* Chips dei file selezionati */}
         <div className={styles.filesBar}>
           {!selFiles.length && <span className={styles.helper}>Nessun file selezionato.</span>}
           {selFiles.map((f, idx) => (
             <div key={idx} className={styles.chip}>
               <span className={styles.name}>{f.file.name}</span>
-              <input
-                list={`tipi-doc-${idx}`}
-                className={styles.chipSelect}
-                value={f.tipo_documento}
-                onChange={e => setSelFiles(p => p.map((x, i) => i === idx ? { ...x, tipo_documento: e.target.value } : x))}
-                placeholder="Tipo documento…"
-              />
-              <datalist id={`tipi-doc-${idx}`}>
-                {tipi.map(t => <option key={t} value={t} />)}
-              </datalist>
+
+              {/* Tipo documento OBBLIGATORIO */}
+              <div className={styles.chipTipoWrapper}>
+                <input
+                  list={`tipi-doc-${idx}`}
+                  className={styles.chipSelect}
+                  value={f.tipo_documento}
+                  onChange={(e) => changeChipTipo(idx, e.target.value)}
+                  placeholder="Tipo documento…"
+                />
+                <datalist id={`tipi-doc-${idx}`}>
+                  {tipi.map((t) => (
+                    <option key={t} value={t} />
+                  ))}
+                </datalist>
+              </div>
+
+              {/* Scadenza opzionale */}
               <input
                 type="date"
                 className={styles.chipSelect}
                 value={f.data_scadenza}
-                onChange={e => setSelFiles(p => p.map((x, i) => i === idx ? { ...x, data_scadenza: e.target.value } : x))}
+                onChange={(e) => changeChipScadenza(idx, e.target.value)}
                 title="Data scadenza (opzionale)"
               />
-              <button className={styles.chipBtn} onClick={() => setSelFiles(p => p.filter((_, i) => i !== idx))}>✕</button>
+
+              <button className={styles.chipBtn} onClick={() => removeChip(idx)} title="Rimuovi">
+                ✕
+              </button>
             </div>
           ))}
         </div>
@@ -221,91 +238,51 @@ export default function DocumentiUtente({ userId, baseUrl = API }) {
         )}
       </div>
 
-      {/* Lista categorie */}
+      {/* LISTA per tipo_documento */}
       {!loading && Object.keys(grouped).length === 0 && (
-        <div className="small" style={{ color: "var(--txt-muted)" }}>Nessun documento caricato.</div>
+        <div className="small" style={{ color: "var(--txt-muted)" }}>
+          Nessun documento caricato.
+        </div>
       )}
 
-      {!loading && Object.entries(grouped).sort(([a], [b]) => a.localeCompare(b)).map(([cat, years]) => {
-        const total    = Object.values(years).reduce((n, arr) => n + arr.length, 0);
-        const isOpen   = isCatOpen(cat);
-        const isDragOver = dragOverCat === cat;
-
-        return (
-          <details
-            key={cat}
-            className={styles.details}
-            open={isOpen || undefined}
-            style={isDragOver ? { outline: "2px dashed #D0933C", outlineOffset: 2 } : undefined}
-            onDragOver={e => onCatDragOver(e, cat)}
-            onDragLeave={onCatDragLeave}
-            onDrop={e => onCatDrop(e, cat)}
-          >
-            <summary className={styles.summary} onClick={e => { e.preventDefault(); toggleCat(cat); }}>
-              <span>{cat} ({total})</span>
-              <span className={styles.chev}><FiChevronDown /></span>
+      {!loading &&
+        Object.entries(grouped).map(([tipo, items]) => (
+          <details key={tipo} className={styles.details} open>
+            <summary className={styles.summary}>
+              <span>
+                {tipo} ({items.length})
+              </span>
+              <span className={styles.chev}>
+                <FiChevronDown />
+              </span>
             </summary>
-
-            {isOpen && Object.entries(years).map(([year, items]) => {
-              const yOpen = isYearOpen(cat, year);
-              return (
-                <div key={year} style={{ borderBottom: "1px solid var(--border, #E5E7EB)" }}>
-                  {/* Header anno */}
-                  <div
-                    onClick={() => toggleYear(cat, year)}
-                    style={{
-                      display: "flex", alignItems: "center", gap: 6,
-                      padding: "6px 14px", cursor: "pointer", userSelect: "none",
-                      background: "var(--bg-subtle, #F8FAFC)",
-                      fontSize: 12, fontWeight: 600, color: "var(--txt-muted, #64748B)",
-                      letterSpacing: "0.3px",
-                    }}
+            <ul className={styles.list}>
+              {items.map((d) => (
+                <li key={d.id} className={styles.item}>
+                  {/* APERTURA INLINE IN NUOVA SCHEDA */}
+                  <a
+                    className={styles.link}
+                    href={d.viewHref || "#"}
+                    target="_blank"
+                    rel="noreferrer"
+                    title="Apri in una nuova scheda"
                   >
-                    {yOpen ? <FiChevronDown size={11} /> : <FiChevronRight size={11} />}
-                    {year}
-                    <span style={{ fontWeight: 400, marginLeft: 2 }}>({items.length})</span>
-                  </div>
-
-                  {yOpen && (
-                    <ul className={styles.list}>
-                      {items
-                        .sort((a, b) => (b.date || "").localeCompare(a.date || ""))
-                        .map(doc => (
-                          <li
-                            key={doc.id}
-                            className={styles.item}
-                            draggable
-                            onDragStart={e => onDragStart(e, doc.id)}
-                            onDragEnd={onDragEnd}
-                            style={dragging === doc.id ? { opacity: 0.4 } : undefined}
-                          >
-                            <a
-                              className={styles.link}
-                              href={doc.viewHref || "#"}
-                              target="_blank"
-                              rel="noreferrer"
-                              title={doc.name}
-                            >
-                              <FiPaperclip style={{ verticalAlign: "-2px", marginRight: 4 }} />
-                              {doc.name}
-                            </a>
-                            <span className={styles.meta}>
-                              {fmtData(doc.date)}
-                              {doc.scadenza && <span style={{ color: "#D97706", marginLeft: 6 }}>⚠ {fmtData(doc.scadenza)}</span>}
-                            </span>
-                            <button className={styles.delBtn} onClick={() => deleteDoc(doc)} title="Elimina">
-                              <FiTrash2 />
-                            </button>
-                          </li>
-                        ))}
-                    </ul>
-                  )}
-                </div>
-              );
-            })}
+                    <FiPaperclip style={{ verticalAlign: "-2px" }} /> {d.name}
+                  </a>
+                  <span className={styles.meta}>
+                    {d.created_at ? ` • ${new Date(d.created_at).toLocaleDateString()}` : ""}
+                    {d.scadenza ? ` • Scad.: ${new Date(d.scadenza).toLocaleDateString()}` : ""}
+                  </span>
+                  <button className={styles.delBtn} onClick={() => deleteDoc(d)} title="Elimina">
+                    <FiTrash2 />
+                  </button>
+                </li>
+              ))}
+            </ul>
           </details>
-        );
-      })}
+        ))}
     </div>
   );
 }
+
+export default DocumentiUtente;
