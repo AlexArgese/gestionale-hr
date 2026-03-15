@@ -4,9 +4,7 @@ import {
   FiDownload,
   FiCalendar,
   FiUsers,
-  FiHome,
   FiMapPin,
-  FiBriefcase,
   FiFileText,
   FiSave,
 } from 'react-icons/fi';
@@ -22,45 +20,44 @@ function PresenzeExport() {
   const [soloPresenti, setSoloPresenti] = useState(false);
 
   // Opzioni select
-  const [societaOptions, setSocietaOptions] = useState([]);
-  const [ruoloOptions, setRuoloOptions] = useState([]);
   const [sedeOptions, setSedeOptions] = useState([]);
   const [utentiOptions, setUtentiOptions] = useState([]);
 
   // Valori selezionati
-  const [societa, setSocieta] = useState(null);
-  const [sede, setSede] = useState(null);
-  const [ruolo, setRuolo] = useState(null);
-
+  const [selectedSedi, setSelectedSedi] = useState([]);
   const [selectedUtenti, setSelectedUtenti] = useState([]);
   const [nota, setNota] = useState('');
 
-  // Caricamento opzioni da /utenti
   useEffect(() => {
+    // Carico utenti per sezione note
     fetch(`${API}/utenti`)
       .then((r) => r.json())
       .then((data) => {
-        const societa = [...new Set(data.map((u) => u.societa_nome))]
-          .filter(Boolean)
-          .map((s) => ({ label: s, value: s }));
-
-        const ruoli = [...new Set(data.map((u) => u.ruolo))]
-          .filter(Boolean)
-          .map((r) => ({ label: r, value: r }));
-
-        const sedi = [...new Set(data.map((u) => u.sede))]
-          .filter(Boolean)
-          .map((s) => ({ label: s, value: s }));
-
         const utenti = data.map((u) => ({
           label: `${u.nome} ${u.cognome}`,
           value: u.id,
         }));
 
-        setSocietaOptions(societa);
-        setRuoloOptions(ruoli);
-        setSedeOptions(sedi);
         setUtentiOptions(utenti);
+      })
+      .catch(() => {
+        // eventualmente gestisci errore
+      });
+
+    // Carico sedi dalla tabella sedi
+    fetch(`${API}/sedi`)
+      .then((r) => r.json())
+      .then((data) => {
+        const sedi = data
+          .map((s) => {
+            const nomeSede = s.nome || s.sede || s.label || '';
+            return nomeSede
+              ? { label: nomeSede, value: nomeSede }
+              : null;
+          })
+          .filter(Boolean);
+
+        setSedeOptions(sedi);
       })
       .catch(() => {
         // eventualmente gestisci errore
@@ -91,10 +88,13 @@ function PresenzeExport() {
     const params = new URLSearchParams();
     params.append('start', startDate);
     params.append('end', endDate);
+
     if (soloPresenti) params.append('solo_presenti', '1');
-    if (societa) params.append('societa', societa.value);
-    if (sede) params.append('sede', sede.value);
-    if (ruolo) params.append('ruolo', ruolo.value);
+
+    // Multi-sede cumulativo
+    selectedSedi.forEach((s) => {
+      params.append('sede', s.value);
+    });
 
     window.open(
       `${API}/presenze/export?${params.toString()}`,
@@ -116,12 +116,12 @@ function PresenzeExport() {
       nota: nota.trim(),
     };
 
-    // Conferma "pulita" prima del salvataggio
     const conferma = window.confirm(
       `Confermi il salvataggio della nota per ${
         selectedUtenti.length
       } dipendente/i nel periodo ${rangeLabel}?`
     );
+
     if (!conferma) return;
 
     fetch(`${API}/presenze/note`, {
@@ -144,7 +144,6 @@ function PresenzeExport() {
       });
   };
 
-  // Icon helper
   const Icon = ({ Cmp, className }) =>
     Cmp ? <Cmp className={className} /> : null;
 
@@ -228,61 +227,23 @@ function PresenzeExport() {
           </div>
 
           <div className={styles.cardBody}>
-            <div className={styles.groupRow}>
-              <div className={styles.group}>
-                <label className={styles.label}>
-                  <Icon Cmp={FiHome} className={styles.labelIcon} />
-                  Società
-                </label>
-                <div className={styles.selectWrap}>
-                  <Select
-                    classNamePrefix="presenze-select"
-                    options={societaOptions}
-                    value={societa}
-                    onChange={setSocieta}
-                    isClearable
-                    isSearchable
-                    placeholder="Tutte le società"
-                  />
-                </div>
-              </div>
-
-              <div className={styles.group}>
-                <label className={styles.label}>
-                  <Icon Cmp={FiMapPin} className={styles.labelIcon} />
-                  Sede
-                </label>
-                <div className={styles.selectWrap}>
-                  <Select
-                    classNamePrefix="presenze-select"
-                    options={sedeOptions}
-                    value={sede}
-                    onChange={setSede}
-                    isClearable
-                    isSearchable
-                    placeholder="Tutte le sedi"
-                  />
-                </div>
-              </div>
-            </div>
-
-            <div className={styles.groupRow}>
-              <div className={styles.group}>
-                <label className={styles.label}>
-                  <Icon Cmp={FiBriefcase} className={styles.labelIcon} />
-                  Ruolo
-                </label>
-                <div className={styles.selectWrap}>
-                  <Select
-                    classNamePrefix="presenze-select"
-                    options={ruoloOptions}
-                    value={ruolo}
-                    onChange={setRuolo}
-                    isClearable
-                    isSearchable
-                    placeholder="Tutti i ruoli"
-                  />
-                </div>
+            <div className={styles.group}>
+              <label className={styles.label}>
+                <Icon Cmp={FiMapPin} className={styles.labelIcon} />
+                Sedi
+              </label>
+              <div className={styles.selectWrap}>
+                <Select
+                  classNamePrefix="presenze-select"
+                  options={sedeOptions}
+                  value={selectedSedi}
+                  onChange={setSelectedSedi}
+                  isMulti
+                  isClearable
+                  isSearchable
+                  closeMenuOnSelect={false}
+                  placeholder="Seleziona una o più sedi"
+                />
               </div>
             </div>
 

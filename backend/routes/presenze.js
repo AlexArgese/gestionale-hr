@@ -41,7 +41,7 @@ function toSuperscript(n) {
 /* -------------------------------------------------------------------------- */
 
 router.get('/export', async (req, res) => {
-  const { start, end, societa, sede, ruolo, solo_presenti } = req.query;
+  const { start, end, solo_presenti } = req.query;
 
   try {
     if (!start || !end) {
@@ -51,26 +51,48 @@ router.get('/export', async (req, res) => {
     const filters = [];
     const values = [];
 
-    if (societa) { filters.push('s.ragione_sociale = $' + (values.length + 1)); values.push(societa); }
-    if (sede)    { filters.push('u.sede = $' + (values.length + 1)); values.push(sede); }
-    if (ruolo)   { filters.push('u.ruolo = $' + (values.length + 1)); values.push(ruolo); }
+    // gestisce sede singola o multipla:
+    // ?sede=Milano&sede=Roma
+    const sedi = req.query.sede
+      ? Array.isArray(req.query.sede)
+        ? req.query.sede
+        : [req.query.sede]
+      : [];
+
+    // filtro sedi cumulative nel campo testo utenti.sede
+    if (sedi.length > 0) {
+      const sedeConditions = sedi.map((nomeSede) => {
+        values.push(nomeSede.trim());
+
+        return `
+          EXISTS (
+            SELECT 1
+            FROM unnest(string_to_array(COALESCE(u.sede, ''), ',')) AS sede_item
+            WHERE trim(sede_item) = $${values.length}
+          )
+        `;
+      });
+
+      filters.push(`(${sedeConditions.join(' OR ')})`);
+    }
 
     const utente_id = req.query.utente_id ? Number(req.query.utente_id) : null;
     if (utente_id) {
-      filters.push('u.id = $' + (values.length + 1));
+      filters.push(`u.id = $${values.length + 1}`);
       values.push(utente_id);
     }
 
-    const filterSql = filters.length ? 'WHERE ' + filters.join(' AND ') : '';
+    const filterSql = filters.length ? `WHERE ${filters.join(' AND ')}` : '';
 
     const utentiQuery = `
       SELECT u.id, u.nome, u.cognome
       FROM utenti u
-      JOIN societa s ON u.societa_id = s.id
       ${filterSql}
       ORDER BY u.cognome, u.nome
     `;
+
     const utenti = await pool.query(utentiQuery, values);
+
     if (utenti.rows.length === 0) {
       return res.status(404).json({ error: 'Nessun utente trovato' });
     }
@@ -80,18 +102,21 @@ router.get('/export', async (req, res) => {
     endDateObj.setDate(endDateObj.getDate() + 1);
     const adjustedEnd = localDateStr(endDateObj);
 
-    const presenze = await pool.query(`
+    const presenze = await pool.query(
+      `
       SELECT utente_id, to_char(data, 'YYYY-MM-DD') AS data_str, note
       FROM presenze
       WHERE data >= $1 AND data < $2
-    `, [start, adjustedEnd]);
+      `,
+      [start, adjustedEnd]
+    );
 
     const noteLegend = {};
     const noteApici = {};
     let noteCounter = 1;
 
     const presenzeMap = new Map();
-    presenze.rows.forEach(p => {
+    presenze.rows.forEach((p) => {
       const key = `${p.utente_id}-${p.data_str}`;
       if (p.note && p.note.trim()) {
         const nota = p.note.trim();
@@ -114,41 +139,46 @@ router.get('/export', async (req, res) => {
     const giorni = [];
     let cursor = new Date(start);
     const fine = new Date(end);
+
     while (cursor <= fine) {
       const giorno = cursor.getDate();
       const mese = cursor.getMonth() + 1;
-      const dataStr = localDateStr(cursor); // ✅ locale
+      const dataStr = localDateStr(cursor);
       giorni.push({ label: `${giorno}/${mese}`, dateStr: dataStr });
       cursor.setDate(cursor.getDate() + 1);
     }
 
-    const intestazioni = ['Dipendente', ...giorni.map(d => d.label), 'Totale'];
+    const intestazioni = ['Dipendente', ...giorni.map((d) => d.label), 'Totale'];
     sheet.addRow(intestazioni);
 
     const righe = [];
     const presenzePerGiorno = new Array(giorni.length).fill(0);
 
-    utenti.rows.forEach(utente => {
-      let riga = [`${utente.nome} ${utente.cognome}`];
+    utenti.rows.forEach((utente) => {
+      const riga = [`${utente.nome} ${utente.cognome}`];
       let count = 0;
 
       giorni.forEach((g, idx) => {
         const chiave = `${utente.id}-${g.dateStr}`;
         const valore = presenzeMap.get(chiave);
-        if (valore) { count++; presenzePerGiorno[idx]++; }
+        if (valore) {
+          count++;
+          presenzePerGiorno[idx]++;
+        }
         riga.push(valore || '');
       });
 
       riga.push(count);
+
       if (!solo_presenti || count > 0) {
         righe.push(riga);
       }
     });
 
-    righe.forEach(r => sheet.addRow(r));
+    righe.forEach((r) => sheet.addRow(r));
 
     const totalRow = ['Totale'];
-    presenzePerGiorno.forEach(c => totalRow.push(c));
+    presenzePerGiorno.forEach((c) => totalRow.push(c));
     totalRow.push('');
     sheet.addRow(totalRow);
 
@@ -160,10 +190,6 @@ router.get('/export', async (req, res) => {
       }
     }
 
-    // tabella formattata
-    const colCount = intestazioni.length;
-    const rowCount = righe.length + 1;
-    const lastCol = String.fromCharCode(64 + colCount);
     sheet.addTable({
       name: 'PresenzeTable',
       ref: 'A1',
@@ -172,13 +198,18 @@ router.get('/export', async (req, res) => {
       style: { theme: 'TableStyleMedium9', showRowStripes: true },
       columns: intestazioni.map((h, i) => ({
         name: h,
-        totalsRowFunction: i === 0 ? undefined : i === intestazioni.length - 1 ? undefined : 'sum',
+        totalsRowFunction:
+          i === 0 || i === intestazioni.length - 1 ? undefined : 'sum',
       })),
-      rows: righe.map(r => r.slice()),
+      rows: righe.map((r) => r.slice()),
     });
 
-    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader(
+      'Content-Type',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    );
     res.setHeader('Content-Disposition', 'attachment; filename=presenze.xlsx');
+
     await workbook.xlsx.write(res);
     res.end();
   } catch (err) {
