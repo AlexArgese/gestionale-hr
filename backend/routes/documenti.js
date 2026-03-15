@@ -951,4 +951,39 @@ router.get('/:id/presigned', requireAuth, async (req, res) => {
   }
 });
 
+/* ==================================================================== */
+/*  PATCH /documenti/:id — aggiorna tipo_documento (drag & drop)         */
+/* ==================================================================== */
+router.patch('/:id', requireAuth, async (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id) || id <= 0) {
+    return res.status(400).json({ error: 'ID non valido' });
+  }
+ 
+  const { tipo_documento } = req.body;
+  if (!validateTipo(tipo_documento)) {
+    return res.status(400).json({ error: 'Tipo documento non valido' });
+  }
+ 
+  try {
+    const q = await pool.query(
+      `UPDATE documenti
+          SET tipo_documento = $1
+        WHERE id = $2
+        RETURNING id, tipo_documento`,
+      [normalizeTipo(tipo_documento), id]
+    );
+ 
+    if (!q.rows.length) {
+      return res.status(404).json({ error: 'Documento non trovato' });
+    }
+ 
+    return res.json({ ok: true, ...q.rows[0] });
+  } catch (err) {
+    console.error('PATCH /documenti/:id', err);
+    res.status(500).json({ error: 'Errore aggiornamento documento' });
+  }
+});
+ 
+
 module.exports = router;
