@@ -89,17 +89,25 @@ router.get('/metriche', async (_, res) => {
   router.get('/avvisi/documenti', async (_, res) => {
     try {
       const result = await pool.query(`
-        SELECT u.id, u.nome, u.cognome, 'Contratto mancante o scaduto' as problema
-        FROM utenti u
-        LEFT JOIN documenti d ON d.utente_id = u.id AND d.tipo_documento = 'Contratto'
-        WHERE u.stato_attivo = true AND (
-          d.id IS NULL OR (d.data_scadenza IS NOT NULL AND d.data_scadenza < CURRENT_DATE)
-        )
+        SELECT
+          d.id,
+          u.id AS utente_id,
+          u.nome,
+          u.cognome,
+          d.nome_file,
+          d.tipo_documento,
+          d.yousign_status
+        FROM documenti d
+        JOIN utenti u ON u.id = d.utente_id
+        WHERE d.require_signature = true
+          AND COALESCE(d.yousign_status, '') NOT IN ('completed', 'signed', 'done')
+        ORDER BY d.data_upload DESC
       `);
+
       res.json(result.rows);
     } catch (e) {
       console.error(e);
-      res.status(500).json({ error: 'Errore avvisi' });
+      res.status(500).json({ error: 'Errore avvisi documenti' });
     }
   });
   
@@ -139,5 +147,20 @@ router.get('/download-massivo/:tipo', async (req, res) => {
       res.status(500).json({ error: 'Errore generazione ZIP' });
     }
   });
+
+  router.get('/dipendenti/stato', async (_, res) => {
+  try {
+    const totali = await pool.query(`SELECT COUNT(*) FROM utenti`);
+    const attivi = await pool.query(`SELECT COUNT(*) FROM utenti WHERE stato_attivo = true`);
+
+    res.json([
+      { nome: 'Totali', totale: parseInt(totali.rows[0].count, 10) },
+      { nome: 'Attivi', totale: parseInt(attivi.rows[0].count, 10) }
+    ]);
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: 'Errore stato dipendenti' });
+  }
+});
 
 module.exports = router;
