@@ -53,7 +53,6 @@ router.get('/', async (_req, res) => {
         u.ruolo,
         u.sede,
         u.stato_attivo,
-        u.codice_teamsystem,
         u.updated_at,
         u.codice_fiscale,                -- ← importante per mapping CF
         u.iban,                          -- 👈 IBAN nella lista
@@ -74,7 +73,7 @@ router.get('/', async (_req, res) => {
 router.post('/', async (req, res) => {
   try {
     const {
-      nome, cognome, email, ruolo, sede, codice_teamsystem,
+      nome, cognome, email, ruolo, sede,
       societa_id, stato_attivo, data_nascita, luogo_nascita,
       provincia_nascita, codice_fiscale, indirizzo_residenza,
       citta_residenza, provincia_residenza, cap_residenza,
@@ -83,14 +82,14 @@ router.post('/', async (req, res) => {
 
     const insert = await pool.query(
       `INSERT INTO utenti
-         (nome,cognome,email,ruolo,sede,codice_teamsystem,societa_id,
+         (nome,cognome,email,ruolo,sede,societa_id,
           stato_attivo,data_nascita,luogo_nascita,provincia_nascita,
           codice_fiscale,indirizzo_residenza,citta_residenza,
           provincia_residenza,cap_residenza,cellulare,contatto_emergenza,iban)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)
        RETURNING id`,
       [
-        nome, cognome, email, ruolo, sede, codice_teamsystem,
+        nome, cognome, email, ruolo, sede,
         societa_id, stato_attivo, data_nascita || null,
         luogo_nascita, provincia_nascita, codice_fiscale,
         indirizzo_residenza, citta_residenza, provincia_residenza,
@@ -172,7 +171,6 @@ router.delete('/delete-my-account', requireAuth, async (req, res) => {
   }
 });
 
-module.exports = router;
 
 /* =========================================================================
    GET singolo utente
@@ -217,33 +215,25 @@ router.delete('/:id', async (req, res) => {
 router.put('/:id', async (req, res) => {
   const id = req.params.id;
   const {
-    nome, cognome, email, ruolo, sede, stato_attivo, codice_teamsystem, societa_id,
+    nome, cognome, email, ruolo, sede, stato_attivo, societa_id,
     data_nascita, luogo_nascita, provincia_nascita, codice_fiscale,
     indirizzo_residenza, citta_residenza, provincia_residenza, cap_residenza,
     cellulare, contatto_emergenza, iban           // 👈 IBAN dal body
   } = req.body;
 
   try {
-    const check = await pool.query(
-      'SELECT id FROM utenti WHERE codice_teamsystem = $1 AND id != $2',
-      [codice_teamsystem, id]
-    );
-    if (check.rows.length > 0) {
-      return res.status(400).json({ error: 'Codice TeamSystem già in uso da un altro dipendente' });
-    }
-
     await pool.query(`
       UPDATE utenti SET
         nome = $1, cognome = $2, email = $3, ruolo = $4, sede = $5,
-        stato_attivo = $6, codice_teamsystem = $7, societa_id = $8,
-        data_nascita = $9, luogo_nascita = $10, provincia_nascita = $11, codice_fiscale = $12,
-        indirizzo_residenza = $13, citta_residenza = $14, provincia_residenza = $15, cap_residenza = $16,
-        cellulare = $17, contatto_emergenza = $18, iban = $19,
+        stato_attivo = $6, societa_id = $7,
+        data_nascita = $8, luogo_nascita = $9, provincia_nascita = $10, codice_fiscale = $11,
+        indirizzo_residenza = $12, citta_residenza = $13, provincia_residenza = $14, cap_residenza = $15,
+        cellulare = $16, contatto_emergenza = $17, iban = $18,
         updated_at = now()
-      WHERE id = $20
+      WHERE id = $19
     `, [
       nome, cognome, email, ruolo, sede,
-      stato_attivo, codice_teamsystem, societa_id,
+      stato_attivo, societa_id,
       data_nascita, luogo_nascita, provincia_nascita, codice_fiscale,
       indirizzo_residenza, citta_residenza, provincia_residenza, cap_residenza,
       cellulare, contatto_emergenza, iban,
@@ -257,3 +247,4 @@ router.put('/:id', async (req, res) => {
   }
 });
 
+module.exports = router;

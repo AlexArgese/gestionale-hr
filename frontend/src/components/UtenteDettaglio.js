@@ -58,7 +58,6 @@ function UtenteDettaglio({
           sede: data?.sede ?? "",
           societa_id: data?.societa_id ?? data?.societa?.id ?? "",
           stato_attivo: !!data?.stato_attivo,
-          codice_teamsystem: data?.codice_teamsystem ?? "",
           data_nascita: data?.data_nascita ?? "",
           luogo_nascita: data?.luogo_nascita ?? "",
           provincia_nascita: data?.provincia_nascita ?? "",
@@ -139,7 +138,6 @@ function UtenteDettaglio({
         ruolo: form.ruolo,
         sede: form.sede,
         stato_attivo: !!form.stato_attivo,
-        codice_teamsystem: form.codice_teamsystem,
         societa_id: societa_id_norm,
         data_nascita: normalizeDateOrNull(form.data_nascita),
         luogo_nascita: form.luogo_nascita,
@@ -345,15 +343,6 @@ function UtenteDettaglio({
               ) : (
                 <input className="input" value={form.societa_id} onChange={onChange("societa_id")} placeholder="ID società"/>
               )}
-            </div>
-          </div>
-
-          {/* Codice TS */}
-          <div className={styles.group}>
-            <label className={styles.label}>Codice TeamSystem</label>
-            <div className={styles.inputIcon}>
-              <FiHash className={styles.icon}/>
-              <input className="input" value={form.codice_teamsystem} onChange={onChange("codice_teamsystem")} />
             </div>
           </div>
 

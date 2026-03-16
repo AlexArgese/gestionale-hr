@@ -34,7 +34,6 @@ function UtenteNuovo({
     ruolo: "",
     sede: "",
     societa_id: "",
-    codice_teamsystem: "",
     stato_attivo: true,
     // anagrafica
     data_nascita: "",
@@ -225,14 +224,6 @@ function UtenteNuovo({
                   <option key={valueSocieta(s)} value={valueSocieta(s)}>{labelSocieta(s)}</option>
                 ))}
               </select>
-            </div>
-          </div>
-
-          <div className={styles.group}>
-            <label className={styles.label}>Codice TeamSystem</label>
-            <div className={styles.inputIcon}>
-              <FiHash className={styles.icon} />
-              <input className="input" value={form.codice_teamsystem} onChange={onChange("codice_teamsystem")} placeholder="TS-..." />
             </div>
           </div>
 
