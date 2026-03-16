@@ -7,6 +7,7 @@ import {
   FiMapPin,
   FiFileText,
   FiSave,
+  FiHome
 } from 'react-icons/fi';
 import styles from './PresenzeExport.module.css';
 import { API_BASE } from "../api";
@@ -25,6 +26,8 @@ function PresenzeExport() {
 
   // Valori selezionati
   const [selectedSedi, setSelectedSedi] = useState([]);
+  const [societaOptions, setSocietaOptions] = useState([]);
+  const [selectedSocieta, setSelectedSocieta] = useState([]);
   const [selectedUtenti, setSelectedUtenti] = useState([]);
   const [nota, setNota] = useState('');
 
@@ -37,6 +40,10 @@ function PresenzeExport() {
           label: `${u.nome} ${u.cognome}`,
           value: u.id,
         }));
+        const societa = [...new Set(data.map((u) => u.societa_nome))]
+          .filter(Boolean)
+          .map((s) => ({ label: s, value: s }));
+        setSocietaOptions(societa);
 
         setUtentiOptions(utenti);
       })
@@ -94,6 +101,9 @@ function PresenzeExport() {
     // Multi-sede cumulativo
     selectedSedi.forEach((s) => {
       params.append('sede', s.value);
+    });
+    selectedSocieta.forEach((s) => {
+      params.append('societa', s.value);
     });
 
     window.open(
@@ -223,6 +233,26 @@ function PresenzeExport() {
                 Esporta presenze
               </h3>
               <span className={styles.rangeBadgeSmall}>{rangeLabel}</span>
+            </div>
+          </div>
+
+          <div className={styles.group}>
+            <label className={styles.label}>
+              <Icon Cmp={FiHome} className={styles.labelIcon} />
+              Società
+            </label>
+            <div className={styles.selectWrap}>
+              <Select
+                classNamePrefix="presenze-select"
+                options={societaOptions}
+                value={selectedSocieta}
+                onChange={setSelectedSocieta}
+                isMulti
+                isClearable
+                isSearchable
+                closeMenuOnSelect={false}
+                placeholder="Tutte le società"
+              />
             </div>
           </div>
 
