@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState, useCallback } from "react";
-import { FiFile, FiChevronDown, FiTrash2, FiUpload, FiPaperclip, FiChevronRight } from "react-icons/fi";
+import { FiFile, FiChevronDown, FiTrash2, FiUpload, FiPaperclip, FiChevronRight, FiEdit2, FiCheck, FiX } from "react-icons/fi";
 import styles from "./DocumentiUtente.module.css";
 import { API_BASE } from "../api";
 
@@ -31,6 +31,9 @@ export default function DocumentiUtente({ userId, baseUrl = API }) {
   /* drag & drop */
   const [dragging, setDragging]       = useState(null);
   const [dragOverCat, setDragOverCat] = useState(null);
+
+  const [renamingId, setRenamingId] = useState(null);
+  const [renameVal,  setRenameVal]  = useState("");
 
   const listUrl   = `${baseUrl}/documenti/utente/${userId}`;
   const tipiUrl   = `${baseUrl}/documenti/tipi`;
@@ -130,6 +133,38 @@ export default function DocumentiUtente({ userId, baseUrl = API }) {
       if (!r.ok) throw new Error(`HTTP ${r.status}`);
       setDocs(p => p.filter(d => d.id !== doc.id));
     } catch (e) { setErr(e.message); }
+  };
+
+  const startRename = (doc) => {
+    setRenamingId(doc.id);
+    setRenameVal(doc.name);
+  };
+
+  const cancelRename = () => {
+    setRenamingId(null);
+    setRenameVal("");
+  };
+
+  const commitRename = async (doc) => {
+    const newName = renameVal.trim();
+    if (!newName || newName === doc.name) { cancelRename(); return; }
+
+    // aggiornamento ottimistico
+    setDocs(p => p.map(d => d.id === doc.id ? { ...d, name: newName } : d));
+    cancelRename();
+
+    try {
+      const r = await fetch(patchUrl(doc.id), {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ nome_file: newName }),
+      });
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    } catch (e) {
+      setErr(`Errore rinomina: ${e.message}`);
+      setDocs(p => p.map(d => d.id === doc.id ? { ...d, name: doc.name } : d)); // rollback
+    }
   };
 
   /* drag & drop */
@@ -281,23 +316,53 @@ export default function DocumentiUtente({ userId, baseUrl = API }) {
                             onDragEnd={onDragEnd}
                             style={dragging === doc.id ? { opacity: 0.4 } : undefined}
                           >
-                            <a
-                              className={styles.link}
-                              href={doc.viewHref || "#"}
-                              target="_blank"
-                              rel="noreferrer"
-                              title={doc.name}
-                            >
-                              <FiPaperclip style={{ verticalAlign: "-2px", marginRight: 4 }} />
-                              {doc.name}
-                            </a>
-                            <span className={styles.meta}>
-                              {fmtData(doc.date)}
-                              {doc.scadenza && <span style={{ color: "#D97706", marginLeft: 6 }}>⚠ {fmtData(doc.scadenza)}</span>}
-                            </span>
-                            <button className={styles.delBtn} onClick={() => deleteDoc(doc)} title="Elimina">
-                              <FiTrash2 />
-                            </button>
+                            {renamingId === doc.id ? (
+                              /* ── modalità rinomina ── */
+                              <>
+                                <input
+                                  autoFocus
+                                  className={styles.renameInput}
+                                  value={renameVal}
+                                  onChange={e => setRenameVal(e.target.value)}
+                                  onKeyDown={e => {
+                                    if (e.key === "Enter")  commitRename(doc);
+                                    if (e.key === "Escape") cancelRename();
+                                  }}
+                                />
+                                <button className={styles.iconBtn} onClick={() => commitRename(doc)} title="Conferma">
+                                  <FiCheck />
+                                </button>
+                                <button className={styles.iconBtn} onClick={cancelRename} title="Annulla">
+                                  <FiX />
+                                </button>
+                              </>
+                            ) : (
+                              /* ── modalità visualizzazione ── */
+                              <>
+                                <a
+                                  className={styles.link}
+                                  href={doc.viewHref || "#"}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  title={doc.name}
+                                >
+                                  <FiPaperclip style={{ verticalAlign: "-2px", marginRight: 4 }} />
+                                  {doc.name}
+                                </a>
+                                <span className={styles.meta}>
+                                  {fmtData(doc.date)}
+                                  {doc.scadenza && (
+                                    <span style={{ color: "#D97706", marginLeft: 6 }}>⚠ {fmtData(doc.scadenza)}</span>
+                                  )}
+                                </span>
+                                <button className={styles.iconBtn} onClick={() => startRename(doc)} title="Rinomina">
+                                  <FiEdit2 />
+                                </button>
+                                <button className={styles.delBtn} onClick={() => deleteDoc(doc)} title="Elimina">
+                                  <FiTrash2 />
+                                </button>
+                              </>
+                            )}
                           </li>
                         ))}
                     </ul>
