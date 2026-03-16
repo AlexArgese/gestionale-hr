@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState, useCallback } from "react";
+import React, { useEffect, useMemo, useState, useCallback } from "react";
 import { FiFile, FiChevronDown, FiTrash2, FiPaperclip, FiChevronRight, FiEdit2, FiCheck, FiX } from "react-icons/fi";
 import styles from "./DocumentiUtente.module.css";
 import { API_BASE } from "../api";
@@ -15,6 +15,15 @@ const getYear = (v) => {
   try { return String(new Date(v).getFullYear()); }
   catch { return "—"; }
 };
+
+
+const mapDoc = (d) => ({
+  id: d.id,
+  name: d.nome_file || "documento",
+  tipo: (d.tipo_documento || "Altro").toUpperCase().trim(),
+  date: d.data_upload || null,
+  scadenza: d.data_scadenza || null,
+});
 
 export default function DocumentiUtente({ userId, baseUrl = API }) {
   const [docs, setDocs]       = useState([]);
@@ -34,17 +43,7 @@ export default function DocumentiUtente({ userId, baseUrl = API }) {
 
   const listUrl   = `${baseUrl}/documenti/utente/${userId}`;
   const deleteUrl = (id) => `${baseUrl}/documenti/${id}`;
-  const viewUrl   = (id) => `${baseUrl}/documenti/${id}/view`;
   const patchUrl  = (id) => `${baseUrl}/documenti/${id}`;
-
-  const mapDoc = (d) => ({
-    id: d.id,
-    name: d.nome_file || "documento",
-    tipo: (d.tipo_documento || "Altro").toUpperCase().trim(),
-    date: d.data_upload || null,
-    scadenza: d.data_scadenza || null,
-    viewHref: d.id ? viewUrl(d.id) : undefined,
-  });
 
   const fetchDocs = useCallback(async () => {
     try {
@@ -52,13 +51,16 @@ export default function DocumentiUtente({ userId, baseUrl = API }) {
       const r = await fetch(listUrl, { headers: { Accept: "application/json" }, credentials: "include" });
       if (!r.ok) throw new Error(`HTTP ${r.status}`);
       const data = await r.json();
-      setDocs((Array.isArray(data) ? data : data?.items || []).map(mapDoc));
+      setDocs((Array.isArray(data) ? data : data?.items || []).map(d => ({
+        ...mapDoc(d),
+        viewHref: d.id ? `${baseUrl}/documenti/${d.id}/view` : undefined,
+      })));
     } catch (e) { setErr(e.message); }
     finally { setLoading(false); }
-  }, [listUrl]);
+  }, [listUrl, baseUrl]);
 
 
-  useEffect(() => { fetchDocs(); }, [userId, baseUrl]);
+  useEffect(() => { fetchDocs(); }, [fetchDocs]);
 
   /* raggruppamento cat → anno → docs */
   const grouped = useMemo(() => {
