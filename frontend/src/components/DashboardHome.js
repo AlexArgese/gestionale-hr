@@ -7,7 +7,7 @@ import { useNavigate } from 'react-router-dom';
 import styles from './DashboardHome.module.css';
 import { API_BASE } from "../api";
 
-import { FiUsers, FiAlertCircle, FiDownload, FiFileText } from 'react-icons/fi';
+import { FiUsers, FiAlertCircle } from 'react-icons/fi';
 import { BsBriefcase } from 'react-icons/bs';
 
 const API = API_BASE;
