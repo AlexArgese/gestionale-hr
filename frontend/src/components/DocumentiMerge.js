@@ -42,6 +42,7 @@ async function renderAllPdfPagesToThumbsFromBytes(bytes, scale = 1.05) {
 export default function DocumentiMerge({ tipi = [] }) {
   const [tipoDocumento, setTipoDocumento] = useState("");
   const [dataScadenza, setDataScadenza] = useState("");
+  const [customFileNames, setCustomFileNames] = useState({});
 
   // files + ordine
   const [files, setFiles] = useState([]); // [{key,name,file}]
@@ -246,9 +247,11 @@ export default function DocumentiMerge({ tipi = [] }) {
 
   // item per la modale di conferma: una riga per ogni dipendente destinatario
   const previewItems = useMemo(() => {
-    const targetIds = computeTargetIds();
+  const targetIds = computeTargetIds();
     return targetIds.map((uid) => {
       const u = utentiById.get(String(uid));
+      const defaultFileName = buildDefaultFileName(u, tipoDocumento);
+
       return {
         id: String(uid),
         utenteId: String(uid),
@@ -256,9 +259,17 @@ export default function DocumentiMerge({ tipi = [] }) {
         cf: u?.codice_fiscale || null,
         thumbs: mergedThumbs,
         thumb: mergedThumbs[0] || null,
+        fileName: customFileNames[String(uid)] || defaultFileName,
+        defaultFileName,
       };
     });
-  }, [computeTargetIds, utentiById, mergedThumbs]);
+  }, [computeTargetIds, utentiById, mergedThumbs, tipoDocumento, customFileNames]);
+
+  function buildDefaultFileName(u, tipoDocumento) {
+    const nome = [u?.cognome, u?.nome].filter(Boolean).join(" ").trim();
+    const tipo = String(tipoDocumento || "").trim();
+    return [nome, tipo].filter(Boolean).join(" ").trim();
+  }
 
   async function handleConfermaUpload({ require_signature, signature_placements } = {}) {
     try {
@@ -322,11 +333,12 @@ export default function DocumentiMerge({ tipi = [] }) {
             : null;
 
         const fd = new FormData();
-        fd.append(
-          "file",
-          mergedBlob,
-          `${tipoDocumento}_merged_${uid}.pdf`
-        );
+        const u = utentiById.get(String(uid));
+        const defaultFileName = buildDefaultFileName(u, tipoDocumento);
+        const finalFileName = (customFileNames[String(uid)] || defaultFileName).trim();
+
+        fd.append("file", mergedBlob, `${finalFileName}.pdf`);
+        fd.append("nome_file", finalFileName);
         fd.append("tipo_documento", tipoDocumento);
         fd.append("utente_id", uid);
         fd.append("require_signature", require_signature ? "true" : "false");
@@ -676,6 +688,8 @@ export default function DocumentiMerge({ tipi = [] }) {
         fallbackToSelected={false}
         utentiFull={utenti}
         loading={loading}
+        customFileNames={customFileNames}
+        setCustomFileNames={setCustomFileNames}
       />
 
       {/* Selettore dipendenti */}

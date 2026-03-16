@@ -53,6 +53,7 @@ async function ocrDetectAnyCF(dataUrl) {
 export default function DocumentiSplitCF({ tipi = [] }) {
   const [pdfFile, setPdfFile] = useState(null); // UNICO file sorgente da splittare
   const [thumbs, setThumbs] = useState([]);      // [{index, dataUrl, cf?, matched?}]
+  const [customFileNames, setCustomFileNames] = useState({});
 
   // utenti
   const [utenti, setUtenti] = useState([]);      // per UI / label bucket
@@ -363,13 +364,11 @@ export default function DocumentiSplitCF({ tipi = [] }) {
     return entries.map(([utenteId, set]) => {
       const pages = Array.from(set).sort((a, b) => a - b);
 
-      // tutte le thumb delle pagine assegnate a questo utente
       const pageThumbs = pages.map((pIdx) => {
         const t = thumbs.find((x) => x.index === pIdx);
         return t?.dataUrl || null;
       });
 
-      // prima thumb valida usata anche nella tabella a sinistra
       const firstThumb = pageThumbs.find((t) => !!t) || null;
 
       const u = utenti.find((x) => String(x.id) === String(utenteId));
@@ -383,18 +382,27 @@ export default function DocumentiSplitCF({ tipi = [] }) {
           ? `pagine ${pages.map((p) => p + 1).join(", ")}`
           : `${pages.length} pagine assegnate`;
 
+      const defaultFileName = buildDefaultFileName(u, tipoDocumento);
+
       return {
         id: String(utenteId),
         name: `${baseName} – ${pagesLabel}`,
         cf: cfFromDb,
-        utenteId: utenteId,
-        pages,           // es. [0,1,2]
+        utenteId,
+        pages,
         thumbs: pageThumbs,
         thumb: firstThumb,
+        fileName: customFileNames[String(utenteId)] || defaultFileName,
+        defaultFileName,
       };
     });
-  }, [bucketMap, utenti, utentiCF, thumbs]);
+  }, [bucketMap, utenti, utentiCF, thumbs, tipoDocumento, customFileNames]);
 
+  function buildDefaultFileName(u, tipoDocumento) {
+    const nome = [u?.cognome, u?.nome].filter(Boolean).join(" ").trim();
+    const tipo = String(tipoDocumento || "").trim();
+    return [nome, tipo].filter(Boolean).join(" ").trim();
+  }
   
 
   const handleConfermaUpload = async ({ require_signature, signature_placements } = {}) => {
@@ -468,7 +476,12 @@ export default function DocumentiSplitCF({ tipi = [] }) {
 
         const blob = new Blob([pdfBytes], { type: "application/pdf" });
         const fd = new FormData();
-        fd.append("file", blob, `${tipoDocumento}_${utenteId}.pdf`);
+        const u = utenti.find((x) => String(x.id) === String(utenteId));
+        const defaultFileName = buildDefaultFileName(u, tipoDocumento);
+        const finalFileName = (customFileNames[String(utenteId)] || defaultFileName).trim();
+
+        fd.append("file", blob, `${finalFileName}.pdf`);
+        fd.append("nome_file", finalFileName);
         fd.append("tipo_documento", tipoDocumento);
         fd.append("utente_id", utenteId);
         fd.append("require_signature", require_signature ? "true" : "false");
@@ -981,6 +994,8 @@ export default function DocumentiSplitCF({ tipi = [] }) {
         fallbackToSelected={false}
         utentiFull={utenti}
         loading={loading}
+        customFileNames={customFileNames}
+        setCustomFileNames={setCustomFileNames}
       />
 
       {/* Selettore dipendenti */}

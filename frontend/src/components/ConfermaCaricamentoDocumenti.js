@@ -7,15 +7,20 @@ const DEFAULT_SIG = { x: 80, y: 120, width: 220, height: 60 };
 export default function ConfermaCaricamentoDocumenti({
   open,
   onClose,
+  items = [],
   onConfirm,
-  items = [], // [{ id, name, cf, utenteId, thumb, thumbs[], pages[] }]
   tipoDocumento,
   dataScadenza,
-  assegnamentoLabel,
-  useCF,
-  fallbackToSelected,
-  utentiFull = [],
+  setTipoDocumento,
+  setDataScadenza,
   loading = false,
+  title = "Conferma caricamento documenti",
+  customFileNames = {},
+  setCustomFileNames,
+  assegnamentoLabel,
+  useCF = false,
+  fallbackToSelected = false,
+  utentiFull = [],
 }) {
   /* =========================
    *  Normalizzazione items
@@ -43,6 +48,8 @@ export default function ConfermaCaricamentoDocumenti({
         destLabel,
         thumb,
         thumbs: thumbsList,
+        fileName: it.fileName || "",
+        defaultFileName: it.defaultFileName || "",
       };
     });
   }, [items, utentiFull, useCF, fallbackToSelected, assegnamentoLabel]);
@@ -342,6 +349,7 @@ export default function ConfermaCaricamentoDocumenti({
                     <tr>
                       <th className={styles.thumbCol}>Anteprima</th>
                       <th>File</th>
+                      <th>Nome file</th>
                       <th>CF</th>
                       <th>Destinatario</th>
                     </tr>
@@ -382,6 +390,27 @@ export default function ConfermaCaricamentoDocumenti({
                             )}
                           </td>
                           <td className={styles.fileName}>{f.name}</td>
+
+                          <td>
+                            <input
+                              type="text"
+                              value={customFileNames[f.id] ?? f.fileName ?? ""}
+                              onChange={(e) =>
+                                setCustomFileNames((prev) => ({
+                                  ...prev,
+                                  [f.id]: e.target.value,
+                                }))
+                              }
+                              placeholder={f.defaultFileName || "Nome file"}
+                              style={{
+                                width: 180,
+                                padding: 6,
+                                border: "1px solid #ddd",
+                                borderRadius: 6,
+                              }}
+                            />
+                          </td>
+
                           <td>{f.cf ? <b>{f.cf}</b> : <span className={styles.muted}>—</span>}</td>
                           <td style={{ maxWidth: 140, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                             {f.destLabel}
@@ -391,7 +420,7 @@ export default function ConfermaCaricamentoDocumenti({
                     })}
                     {filesInfo.length === 0 && (
                       <tr>
-                        <td colSpan={4} className={styles.empty}>
+                        <td colSpan={5} className={styles.empty}>
                           Nessun file selezionato.
                         </td>
                       </tr>

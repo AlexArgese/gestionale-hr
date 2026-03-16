@@ -161,6 +161,24 @@
     padding:6px 14px;
   }
   
+  .fileRename {
+  margin-top: 8px;
+}
+
+.fileRename label {
+  display: block;
+  font-size: 12px;
+  margin-bottom: 4px;
+  color: #666;
+}
+
+.fileRename input {
+  width: 100%;
+  padding: 8px;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+}
+
   /* RESPONSIVE */
   
   @media (max-width: 640px){

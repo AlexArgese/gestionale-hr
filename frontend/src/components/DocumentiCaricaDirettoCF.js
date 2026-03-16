@@ -161,6 +161,12 @@ async function ensureThumbOnly(file) {
   }
 }
 
+function buildDefaultFileName(u, tipoDocumento, fallbackName = "Documento") {
+  const fullName = [u?.cognome, u?.nome].filter(Boolean).join(" ").trim();
+  const tipo = String(tipoDocumento || "").trim();
+  return [fullName || fallbackName, tipo].filter(Boolean).join(" ").trim();
+}
+
 export default function DocumentiCaricaDirettoCF({ tipi = [] }) {
   const [tipoDocumento, setTipoDocumento] = useState("");
   const [dataScadenza, setDataScadenza] = useState("");
@@ -217,6 +223,7 @@ export default function DocumentiCaricaDirettoCF({ tipi = [] }) {
   // opzioni CF
   const [useCF, setUseCF] = useState(true);
   const [fallbackToSelected, setFallbackToSelected] = useState(true);
+  const [customFileNames, setCustomFileNames] = useState({});
 
   // banner + loading
   const [banner, setBanner] = useState(null);
@@ -413,7 +420,25 @@ export default function DocumentiCaricaDirettoCF({ tipi = [] }) {
         for (const uid of targetsForFile) {
           tot += 1;
           const fd = new FormData();
-          fd.append("file", it.file, it.name);
+          const matchedUser = uid
+            ? utentiFull.find((x) => String(x.id) === String(uid))
+            : null;
+
+          const fallbackUserName = it.name?.replace(/\.[^.]+$/, "") || "Documento";
+          const defaultFileName = buildDefaultFileName(
+            matchedUser,
+            tipoDocumento,
+            fallbackUserName
+          );
+
+          const finalFileName = (
+            customFileNames[it.id] ||
+            it.fileName ||
+            defaultFileName
+          ).trim();
+
+          fd.append("file", it.file, `${finalFileName}.pdf`);
+          fd.append("nome_file", finalFileName);
           fd.append("tipo_documento", tipoDocumento);
           fd.append("utente_id", uid);
           fd.append("require_signature", require_signature ? "true" : "false");
@@ -487,17 +512,46 @@ export default function DocumentiCaricaDirettoCF({ tipi = [] }) {
     try {
       const updated = await Promise.all(
         items.map(async (it) => {
-          if (Array.isArray(it.thumbs) && it.thumbs.length) return it;
-          if (!it.file) return it;
+          const matchedUser = it.utenteId
+            ? utentiFull.find((x) => String(x.id) === String(it.utenteId))
+            : null;
+
+          const fallbackUserName = it.name?.replace(/\.[^.]+$/, "") || "Documento";
+          const defaultFileName = buildDefaultFileName(
+            matchedUser,
+            tipoDocumento,
+            fallbackUserName
+          );
+
+          const fileName = customFileNames[it.id] || defaultFileName;
+
+          if (Array.isArray(it.thumbs) && it.thumbs.length) {
+            return { ...it, fileName, defaultFileName };
+          }
+          if (!it.file) {
+            return { ...it, fileName, defaultFileName };
+          }
           if (isPdf(it.file.name, it.file.type)) {
             const thumbs = await renderAllPdfPagesToThumbs(it.file, 1.05);
-            return { ...it, thumbs, thumb: thumbs[0] || it.thumb };
+            return {
+              ...it,
+              thumbs,
+              thumb: thumbs[0] || it.thumb,
+              fileName,
+              defaultFileName,
+            };
           }
           if (isImage(it.file.name, it.file.type)) {
             const thumb = it.thumb || URL.createObjectURL(it.file);
-            return { ...it, thumbs: [thumb], thumb };
+            return {
+              ...it,
+              thumbs: [thumb],
+              thumb,
+              fileName,
+              defaultFileName,
+            };
           }
-          return it;
+          return { ...it, fileName, defaultFileName };
         })
       );
       setItems(updated);
@@ -789,6 +843,8 @@ export default function DocumentiCaricaDirettoCF({ tipi = [] }) {
         fallbackToSelected={fallbackToSelected}
         utentiFull={utentiFull}
         loading={loading}
+        customFileNames={customFileNames}
+        setCustomFileNames={setCustomFileNames}
       />
 
       {/* Selettore dipendenti */}

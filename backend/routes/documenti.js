@@ -390,7 +390,7 @@ router.post('/upload', requireAuth, (req, res) => {
       if (err) throw err;
       if (!req.file) return res.status(400).json({ error: 'File mancante' });
 
-      const { tipo_documento, data_scadenza } = req.body;
+      const { tipo_documento, data_scadenza, nome_file } = req.body;
       const require_signature = parseBool(req.body.require_signature || req.body.requireSignature);
       let signaturePlacement = null;
       if (req.body.signature_placement || req.body.signaturePlacement) {
@@ -406,13 +406,18 @@ router.post('/upload', requireAuth, (req, res) => {
       }
       const tipoNorm = normalizeTipo(tipo_documento);
 
+      const safeNomeFile = String(nome_file || req.file.originalname).trim() || req.file.originalname;
+      const finalNomeFile = safeNomeFile.toLowerCase().endsWith('.pdf')
+        ? safeNomeFile
+        : `${safeNomeFile}.pdf`;
+
       const { targetUserId, autoreId } = await resolveTargetUserId(req);
 
       // 1) carica su S3
       const chiaveS3 = creaChiaveS3({
         utenteId: targetUserId,
         tipoDocumento: tipoNorm,
-        nomeFile: req.file.originalname,
+        nomeFile: finalNomeFile,
       });
       await caricaBufferSuS3({
         chiave: chiaveS3,
@@ -427,7 +432,7 @@ router.post('/upload', requireAuth, (req, res) => {
       const inserted = await insertDocumentoRows({
         utenteIds: [targetUserId],
         tipo: tipoNorm,
-        nome_file: req.file.originalname,
+        nome_file: finalNomeFile,
         relPath,
         caricato_da: autoreId,
         data_scadenza,
@@ -519,7 +524,7 @@ router.post('/upload-multi', requireAuth, (req, res) => {
       await insertDocumentoRows({
         utenteIds: uniq,
         tipo: tipoNorm,
-        nome_file: req.file.originalname,
+        nome_file: finalNomeFile,
         relPath,
         caricato_da: autoreId,
         data_scadenza,
