@@ -57,6 +57,7 @@ function UtenteDettaglio({
           ruolo: data?.ruolo ?? "",
           sede: data?.sede ?? "",
           societa_id: data?.societa_id ?? data?.societa?.id ?? "",
+          tipo_contratto: data?.tipo_contratto ?? "full_time",
           stato_attivo: !!data?.stato_attivo,
           data_nascita: data?.data_nascita ?? "",
           luogo_nascita: data?.luogo_nascita ?? "",
@@ -137,6 +138,7 @@ function UtenteDettaglio({
         email: form.email,
         ruolo: form.ruolo,
         sede: form.sede,
+        tipo_contratto: form.tipo_contratto || "full_time",
         stato_attivo: !!form.stato_attivo,
         societa_id: societa_id_norm,
         data_nascita: normalizeDateOrNull(form.data_nascita),
@@ -438,6 +440,22 @@ function UtenteDettaglio({
             <div className={styles.inputIcon}>
               <FiPhone className={styles.icon}/>
               <input className="input" value={form.contatto_emergenza} onChange={onChange("contatto_emergenza")} />
+            </div>
+          </div>
+
+          {/* Tipo contratto */}
+          <div className={styles.group}>
+            <label className={styles.label}>Tipo contratto</label>
+            <div className={styles.inputIcon}>
+              <FiBriefcase className={styles.icon}/>
+              <select
+                className="select"
+                value={form.tipo_contratto || "full_time"}
+                onChange={onChange("tipo_contratto")}
+              >
+                <option value="full_time">Full time</option>
+                <option value="part_time">Part time</option>
+              </select>
             </div>
           </div>
 

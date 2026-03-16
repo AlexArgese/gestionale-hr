@@ -53,6 +53,7 @@ router.get('/', async (_req, res) => {
         u.ruolo,
         u.sede,
         u.stato_attivo,
+        u.tipo_contratto,
         u.updated_at,
         u.codice_fiscale,                -- ← importante per mapping CF
         u.iban,                          -- 👈 IBAN nella lista
@@ -74,7 +75,7 @@ router.post('/', async (req, res) => {
   try {
     const {
       nome, cognome, email, ruolo, sede,
-      societa_id, stato_attivo, data_nascita, luogo_nascita,
+      societa_id, stato_attivo,tipo_contratto, data_nascita, luogo_nascita,
       provincia_nascita, codice_fiscale, indirizzo_residenza,
       citta_residenza, provincia_residenza, cap_residenza,
       cellulare, contatto_emergenza, iban        // 👈 IBAN dal body
@@ -83,14 +84,14 @@ router.post('/', async (req, res) => {
     const insert = await pool.query(
       `INSERT INTO utenti
          (nome,cognome,email,ruolo,sede,societa_id,
-          stato_attivo,data_nascita,luogo_nascita,provincia_nascita,
+          stato_attivo,tipo_contratto,data_nascita,luogo_nascita,provincia_nascita,
           codice_fiscale,indirizzo_residenza,citta_residenza,
           provincia_residenza,cap_residenza,cellulare,contatto_emergenza,iban)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)
        RETURNING id`,
       [
         nome, cognome, email, ruolo, sede,
-        societa_id, stato_attivo, data_nascita || null,
+        societa_id, stato_attivo, tipo_contratto, data_nascita || null,
         luogo_nascita, provincia_nascita, codice_fiscale,
         indirizzo_residenza, citta_residenza, provincia_residenza,
         cap_residenza, cellulare, contatto_emergenza, iban,
@@ -215,7 +216,7 @@ router.delete('/:id', async (req, res) => {
 router.put('/:id', async (req, res) => {
   const id = req.params.id;
   const {
-    nome, cognome, email, ruolo, sede, stato_attivo, societa_id,
+    nome, cognome, email, ruolo, sede, stato_attivo, tipo_contratto, societa_id,
     data_nascita, luogo_nascita, provincia_nascita, codice_fiscale,
     indirizzo_residenza, citta_residenza, provincia_residenza, cap_residenza,
     cellulare, contatto_emergenza, iban           // 👈 IBAN dal body
@@ -225,15 +226,15 @@ router.put('/:id', async (req, res) => {
     await pool.query(`
       UPDATE utenti SET
         nome = $1, cognome = $2, email = $3, ruolo = $4, sede = $5,
-        stato_attivo = $6, societa_id = $7,
-        data_nascita = $8, luogo_nascita = $9, provincia_nascita = $10, codice_fiscale = $11,
-        indirizzo_residenza = $12, citta_residenza = $13, provincia_residenza = $14, cap_residenza = $15,
-        cellulare = $16, contatto_emergenza = $17, iban = $18,
+        stato_attivo = $6, tipo_contratto = $7, societa_id = $8,
+        data_nascita = $9, luogo_nascita = $10, provincia_nascita = $11, codice_fiscale = $12,
+        indirizzo_residenza = $13, citta_residenza = $14, provincia_residenza = $15, cap_residenza = $16,
+        cellulare = $17, contatto_emergenza = $18, iban = $19,
         updated_at = now()
-      WHERE id = $19
+      WHERE id = $20
     `, [
       nome, cognome, email, ruolo, sede,
-      stato_attivo, societa_id,
+      stato_attivo, tipo_contratto, societa_id,
       data_nascita, luogo_nascita, provincia_nascita, codice_fiscale,
       indirizzo_residenza, citta_residenza, provincia_residenza, cap_residenza,
       cellulare, contatto_emergenza, iban,

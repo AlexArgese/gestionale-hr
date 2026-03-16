@@ -35,6 +35,7 @@ function UtenteNuovo({
     sede: "",
     societa_id: "",
     stato_attivo: true,
+    tipo_contratto: "full_time",
     // anagrafica
     data_nascita: "",
     luogo_nascita: "",
@@ -307,6 +308,22 @@ function UtenteNuovo({
             <div className={styles.inputIcon}>
               <FiPhone className={styles.icon} />
               <input className="input" value={form.contatto_emergenza} onChange={onChange("contatto_emergenza")} placeholder="Nome + telefono" />
+            </div>
+          </div>
+
+          {/* Tipo contratto */}
+          <div className={styles.group}>
+            <label className={styles.label}>Tipo contratto</label>
+            <div className={styles.inputIcon}>
+              <FiBriefcase className={styles.icon} />
+              <select
+                className="select"
+                value={form.tipo_contratto}
+                onChange={onChange("tipo_contratto")}
+              >
+                <option value="full_time">Full time</option>
+                <option value="part_time">Part time</option>
+              </select>
             </div>
           </div>
 
