@@ -48,7 +48,8 @@ function labelDurata(minuti) {
 /* -------------------------------------------------------------------------- */
 
 router.get('/export', async (req, res) => {
-  const { start, end, solo_presenti } = req.query;
+  const { start, end } = req.query;
+  const soloPresenti = String(req.query.solo_presenti).toLowerCase() === 'true';
 
   try {
     if (!start || !end) {
@@ -190,23 +191,29 @@ router.get('/export', async (req, res) => {
     utenti.rows.forEach((utente) => {
       const riga = [`${utente.nome} ${utente.cognome}`];
       let count = 0;
+      let haPresenzaDaMostrare = false;
 
       giorni.forEach((g, idx) => {
         const chiave = `${utente.id}-${g.dateStr}`;
         const valore = presenzeMap.get(chiave);
-        
-        // ✅ conta solo P (con o senza apice nota)
+
+        // per il filtro "solo presenti" basta che ci sia qualcosa
+        if (valore) {
+          haPresenzaDaMostrare = true;
+        }
+
+        // il totale invece continua a contare solo le vere P
         if (valore?.startsWith('P')) {
           count++;
           presenzePerGiorno[idx]++;
         }
-        
+
         riga.push(valore || '');
       });
 
       riga.push(count);
 
-      if (!solo_presenti || count > 0) {
+      if (!soloPresenti || haPresenzaDaMostrare) {
         righe.push(riga);
       }
     });
@@ -225,20 +232,6 @@ router.get('/export', async (req, res) => {
         sheet.addRow([`${sup}: ${nota}`]);
       }
     }
-
-    sheet.addTable({
-      name: 'PresenzeTable',
-      ref: 'A1',
-      headerRow: true,
-      totalsRow: true,
-      style: { theme: 'TableStyleMedium9', showRowStripes: true },
-      columns: intestazioni.map((h, i) => ({
-        name: h,
-        totalsRowFunction:
-          i === 0 || i === intestazioni.length - 1 ? undefined : 'sum',
-      })),
-      rows: righe.map((r) => r.slice()),
-    });
 
     res.setHeader(
       'Content-Type',
