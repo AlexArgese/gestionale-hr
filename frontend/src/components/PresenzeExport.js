@@ -40,7 +40,7 @@ function PresenzeExport() {
           label: `${u.nome} ${u.cognome}`,
           value: u.id,
         }));
-        const societa = [...new Set(data.map((u) => u.societa_nome))]
+        const societa = [...new Set(data.map((u) => u.ragione_sociale))]
           .filter(Boolean)
           .map((s) => ({ label: s, value: s }));
         setSocietaOptions(societa);

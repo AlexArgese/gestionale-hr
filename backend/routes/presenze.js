@@ -36,6 +36,13 @@ function toSuperscript(n) {
   return String(n).split('').map(c => map[c] || c).join('');
 }
 
+function labelDurata(minuti) {
+  if (minuti < 60)  return '<1h';
+  if (minuti < 120) return '<2h';
+  if (minuti < 180) return '<3h';
+  return '<3h30';
+}
+
 /* -------------------------------------------------------------------------- */
 /*                                   EXPORT                                   */
 /* -------------------------------------------------------------------------- */
@@ -82,11 +89,26 @@ router.get('/export', async (req, res) => {
       values.push(utente_id);
     }
 
+    const societaParam = req.query.societa
+      ? Array.isArray(req.query.societa)
+        ? req.query.societa
+        : [req.query.societa]
+      : [];
+
+    if (societaParam.length > 0) {
+      const societaConditions = societaParam.map((nome) => {
+        values.push(nome.trim());
+        return `s.ragione_sociale = $${values.length}`;
+      });
+      filters.push(`(${societaConditions.join(' OR ')})`);
+    }
+
     const filterSql = filters.length ? `WHERE ${filters.join(' AND ')}` : '';
 
     const utentiQuery = `
       SELECT u.id, u.nome, u.cognome
       FROM utenti u
+      LEFT JOIN societa s ON s.id = u.societa_id
       ${filterSql}
       ORDER BY u.cognome, u.nome
     `;
@@ -104,7 +126,8 @@ router.get('/export', async (req, res) => {
 
     const presenze = await pool.query(
       `
-      SELECT utente_id, to_char(data, 'YYYY-MM-DD') AS data_str, note
+      SELECT utente_id, to_char(data, 'YYYY-MM-DD') AS data_str, note,
+            ora_entrata, ora_uscita
       FROM presenze
       WHERE data >= $1 AND data < $2
       `,
@@ -118,6 +141,17 @@ router.get('/export', async (req, res) => {
     const presenzeMap = new Map();
     presenze.rows.forEach((p) => {
       const key = `${p.utente_id}-${p.data_str}`;
+
+      const minuti =
+        p.ora_entrata && p.ora_uscita
+          ? (new Date(p.ora_uscita) - new Date(p.ora_entrata)) / 60000
+          : 0;
+
+      if (minuti < 210) {
+        if (minuti > 0) presenzeMap.set(key, labelDurata(minuti));
+        return; // non è una P
+      }
+
       if (p.note && p.note.trim()) {
         const nota = p.note.trim();
         if (!noteApici[nota]) {
@@ -126,8 +160,7 @@ router.get('/export', async (req, res) => {
           noteLegend[sup] = nota;
           noteCounter++;
         }
-        const sup = noteApici[nota];
-        presenzeMap.set(key, `P${sup}`);
+        presenzeMap.set(key, `P${noteApici[nota]}`);
       } else {
         presenzeMap.set(key, 'P');
       }
@@ -161,10 +194,13 @@ router.get('/export', async (req, res) => {
       giorni.forEach((g, idx) => {
         const chiave = `${utente.id}-${g.dateStr}`;
         const valore = presenzeMap.get(chiave);
-        if (valore) {
+        
+        // ✅ conta solo P (con o senza apice nota)
+        if (valore?.startsWith('P')) {
           count++;
           presenzePerGiorno[idx]++;
         }
+        
         riga.push(valore || '');
       });
 

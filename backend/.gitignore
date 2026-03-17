@@ -13,6 +13,8 @@ backend/uploads/
 backend/uploads/**
 backend/data/
 backend/data/**
+backend/data/wb/
+backend/data/wb/**
 
 # ===== BUILD =====
 build/
