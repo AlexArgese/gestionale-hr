@@ -49,7 +49,11 @@ function labelDurata(minuti) {
 
 router.get('/export', async (req, res) => {
   const { start, end } = req.query;
-  const soloPresenti = String(req.query.solo_presenti).toLowerCase() === 'true';
+  const soloPresenti =
+    req.query.solo_presenti === true ||
+    req.query.solo_presenti === 'true' ||
+    req.query.solo_presenti === '1' ||
+    req.query.solo_presenti === 'on';
 
   try {
     if (!start || !end) {
