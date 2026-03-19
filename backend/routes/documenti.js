@@ -446,7 +446,6 @@ router.post('/upload', requireAuth, (req, res) => {
         require_signature: !!require_signature,
       });
 
-
       // fire-and-forget Yousign
       if (require_signature) {
         startYousignForDocumento({
@@ -455,8 +454,29 @@ router.post('/upload', requireAuth, (req, res) => {
           nomeFile: req.file.originalname,
           urlFile: relPath,
           signaturePlacement,
-        }).catch((e) => {
-          console.error("Yousign start failed (upload):", e.response?.data || e);
+        }).catch(async (e) => {
+          console.error("Yousign start failed (upload):", {
+            message: e.message,
+            status: e.response?.status,
+            data: e.response?.data,
+            stack: e.stack,
+          });
+
+          try {
+            await pool.query(
+              `UPDATE documenti
+                  SET yousign_status = $1,
+                      yousign_signature_request_id = NULL,
+                      yousign_document_id = NULL,
+                      yousign_signer_id = NULL,
+                      yousign_signature_link = NULL,
+                      yousign_signature_link_expires_at = NULL
+                WHERE id = $2`,
+              ['init_error', inserted[0].id]
+            );
+          } catch (dbErr) {
+            console.error("Errore update init_error:", dbErr);
+          }
         });
       }
     } catch (e) {
@@ -784,7 +804,9 @@ router.get('/da-firmare', requireAuth, async (req, res) => {
          FROM documenti
         WHERE utente_id = $1
           AND require_signature = true
-          AND COALESCE(yousign_status,'') NOT IN ('completed','signed','done')
+          AND yousign_signature_request_id IS NOT NULL
+          AND yousign_signature_link IS NOT NULL
+          AND COALESCE(yousign_status,'') NOT IN ('completed','signed','done','init_error','canceled','expired','declined')
         ORDER BY data_upload DESC`,
       [userId]
     );
