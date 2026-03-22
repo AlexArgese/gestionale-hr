@@ -10,7 +10,6 @@ const path    = require('path');
 const fs      = require('fs');
 const { PDFDocument } = require('pdf-lib');
 const requireAuth = require('../middleware/requireAuth');
-const mime = require('mime-types');
 
 /* ---------- Multer ---------- */
 const storage = multer.memoryStorage();
@@ -19,11 +18,103 @@ const uploadManyPdf = multer({ storage }).array('files', 20);
 const yousignClient = require('../services/yousignClient');
 const os = require("os");
 const { creaChiaveS3, caricaBufferSuS3, scaricaBufferDaS3, urlFirmatoGet, eliminaDaS3 } = require("../lib/s3");
-
+const { sendExpoPush } = require("../services/expoPush");
+const { safeSendMail } = require("../lib/notifier");
 
 /* ==================================================================== */
 /*  Helpers                                                             */
 /* ==================================================================== */
+async function getUserPushTokens(utenteId) {
+  const t = await pool.query(
+    `SELECT expo_push_token
+       FROM push_tokens
+      WHERE utente_id = $1
+        AND attivo = true`,
+    [utenteId]
+  );
+
+  return t.rows
+    .map(r => r.expo_push_token)
+    .filter(Boolean);
+}
+
+async function notifyNewDocumentAssigned({ utenteId, documentoId, nomeFile, tipoDocumento }) {
+  try {
+    const u = await pool.query(
+      `SELECT nome, cognome, email
+         FROM utenti
+        WHERE id = $1
+        LIMIT 1`,
+      [utenteId]
+    );
+
+    const user = u.rows[0];
+    if (!user) return;
+
+    const displayName =
+      [user.nome, user.cognome].filter(Boolean).join(" ").trim() || "dipendente";
+
+    // PUSH
+    const tokens = await getUserPushTokens(utenteId);
+    if (tokens.length) {
+      await sendExpoPush(tokens, {
+        title: "Nuovo documento",
+        body: nomeFile,
+        data: {
+          type: "NEW_DOCUMENT",
+          documentoId,
+        },
+      });
+    }
+
+    // EMAIL
+    if (user.email) {
+      await safeSendMail({
+        to: user.email,
+        subject: "ClockEasy - Nuovo documento disponibile",
+        text:
+`Ciao ${displayName},
+
+è stato caricato un nuovo documento su ClockEasy.
+
+Documento: ${nomeFile}
+Tipo: ${tipoDocumento || "-"}
+
+Accedi all'app ClockEasy per visualizzarlo.
+
+Messaggio automatico, non rispondere a questa email.`,
+        html: `
+          <p>Ciao <strong>${displayName}</strong>,</p>
+          <p>è stato caricato un nuovo documento su <strong>ClockEasy</strong>.</p>
+          <p>
+            <strong>Documento:</strong> ${nomeFile}<br />
+            <strong>Tipo:</strong> ${tipoDocumento || "-"}
+          </p>
+          <p>Accedi all'app ClockEasy per visualizzarlo.</p>
+          <p style="color:#666;font-size:12px;">Messaggio automatico, non rispondere a questa email.</p>
+        `,
+      });
+    }
+  } catch (e) {
+    console.error("notifyNewDocumentAssigned error:", e);
+  }
+}
+
+function fireAndForgetDocumentNotifications(rows, tipoDocumento) {
+  Promise.allSettled(
+    (rows || []).map((doc) =>
+      notifyNewDocumentAssigned({
+        utenteId: doc.utente_id,
+        documentoId: doc.id,
+        nomeFile: doc.nome_file,
+        tipoDocumento,
+      })
+    )
+  ).catch((e) => {
+    console.error("fireAndForgetDocumentNotifications error:", e);
+  });
+}
+
 function normalizzaChiaveS3(pathDb) {
   if (!pathDb) return null;
   if (pathDb.startsWith("s3://")) return pathDb.replace("s3://", "");
@@ -272,11 +363,9 @@ async function startYousignForDocumento({ documentoId, utenteId, nomeFile, urlFi
   );
 
   // 4) notifica app (qui ci agganciamo alla tua tabella comunicazioni)
-  const { sendExpoPush } = require("../services/expoPush");
-
   async function notifyFirmaRichiesta(utenteId, documentoId, nomeFile) {
-    const t = await pool.query("SELECT expo_token FROM push_tokens WHERE utente_id = $1", [utenteId]);
-    const tokens = t.rows.map(r => r.expo_token);
+    const tokens = await getUserPushTokens(utenteId);
+    if (!tokens.length) return;
 
     await sendExpoPush(tokens, {
       title: "Firma richiesta",
@@ -284,6 +373,7 @@ async function startYousignForDocumento({ documentoId, utenteId, nomeFile, urlFi
       data: { type: "SIGN_DOCUMENT", documentoId },
     });
   }
+
   await notifyFirmaRichiesta(utenteId, documentoId, nomeFile);
 
 
@@ -439,12 +529,14 @@ router.post('/upload', requireAuth, (req, res) => {
         require_signature,
       });
 
-      // rispondo subito
       res.json({
         message: 'Documento caricato correttamente!',
         documentoId: inserted[0].id,
         require_signature: !!require_signature,
       });
+
+      // push + mail documento
+      fireAndForgetDocumentNotifications(inserted, tipoNorm);
 
       // fire-and-forget Yousign
       if (require_signature) {
@@ -526,11 +618,15 @@ router.post('/upload-multi', requireAuth, (req, res) => {
 
       const autoreId = await resolveAutoreId(req);
 
-      // ✅ carico 1 sola volta su S3 in una "cartella condivisa"
+      const safeNomeFile = String(req.body?.nome_file || req.file.originalname).trim() || req.file.originalname;
+      const finalNomeFile = safeNomeFile.toLowerCase().endsWith('.pdf')
+        ? safeNomeFile
+        : `${safeNomeFile}.pdf`;
+
       const chiaveS3 = creaChiaveS3({
-        utenteId: 0, // shared
+        utenteId: 0,
         tipoDocumento: tipoNorm,
-        nomeFile: req.file.originalname,
+        nomeFile: finalNomeFile,
       });
 
       await caricaBufferSuS3({
@@ -541,7 +637,7 @@ router.post('/upload-multi', requireAuth, (req, res) => {
 
       const relPath = chiaveS3;
 
-      await insertDocumentoRows({
+      const inserted = await insertDocumentoRows({
         utenteIds: uniq,
         tipo: tipoNorm,
         nome_file: finalNomeFile,
@@ -552,6 +648,7 @@ router.post('/upload-multi', requireAuth, (req, res) => {
       });
 
       res.json({ message: `Documento assegnato a ${uniq.length} dipendenti.` });
+      fireAndForgetDocumentNotifications(inserted, tipoNorm);
 
       if (require_signature) {
         console.warn("[Yousign] upload-multi con firma: da gestire caso multi (scelta business).");
@@ -592,6 +689,15 @@ router.post('/split', requireAuth, (req, res) => {
       }
       if (!ranges) return res.status(400).json({ error: 'ranges richiesto' });
 
+      const uniq = [...new Set(ids.map(n => Number(n)).filter(n => Number.isInteger(n) && n > 0))];
+      if (uniq.length !== ids.length) {
+        return res.status(400).json({ error: 'utente_ids non validi' });
+      }
+      const check = await pool.query('SELECT id FROM utenti WHERE id = ANY($1::int[])', [uniq]);
+      if (check.rows.length !== uniq.length) {
+        return res.status(404).json({ error: 'Alcuni utenti non esistono' });
+      }
+
       // ✅ carico PDF sorgente da buffer (memoryStorage)
       const srcPdf = await PDFDocument.load(file.buffer);
       const total = srcPdf.getPageCount();
@@ -609,6 +715,7 @@ router.post('/split', requireAuth, (req, res) => {
         });
 
       const caricato_da = await resolveAutoreId(req);
+      const createdDocs = [];
 
       // ✅ per ogni parte: genera pdf bytes -> carica su S3 -> inserisci su DB
       for (let i=0; i<parts.length; i++) {
@@ -639,18 +746,21 @@ router.post('/split', requireAuth, (req, res) => {
           contentType: "application/pdf",
         });
 
-        await insertDocumentoRows({
-          utenteIds: ids,
+        const inserted = await insertDocumentoRows({
+          utenteIds: uniq,
           tipo: tipoNorm,
-          nome_file: `${file.originalname} (parte ${i+1} ${from}-${to})`,
+          nome_file: `${file.originalname} (parte ${i + 1} ${from}-${to})`,
           relPath: chiaveS3,
           caricato_da,
           data_scadenza,
           require_signature,
         });
+
+        createdDocs.push(...inserted);
       }
 
       res.json({ message: `Creati ${parts.length} documenti e assegnati a ${ids.length} dipendenti.` });
+      fireAndForgetDocumentNotifications(createdDocs, tipoNorm);
 
       if (require_signature) {
         console.warn("[Yousign] split con firma: da definire strategia (di solito firma solo alcune parti).");
@@ -693,6 +803,15 @@ router.post('/merge', requireAuth, (req, res) => {
         return res.status(400).json({ error: 'utente_ids richiesto' });
       }
 
+      const uniq = [...new Set(ids.map(n => Number(n)).filter(n => Number.isInteger(n) && n > 0))];
+      if (uniq.length !== ids.length) {
+        return res.status(400).json({ error: 'utente_ids non validi' });
+      }
+      const check = await pool.query('SELECT id FROM utenti WHERE id = ANY($1::int[])', [uniq]);
+      if (check.rows.length !== uniq.length) {
+        return res.status(404).json({ error: 'Alcuni utenti non esistono' });
+      }
+
       const merged = await PDFDocument.create();
 
       for (const f of files) {
@@ -720,8 +839,8 @@ router.post('/merge', requireAuth, (req, res) => {
 
       const caricato_da = await resolveAutoreId(req);
 
-      await insertDocumentoRows({
-        utenteIds: ids,
+      const inserted = await insertDocumentoRows({
+        utenteIds: uniq,
         tipo: tipoNorm,
         nome_file: files.map(f => f.originalname).join(' + '),
         relPath: chiaveS3,
@@ -731,6 +850,7 @@ router.post('/merge', requireAuth, (req, res) => {
       });
 
       res.json({ message: `Documento unito e assegnato a ${ids.length} dipendenti.` });
+      fireAndForgetDocumentNotifications(inserted, tipoNorm);
 
       if (require_signature) {
         console.warn("[Yousign] merge con firma: ok, ma definire se parte firma automatica.");
