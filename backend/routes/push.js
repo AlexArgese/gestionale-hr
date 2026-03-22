@@ -8,8 +8,8 @@ router.post("/register", requireAuth, async (req, res) => {
     console.log("PUSH REGISTER HIT", {
       userId: req.user?.id,
       email: req.user?.email,
-      body: req.body,
       auth: !!req.headers.authorization,
+      body: req.body,
     });
 
     const expoPushToken = String(req.body?.expoPushToken || "").trim();
