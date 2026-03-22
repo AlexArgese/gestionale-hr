@@ -5,17 +5,28 @@ const requireAuth = require("../middleware/requireAuth");
 
 router.post("/register", requireAuth, async (req, res) => {
   try {
+    console.log("PUSH REGISTER HIT", {
+      userId: req.user?.id,
+      email: req.user?.email,
+      body: req.body,
+      auth: !!req.headers.authorization,
+    });
+
     const expoPushToken = String(req.body?.expoPushToken || "").trim();
     const platform = String(req.body?.platform || "").trim() || null;
+
+    console.log("PUSH REGISTER PARSED", { expoPushToken, platform });
 
     if (
       !expoPushToken.startsWith("ExponentPushToken") &&
       !expoPushToken.startsWith("ExpoPushToken")
     ) {
+      console.log("PUSH REGISTER INVALID TOKEN", expoPushToken);
       return res.status(400).json({ error: "expoPushToken non valido" });
     }
 
     if (!req.user?.id) {
+      console.log("PUSH REGISTER NO USER ID");
       return res.status(401).json({ error: "Utente non autenticato" });
     }
 
@@ -32,6 +43,8 @@ router.post("/register", requireAuth, async (req, res) => {
       `,
       [req.user.id, expoPushToken, platform]
     );
+
+    console.log("PUSH REGISTER OK", { userId: req.user.id, expoPushToken });
 
     return res.json({ ok: true });
   } catch (e) {
