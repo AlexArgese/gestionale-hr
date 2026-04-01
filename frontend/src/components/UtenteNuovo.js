@@ -321,8 +321,13 @@ function UtenteNuovo({
                 value={form.tipo_contratto}
                 onChange={onChange("tipo_contratto")}
               >
-                <option value="full_time">Full time</option>
-                <option value="part_time">Part time</option>
+                <option value="full_time">Full time 6,40</option>
+                <option value="part_time_2">Part time 2</option>
+                <option value="part_time_3">Part time 3</option>
+                <option value="part_time_4">Part time 4</option>
+                <option value="part_time_6">Part time 6</option>
+                <option value="part_time_8">Part time 8</option>
+                <option value="chiamata_6">Chiamata 6</option>
               </select>
             </div>
           </div>
