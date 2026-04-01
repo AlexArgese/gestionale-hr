@@ -207,9 +207,9 @@ router.get('/export', async (req, res) => {
         }
 
         // il totale invece continua a contare solo le vere P
-        if (valore?.startsWith('P')) {
-          count++;
-          presenzePerGiorno[idx]++;
+        if (valore) {
+        count++;
+        presenzePerGiorno[idx]++;
         }
 
         riga.push(valore || '');

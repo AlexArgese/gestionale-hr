@@ -453,8 +453,13 @@ function UtenteDettaglio({
                 value={form.tipo_contratto || "full_time"}
                 onChange={onChange("tipo_contratto")}
               >
-                <option value="full_time">Full time</option>
-                <option value="part_time">Part time</option>
+                <option value="full_time">Full time 6,40</option>
+                <option value="part_time">Part time 2</option>
+                <option value="part_time">Part time 3</option>
+                <option value="part_time">Part time 4</option>
+                <option value="part_time">Part time 6</option>
+                <option value="part_time">Part time 8</option>
+                <option value="part_time">Chiamata 6</option>
               </select>
             </div>
           </div>
