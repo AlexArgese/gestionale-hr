@@ -8,6 +8,8 @@ import {
   FiSlash,
   FiArchive,
   FiRotateCcw,
+  FiToggleLeft,
+  FiToggleRight,
 } from "react-icons/fi";
 import { API_BASE } from "../api";
 
@@ -26,6 +28,18 @@ function UtentiTable({
   const [utenti, setUtenti] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+
+  const CONTRACT_OPTIONS = [
+    { value: "full_time", label: "Full time 6,40" },
+    { value: "part_time_2", label: "Part time 2" },
+    { value: "part_time_3", label: "Part time 3" },
+    { value: "part_time_4", label: "Part time 4" },
+    { value: "part_time_6", label: "Part time 6" },
+    { value: "part_time_8", label: "Part time 8" },
+    { value: "chiamata_6", label: "Chiamata 6" },
+  ];
+
+  const [bulkContract, setBulkContract] = useState("");
 
   // UI state
   const [q, setQ] = useState("");
@@ -157,6 +171,19 @@ function UtentiTable({
     () => pageItems.map((u) => u.id).filter(Boolean),
     [pageItems]
   );
+  const selectedUsers = useMemo(
+    () => utenti.filter((u) => selectedIds.includes(u.id)),
+    [utenti, selectedIds]
+  );
+
+  const selectedStates = useMemo(
+    () => Array.from(new Set(selectedUsers.map((u) => !!u.stato_attivo))),
+    [selectedUsers]
+  );
+
+  const selectedHaveUniformState = selectedStates.length <= 1;
+  const selectedStateValue =
+    selectedStates.length === 1 ? selectedStates[0] : null;
 
   const allPageSelected =
     pageItemIds.length > 0 && pageItemIds.every((id) => selectedIds.includes(id));
@@ -203,6 +230,124 @@ function UtentiTable({
     });
     const data = await res.json();
     setUtenti(Array.isArray(data) ? data : data?.items || []);
+  };
+  const handleBulkToggleStatus = async () => {
+    if (!selectedIds.length || bulkLoading) return;
+
+    if (!selectedHaveUniformState) {
+      alert("Gli utenti selezionati non hanno tutti lo stesso stato.");
+      return;
+    }
+
+    const nextState = !selectedStateValue;
+    const label = nextState ? "attivi" : "non attivi";
+
+    const ok = window.confirm(
+      `Vuoi impostare ${selectedIds.length} dipendenti come ${label}?`
+    );
+    if (!ok) return;
+
+    try {
+      setBulkLoading(true);
+
+      const res = await fetch(`${API_BASE}/utenti/bulk/stato-attivo`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json, text/plain, */*",
+        },
+        body: JSON.stringify({
+          ids: selectedIds,
+          stato_attivo: nextState,
+        }),
+      });
+
+      const ctype = res.headers.get("content-type") || "";
+      const isJson = ctype.includes("application/json");
+      const payload = isJson ? await res.json().catch(() => null) : null;
+
+      if (!res.ok) {
+        throw new Error(payload?.error || payload?.message || `HTTP ${res.status}`);
+      }
+
+      await reloadData();
+      setSelectedIds([]);
+    } catch (e) {
+      alert(e.message || "Errore durante cambio stato");
+    } finally {
+      setBulkLoading(false);
+    }
+  };
+
+  const handleBulkContractChange = async () => {
+    if (!selectedIds.length || !bulkContract || bulkLoading) return;
+
+    const label =
+      CONTRACT_OPTIONS.find((c) => c.value === bulkContract)?.label || bulkContract;
+
+    const ok = window.confirm(
+      `Vuoi impostare il contratto "${label}" a ${selectedIds.length} dipendenti?`
+    );
+    if (!ok) return;
+
+    try {
+      setBulkLoading(true);
+
+      const res = await fetch(`${API_BASE}/utenti/bulk/tipo-contratto`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json, text/plain, */*",
+        },
+        body: JSON.stringify({
+          ids: selectedIds,
+          tipo_contratto: bulkContract,
+        }),
+      });
+
+      const ctype = res.headers.get("content-type") || "";
+      const isJson = ctype.includes("application/json");
+      const payload = isJson ? await res.json().catch(() => null) : null;
+
+      if (!res.ok) {
+        throw new Error(payload?.error || payload?.message || `HTTP ${res.status}`);
+      }
+
+      await reloadData();
+      setSelectedIds([]);
+      setBulkContract("");
+    } catch (e) {
+      alert(e.message || "Errore durante cambio contratto");
+    } finally {
+      setBulkLoading(false);
+    }
+  };
+
+  const handleSingleArchive = async (id) => {
+    const ok = window.confirm("Vuoi archiviare questo dipendente?");
+    if (!ok) return;
+
+    try {
+      const res = await fetch(`${API_BASE}/utenti/${id}/archivia`, {
+        method: "PATCH",
+        headers: {
+          Accept: "application/json, text/plain, */*",
+        },
+      });
+
+      const ctype = res.headers.get("content-type") || "";
+      const isJson = ctype.includes("application/json");
+      const payload = isJson ? await res.json().catch(() => null) : null;
+
+      if (!res.ok) {
+        throw new Error(payload?.error || payload?.message || `HTTP ${res.status}`);
+      }
+
+      await reloadData();
+      setSelectedIds((prev) => prev.filter((x) => x !== id));
+    } catch (e) {
+      alert(e.message || "Errore durante archiviazione");
+    }
   };
 
   const handleBulkAction = async () => {
@@ -331,18 +476,71 @@ function UtentiTable({
         </h1>
 
         <div className={styles.headerCta}>
-          {!!selectedIds.length && (
+          {!!selectedIds.length && !archived && (
+            <>
+              <button
+                className={`btn btn-primary ${styles.addBtn}`}
+                onClick={handleBulkAction}
+                disabled={bulkLoading}
+              >
+                <FiArchive />
+                {bulkLoading
+                  ? "Operazione in corso..."
+                  : ` Archivia selezionati (${selectedIds.length})`}
+              </button>
+
+              <button
+                className={`btn btn-primary ${styles.addBtn}`}
+                onClick={handleBulkToggleStatus}
+                disabled={bulkLoading || !selectedHaveUniformState}
+                title={
+                  selectedHaveUniformState
+                    ? ""
+                    : "Gli utenti selezionati non hanno tutti lo stesso stato"
+                }
+              >
+                {selectedStateValue ? <FiToggleLeft /> : <FiToggleRight />}
+                {selectedHaveUniformState
+                  ? selectedStateValue
+                    ? ` Imposta non attivi (${selectedIds.length})`
+                    : ` Imposta attivi (${selectedIds.length})`
+                  : " Stato misto"}
+              </button>
+
+              <select
+                className="select"
+                value={bulkContract}
+                onChange={(e) => setBulkContract(e.target.value)}
+                disabled={bulkLoading}
+              >
+                <option value="">Imposta contratto…</option>
+                {CONTRACT_OPTIONS.map((opt) => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
+              </select>
+
+              <button
+                className={`btn btn-primary ${styles.addBtn}`}
+                onClick={handleBulkContractChange}
+                disabled={bulkLoading || !bulkContract}
+              >
+                Applica contratto ({selectedIds.length})
+              </button>
+            </>
+          )}
+
+          {!!selectedIds.length && archived && (
             <button
-              className={`btn ${archived ? "btn-secondary" : "btn-warning"} ${styles.addBtn}`}
+              className={`btn btn-secondary ${styles.addBtn}`}
               onClick={handleBulkAction}
               disabled={bulkLoading}
             >
-              {archived ? <FiRotateCcw /> : <FiArchive />}
+              <FiRotateCcw />
               {bulkLoading
                 ? "Operazione in corso..."
-                : archived
-                ? ` Ripristina selezionati (${selectedIds.length})`
-                : ` Archivia selezionati (${selectedIds.length})`}
+                : ` Ripristina selezionati (${selectedIds.length})`}
             </button>
           )}
 
@@ -400,6 +598,13 @@ function UtentiTable({
           </select>
         </div>
       </div>
+
+      {!!selectedIds.length && !archived && !selectedHaveUniformState && (
+        <div className={styles.empty} style={{ marginBottom: 12 }}>
+          Gli utenti selezionati non hanno tutti lo stesso stato. Per cambiare
+          stato in blocco, seleziona solo utenti tutti attivi oppure tutti non attivi.
+        </div>
+      )}
 
       <div className={`card ${styles.tableCard}`}>
         {loading && <div className={styles.empty}>Caricamento…</div>}
@@ -515,7 +720,16 @@ function UtentiTable({
                           >
                             <FiRotateCcw /> Ripristina
                           </button>
-                        ) : null}
+                        ) : (
+                          <button
+                            type="button"
+                            className="btn btn-secondary"
+                            onClick={() => handleSingleArchive(u.id)}
+                            title="Archivia dipendente"
+                          >
+                            <FiArchive /> Archivia
+                          </button>
+                        )}
                       </td>
                     </tr>
                   );

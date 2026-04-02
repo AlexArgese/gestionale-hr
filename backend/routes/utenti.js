@@ -261,6 +261,76 @@ router.patch('/bulk/ripristina', async (req, res) => {
   }
 });
 
+router.patch('/bulk/stato-attivo', async (req, res) => {
+  try {
+    const { ids, stato_attivo } = req.body;
+
+    if (!Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({ error: 'ids deve essere un array non vuoto' });
+    }
+
+    if (typeof stato_attivo !== 'boolean') {
+      return res.status(400).json({ error: 'stato_attivo deve essere boolean' });
+    }
+
+    const result = await pool.query(`
+      UPDATE utenti
+      SET stato_attivo = $2,
+          updated_at = NOW()
+      WHERE id = ANY($1::int[])
+      RETURNING id
+    `, [ids, stato_attivo]);
+
+    res.json({
+      message: 'Stato attivo aggiornato con successo',
+      updatedCount: result.rowCount,
+    });
+  } catch (err) {
+    console.error('PATCH /utenti/bulk/stato-attivo', err);
+    res.status(500).json({ error: 'Errore durante aggiornamento stato attivo' });
+  }
+});
+
+router.patch('/bulk/tipo-contratto', async (req, res) => {
+  try {
+    const { ids, tipo_contratto } = req.body;
+
+    const tipiValidi = [
+      'full_time',
+      'part_time_2',
+      'part_time_3',
+      'part_time_4',
+      'part_time_6',
+      'part_time_8',
+      'chiamata_6',
+    ];
+
+    if (!Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({ error: 'ids deve essere un array non vuoto' });
+    }
+
+    if (!tipiValidi.includes(tipo_contratto)) {
+      return res.status(400).json({ error: 'tipo_contratto non valido' });
+    }
+
+    const result = await pool.query(`
+      UPDATE utenti
+      SET tipo_contratto = $2,
+          updated_at = NOW()
+      WHERE id = ANY($1::int[])
+      RETURNING id
+    `, [ids, tipo_contratto]);
+
+    res.json({
+      message: 'Tipo contratto aggiornato con successo',
+      updatedCount: result.rowCount,
+    });
+  } catch (err) {
+    console.error('PATCH /utenti/bulk/tipo-contratto', err);
+    res.status(500).json({ error: 'Errore durante aggiornamento tipo contratto' });
+  }
+});
+
 router.patch('/:id/archivia', async (req, res) => {
   try {
     const result = await pool.query(`
