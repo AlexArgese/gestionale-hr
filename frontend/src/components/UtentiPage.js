@@ -5,11 +5,10 @@ import SediTable from "./SediTable";
 import styles from "./UtentiTable.module.css";
 
 function UtentiPage() {
-  const [activeTab, setActiveTab] = useState("utenti"); // "utenti" | "sedi"
+  const [activeTab, setActiveTab] = useState("utenti"); // "utenti" | "archiviati" | "sedi"
 
   return (
     <>
-      {/* SOTTO-MENU STILE NAVBAR */}
       <div className={styles.subnavBar}>
         <div className={styles.subnav}>
           <button
@@ -25,6 +24,16 @@ function UtentiPage() {
           <button
             type="button"
             className={`${styles.subnavLink} ${
+              activeTab === "archiviati" ? styles.subnavLinkActive : ""
+            }`}
+            onClick={() => setActiveTab("archiviati")}
+          >
+            Archiviati
+          </button>
+
+          <button
+            type="button"
+            className={`${styles.subnavLink} ${
               activeTab === "sedi" ? styles.subnavLinkActive : ""
             }`}
             onClick={() => setActiveTab("sedi")}
@@ -34,8 +43,8 @@ function UtentiPage() {
         </div>
       </div>
 
-      {/* CONTENUTO TAB */}
-      {activeTab === "utenti" && <UtentiTable />}
+      {activeTab === "utenti" && <UtentiTable archived={false} />}
+      {activeTab === "archiviati" && <UtentiTable archived />}
       {activeTab === "sedi" && <SediTable />}
     </>
   );

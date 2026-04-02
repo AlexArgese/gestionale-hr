@@ -1,15 +1,26 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import styles from "./UtentiTable.module.css";
-import { FiPlus, FiSearch, FiCheckCircle, FiSlash } from "react-icons/fi";
+import {
+  FiPlus,
+  FiSearch,
+  FiCheckCircle,
+  FiSlash,
+  FiArchive,
+  FiRotateCcw,
+} from "react-icons/fi";
 import { API_BASE } from "../api";
 
 function UtentiTable({
-  fetchUrl = `${API_BASE}/utenti`,
+  fetchUrl,
+  archived = false,
   onAddUser,
   onRowClick,
 }) {
   const navigate = useNavigate();
+
+  const effectiveFetchUrl =
+    fetchUrl || `${API_BASE}/utenti${archived ? "/archiviati" : ""}`;
 
   // dati
   const [utenti, setUtenti] = useState([]);
@@ -19,13 +30,17 @@ function UtentiTable({
   // UI state
   const [q, setQ] = useState("");
   const [filterSede, setFilterSede] = useState("tutte");
-  const [filterStato, setFilterStato] = useState("tutti"); // tutti | attivi | disattivi
-  const [sortBy, setSortBy] = useState("nome");            // nome | email | sede | stato
+  const [filterStato, setFilterStato] = useState("tutti");
+  const [sortBy, setSortBy] = useState("nome");
   const [sortDir, setSortDir] = useState("asc");
 
   // paginazione
   const [pageSize, setPageSize] = useState(100);
   const [page, setPage] = useState(1);
+
+  // selezione multipla
+  const [selectedIds, setSelectedIds] = useState([]);
+  const [bulkLoading, setBulkLoading] = useState(false);
 
   // fetch
   useEffect(() => {
@@ -34,40 +49,54 @@ function UtentiTable({
       try {
         setLoading(true);
         setError(null);
-        const res = await fetch(fetchUrl, {
+        setSelectedIds([]);
+
+        const res = await fetch(effectiveFetchUrl, {
           headers: { Accept: "application/json, text/plain, */*" },
         });
+
         const ctype = res.headers.get("content-type") || "";
         const isJson = ctype.includes("application/json");
+
         if (!res.ok) {
           const msg = isJson
             ? (await res.json().catch(() => null))?.message || `HTTP ${res.status}`
             : `HTTP ${res.status} — non JSON`;
           throw new Error(msg);
         }
+
         const data = isJson ? await res.json() : [];
-        if (alive) setUtenti(Array.isArray(data) ? data : (data?.items || []));
+        if (alive) setUtenti(Array.isArray(data) ? data : data?.items || []);
       } catch (e) {
         if (alive) setError(e.message || "Errore di caricamento");
       } finally {
         if (alive) setLoading(false);
       }
     })();
+
     return () => {
       alive = false;
     };
-  }, [fetchUrl]);
+  }, [effectiveFetchUrl]);
 
-  // derivati filtri (da dati reali)
+  // reset pagina quando cambia vista
+  useEffect(() => {
+    setPage(1);
+    setQ("");
+    setFilterSede("tutte");
+    setFilterStato("tutti");
+    setSelectedIds([]);
+  }, [archived]);
+
   const sedi = useMemo(() => {
     const s = new Set();
     utenti.forEach((u) => u?.sede && s.add(u.sede));
     return ["tutte", ...Array.from(s)];
   }, [utenti]);
 
-  // filtro + sort (usa "stato_attivo")
   const filtered = useMemo(() => {
     const QQ = q.trim().toLowerCase();
+
     let out = utenti.filter((u) => {
       const nome = `${u?.nome || ""} ${u?.cognome || ""}`.trim();
       const hay = [
@@ -97,20 +126,19 @@ function UtentiTable({
           return ((a.stato_attivo ? 1 : 0) - (b.stato_attivo ? 1 : 0)) * dir;
         case "nome":
         default: {
-          const an = `${m(a.cognome)} ${m(a.nome)}`.trim(); // Cognome Nome
+          const an = `${m(a.cognome)} ${m(a.nome)}`.trim();
           const bn = `${m(b.cognome)} ${m(b.nome)}`.trim();
           return an.localeCompare(bn) * dir;
         }
       }
     });
+
     return out;
   }, [utenti, q, filterSede, filterStato, sortBy, sortDir]);
 
-  // paginazione derivata
   const totalItems = filtered.length;
   const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
 
-  // se cambio filtri e la pagina è fuori range, raddrizzo
   useEffect(() => {
     if (page > totalPages) {
       setPage(totalPages);
@@ -124,6 +152,17 @@ function UtentiTable({
 
   const from = totalItems === 0 ? 0 : (page - 1) * pageSize + 1;
   const to = totalItems === 0 ? 0 : Math.min(totalItems, page * pageSize);
+
+  const pageItemIds = useMemo(
+    () => pageItems.map((u) => u.id).filter(Boolean),
+    [pageItems]
+  );
+
+  const allPageSelected =
+    pageItemIds.length > 0 && pageItemIds.every((id) => selectedIds.includes(id));
+
+  const somePageSelected =
+    pageItemIds.some((id) => selectedIds.includes(id)) && !allPageSelected;
 
   const toggleSort = (key) => {
     if (key === sortBy) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
@@ -143,11 +182,100 @@ function UtentiTable({
     else navigate(`/utenti/${u?.id || ""}`);
   };
 
-  // componente interno: barra paginazione sopra e sotto
+  const toggleUserSelection = (id) => {
+    setSelectedIds((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+    );
+  };
+
+  const toggleSelectAllPage = () => {
+    setSelectedIds((prev) => {
+      if (allPageSelected) {
+        return prev.filter((id) => !pageItemIds.includes(id));
+      }
+      return Array.from(new Set([...prev, ...pageItemIds]));
+    });
+  };
+
+  const reloadData = async () => {
+    const res = await fetch(effectiveFetchUrl, {
+      headers: { Accept: "application/json, text/plain, */*" },
+    });
+    const data = await res.json();
+    setUtenti(Array.isArray(data) ? data : data?.items || []);
+  };
+
+  const handleBulkAction = async () => {
+    if (!selectedIds.length || bulkLoading) return;
+
+    const actionLabel = archived ? "ripristinare" : "archiviare";
+    const ok = window.confirm(
+      `Vuoi ${actionLabel} ${selectedIds.length} dipendenti?`
+    );
+    if (!ok) return;
+
+    try {
+      setBulkLoading(true);
+
+      const endpoint = archived
+        ? `${API_BASE}/utenti/bulk/ripristina`
+        : `${API_BASE}/utenti/bulk/archivia`;
+
+      const res = await fetch(endpoint, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json, text/plain, */*",
+        },
+        body: JSON.stringify({ ids: selectedIds }),
+      });
+
+      const ctype = res.headers.get("content-type") || "";
+      const isJson = ctype.includes("application/json");
+      const payload = isJson ? await res.json().catch(() => null) : null;
+
+      if (!res.ok) {
+        throw new Error(payload?.error || payload?.message || `HTTP ${res.status}`);
+      }
+
+      await reloadData();
+      setSelectedIds([]);
+    } catch (e) {
+      alert(e.message || "Errore durante operazione multipla");
+    } finally {
+      setBulkLoading(false);
+    }
+  };
+
+  const handleSingleRestore = async (id) => {
+    const ok = window.confirm("Vuoi ripristinare questo dipendente?");
+    if (!ok) return;
+
+    try {
+      const res = await fetch(`${API_BASE}/utenti/${id}/ripristina`, {
+        method: "PATCH",
+        headers: {
+          Accept: "application/json, text/plain, */*",
+        },
+      });
+
+      const ctype = res.headers.get("content-type") || "";
+      const isJson = ctype.includes("application/json");
+      const payload = isJson ? await res.json().catch(() => null) : null;
+
+      if (!res.ok) {
+        throw new Error(payload?.error || payload?.message || `HTTP ${res.status}`);
+      }
+
+      await reloadData();
+      setSelectedIds((prev) => prev.filter((x) => x !== id));
+    } catch (e) {
+      alert(e.message || "Errore durante ripristino");
+    }
+  };
+
   const PaginationBar = () => (
     <div className={styles.paginationBar}>
-      
-      {/* SELECT PER PAGINA */}
       <div className={styles.paginationLeft}>
         <label className={styles.pageSizeLabel}>Mostra</label>
         <select
@@ -155,9 +283,7 @@ function UtentiTable({
           value={pageSize}
           onChange={(e) => {
             const newSize = Number(e.target.value);
-            setPage(1); // reset pagina
-            // aggiorno pageSize
-            // (lo trasformo in stato, quindi sposta pageSize da const a state!)
+            setPage(1);
             setPageSize(newSize);
           }}
         >
@@ -166,8 +292,7 @@ function UtentiTable({
           <option value={100}>100</option>
         </select>
       </div>
-  
-      {/* INFO CENTRATE */}
+
       <div className={styles.paginationCenter}>
         <span>Totale: {totalItems}</span>
         <span className={styles.dot}>•</span>
@@ -177,8 +302,7 @@ function UtentiTable({
           Pagina {page} di {totalPages}
         </span>
       </div>
-  
-      {/* FRECCE A DESTRA */}
+
       <div className={styles.paginationControls}>
         <button
           className={styles.pageBtn}
@@ -187,7 +311,7 @@ function UtentiTable({
         >
           ←
         </button>
-  
+
         <button
           className={styles.pageBtn}
           disabled={page === totalPages || totalItems === 0}
@@ -196,26 +320,42 @@ function UtentiTable({
           →
         </button>
       </div>
-  
     </div>
   );
-  
 
   return (
     <div className={styles.container}>
-      {/* Header: titolo a sx, CTA a dx */}
       <div className={styles.header}>
-        <h1 className={styles.title}>Utenti</h1>
+        <h1 className={styles.title}>
+          {archived ? "Dipendenti archiviati" : "Utenti"}
+        </h1>
+
         <div className={styles.headerCta}>
-          <button className={`btn btn-primary ${styles.addBtn}`} onClick={goAdd}>
-            <FiPlus /> Nuovo utente
-          </button>
+          {!!selectedIds.length && (
+            <button
+              className={`btn ${archived ? "btn-secondary" : "btn-warning"} ${styles.addBtn}`}
+              onClick={handleBulkAction}
+              disabled={bulkLoading}
+            >
+              {archived ? <FiRotateCcw /> : <FiArchive />}
+              {bulkLoading
+                ? "Operazione in corso..."
+                : archived
+                ? ` Ripristina selezionati (${selectedIds.length})`
+                : ` Archivia selezionati (${selectedIds.length})`}
+            </button>
+          )}
+
+          {!archived && (
+            <button className={`btn btn-primary ${styles.addBtn}`} onClick={goAdd}>
+              <FiPlus /> Nuovo utente
+            </button>
+          )}
         </div>
       </div>
 
       <div className={styles.underline} />
 
-      {/* Toolbar: search a sx, filtri a dx */}
       <div className={styles.toolbar}>
         <div className={styles.searchWrap}>
           {q === "" ? <FiSearch className={styles.searchIcon} /> : null}
@@ -261,19 +401,29 @@ function UtentiTable({
         </div>
       </div>
 
-      {/* Tabella in card */}
       <div className={`card ${styles.tableCard}`}>
         {loading && <div className={styles.empty}>Caricamento…</div>}
         {error && !loading && <div className={styles.empty}>Errore: {error}</div>}
 
         {!loading && !error && (
           <>
-            {/* PAGINAZIONE SOPRA */}
             <PaginationBar />
 
             <table className={styles.table}>
               <thead className={styles.thead}>
                 <tr>
+                  <th className={styles.th} style={{ width: 44 }}>
+                    <input
+                      type="checkbox"
+                      checked={allPageSelected}
+                      ref={(el) => {
+                        if (el) el.indeterminate = somePageSelected;
+                      }}
+                      onChange={toggleSelectAllPage}
+                      onClick={(e) => e.stopPropagation()}
+                    />
+                  </th>
+
                   <th
                     className={styles.th}
                     onClick={() => toggleSort("nome")}
@@ -282,6 +432,7 @@ function UtentiTable({
                     Cognome / Nome{" "}
                     {sortBy === "nome" ? (sortDir === "asc" ? "↑" : "↓") : ""}
                   </th>
+
                   <th
                     className={styles.th}
                     onClick={() => toggleSort("email")}
@@ -289,6 +440,7 @@ function UtentiTable({
                   >
                     Email {sortBy === "email" ? (sortDir === "asc" ? "↑" : "↓") : ""}
                   </th>
+
                   <th
                     className={styles.th}
                     onClick={() => toggleSort("sede")}
@@ -296,6 +448,7 @@ function UtentiTable({
                   >
                     Sede {sortBy === "sede" ? (sortDir === "asc" ? "↑" : "↓") : ""}
                   </th>
+
                   <th
                     className={styles.th}
                     onClick={() => toggleSort("stato")}
@@ -303,23 +456,39 @@ function UtentiTable({
                   >
                     Stato {sortBy === "stato" ? (sortDir === "asc" ? "↑" : "↓") : ""}
                   </th>
-                  <th className={styles.th} style={{ width: 50 }}>
-                    {" "}
-                  </th>
+
+                  <th className={styles.th} style={{ width: archived ? 130 : 50 }} />
                 </tr>
               </thead>
+
               <tbody>
                 {pageItems.map((u) => {
                   const nomeCompleto = `${u?.cognome || ""} ${u?.nome || ""}`.trim();
+                  const isSelected = selectedIds.includes(u.id);
+
                   return (
                     <tr
                       key={u?.id || nomeCompleto + u?.email}
                       className={styles.row}
                       onClick={() => handleRowClick(u)}
                     >
+                      <td
+                        className={styles.td}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                        }}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          onChange={() => toggleUserSelection(u.id)}
+                        />
+                      </td>
+
                       <td className={styles.td}>{nomeCompleto || "—"}</td>
                       <td className={styles.td}>{u?.email || "—"}</td>
                       <td className={styles.td}>{u?.sede || "—"}</td>
+
                       <td className={styles.td}>
                         {u?.stato_attivo ? (
                           <span className={styles.badgeOk}>
@@ -331,20 +500,30 @@ function UtentiTable({
                           </span>
                         )}
                       </td>
+
                       <td
                         className={styles.td}
                         onClick={(e) => {
                           e.stopPropagation();
                         }}
                       >
-                        {/* azioni inline future */}
+                        {archived ? (
+                          <button
+                            type="button"
+                            className="btn btn-secondary"
+                            onClick={() => handleSingleRestore(u.id)}
+                          >
+                            <FiRotateCcw /> Ripristina
+                          </button>
+                        ) : null}
                       </td>
                     </tr>
                   );
                 })}
+
                 {!pageItems.length && (
                   <tr>
-                    <td className={styles.td} colSpan={5}>
+                    <td className={styles.td} colSpan={6}>
                       <div className={styles.empty}>
                         Nessun risultato con i filtri correnti.
                       </div>
@@ -354,7 +533,6 @@ function UtentiTable({
               </tbody>
             </table>
 
-            {/* PAGINAZIONE SOTTO */}
             <PaginationBar />
           </>
         )}

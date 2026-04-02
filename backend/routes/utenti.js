@@ -55,11 +55,15 @@ router.get('/', async (_req, res) => {
         u.stato_attivo,
         u.tipo_contratto,
         u.updated_at,
-        u.codice_fiscale,                -- ← importante per mapping CF
-        u.iban,                          -- 👈 IBAN nella lista
+        u.codice_fiscale,
+        u.iban,
+        u.archiviato,
+        u.archiviato_at,
         s.ragione_sociale AS societa_nome
       FROM utenti u
       JOIN societa s ON u.societa_id = s.id
+      WHERE COALESCE(u.archiviato, false) = false
+      ORDER BY u.cognome ASC, u.nome ASC
     `);
     res.json(result.rows);
   } catch (err) {
@@ -171,6 +175,136 @@ router.delete('/delete-my-account', requireAuth, async (req, res) => {
     client.release();
   }
 });
+
+
+router.get('/archiviati', async (_req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT 
+        u.id,
+        u.nome,
+        u.cognome,
+        u.email,
+        u.ruolo,
+        u.sede,
+        u.stato_attivo,
+        u.tipo_contratto,
+        u.updated_at,
+        u.codice_fiscale,
+        u.iban,
+        u.archiviato,
+        u.archiviato_at,
+        s.ragione_sociale AS societa_nome
+      FROM utenti u
+      JOIN societa s ON u.societa_id = s.id
+      WHERE COALESCE(u.archiviato, false) = true
+      ORDER BY u.archiviato_at DESC NULLS LAST, u.cognome ASC, u.nome ASC
+    `);
+    res.json(result.rows);
+  } catch (err) {
+    console.error('GET /utenti/archiviati', err);
+    res.status(500).json({ error: 'Errore nel recupero utenti archiviati' });
+  }
+});
+
+router.patch('/bulk/archivia', async (req, res) => {
+  try {
+    const { ids } = req.body;
+
+    if (!Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({ error: 'ids deve essere un array non vuoto' });
+    }
+
+    const result = await pool.query(`
+      UPDATE utenti
+      SET archiviato = true,
+          archiviato_at = NOW(),
+          updated_at = NOW()
+      WHERE id = ANY($1::int[])
+      RETURNING id
+    `, [ids]);
+
+    res.json({
+      message: 'Utenti archiviati con successo',
+      updatedCount: result.rowCount,
+    });
+  } catch (err) {
+    console.error('PATCH /utenti/bulk/archivia', err);
+    res.status(500).json({ error: 'Errore durante archiviazione multipla' });
+  }
+});
+
+router.patch('/bulk/ripristina', async (req, res) => {
+  try {
+    const { ids } = req.body;
+
+    if (!Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({ error: 'ids deve essere un array non vuoto' });
+    }
+
+    const result = await pool.query(`
+      UPDATE utenti
+      SET archiviato = false,
+          archiviato_at = NULL,
+          updated_at = NOW()
+      WHERE id = ANY($1::int[])
+      RETURNING id
+    `, [ids]);
+
+    res.json({
+      message: 'Utenti ripristinati con successo',
+      updatedCount: result.rowCount,
+    });
+  } catch (err) {
+    console.error('PATCH /utenti/bulk/ripristina', err);
+    res.status(500).json({ error: 'Errore durante ripristino multiplo' });
+  }
+});
+
+router.patch('/:id/archivia', async (req, res) => {
+  try {
+    const result = await pool.query(`
+      UPDATE utenti
+      SET archiviato = true,
+          archiviato_at = NOW(),
+          updated_at = NOW()
+      WHERE id = $1
+      RETURNING id
+    `, [req.params.id]);
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Utente non trovato' });
+    }
+
+    res.json({ message: 'Utente archiviato con successo' });
+  } catch (err) {
+    console.error('PATCH /utenti/:id/archivia', err);
+    res.status(500).json({ error: 'Errore durante archiviazione utente' });
+  }
+});
+
+router.patch('/:id/ripristina', async (req, res) => {
+  try {
+    const result = await pool.query(`
+      UPDATE utenti
+      SET archiviato = false,
+          archiviato_at = NULL,
+          updated_at = NOW()
+      WHERE id = $1
+      RETURNING id
+    `, [req.params.id]);
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Utente non trovato' });
+    }
+
+    res.json({ message: 'Utente ripristinato con successo' });
+  } catch (err) {
+    console.error('PATCH /utenti/:id/ripristina', err);
+    res.status(500).json({ error: 'Errore durante ripristino utente' });
+  }
+});
+
 
 
 /* =========================================================================
