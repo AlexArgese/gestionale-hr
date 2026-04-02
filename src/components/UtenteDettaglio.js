@@ -69,7 +69,8 @@ function UtenteDettaglio({
           cap_residenza: data?.cap_residenza ?? "",
           cellulare: data?.cellulare ?? "",
           contatto_emergenza: data?.contatto_emergenza ?? "",
-          iban: data?.iban ?? "",              // 👈 IBAN qui
+          iban: data?.iban ?? "",              
+          tipo_contratto: data?.tipo_contratto ?? "full_time",
         });
       } catch {
         if (alive) setMsgError("Errore caricamento utente");

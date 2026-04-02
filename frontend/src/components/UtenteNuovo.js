@@ -319,7 +319,9 @@ function UtenteNuovo({
               <select
                 className="select"
                 value={form.tipo_contratto}
-                onChange={onChange("tipo_contratto")}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, tipo_contratto: e.target.value }))
+                }
               >
                 <option value="full_time">Full time 6,40</option>
                 <option value="part_time_2">Part time 2</option>
