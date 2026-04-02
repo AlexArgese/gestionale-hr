@@ -23,6 +23,10 @@
 }
 .addBtn{ display:inline-flex; align-items:center; gap:8px; }
 
+.arch{
+  border-width: 1px;
+}
+
 /* Underline */
 .underline{
   height:3px; border-radius:2px; background:var(--grad);

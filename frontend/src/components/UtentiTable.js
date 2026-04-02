@@ -715,19 +715,19 @@ function UtentiTable({
                         {archived ? (
                           <button
                             type="button"
-                            className="btn btn-secondary"
+                            className="btn btn-secondary arch"
                             onClick={() => handleSingleRestore(u.id)}
                           >
-                            <FiRotateCcw /> Ripristina
+                            <FiRotateCcw />
                           </button>
                         ) : (
                           <button
                             type="button"
-                            className="btn btn-secondary"
+                            className="btn btn-secondary arch"
                             onClick={() => handleSingleArchive(u.id)}
                             title="Archivia dipendente"
                           >
-                            <FiArchive /> Archivia
+                            <FiArchive />
                           </button>
                         )}
                       </td>
