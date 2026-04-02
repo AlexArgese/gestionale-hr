@@ -1,9 +1,21 @@
 import React, { useEffect, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useLocation, useNavigate, useParams } from "react-router-dom";
 import styles from "./UtenteDettaglio.module.css";
 import {
-  FiArrowLeft, FiSave, FiUser, FiAtSign, FiCalendar,
-  FiMapPin, FiHome, FiPhone, FiHash, FiBriefcase, FiGrid
+  FiArrowLeft,
+  FiArrowRight,
+  FiChevronLeft,
+  FiChevronRight,
+  FiSave,
+  FiUser,
+  FiAtSign,
+  FiCalendar,
+  FiMapPin,
+  FiHome,
+  FiPhone,
+  FiHash,
+  FiBriefcase,
+  FiGrid,
 } from "react-icons/fi";
 import DocumentiUtente from "./DocumentiUtente";
 import PresenzeExportUtente from "./PresenzeExportUtente";
@@ -20,6 +32,7 @@ function UtenteDettaglio({
 }) {
   const { id } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
 
   const [form, setForm] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -27,6 +40,7 @@ function UtenteDettaglio({
   const [msgError, setMsgError] = useState("");
   const [msgOk, setMsgOk] = useState("");
   const [sediFromApi, setSediFromApi] = useState([]);
+  const [navIds, setNavIds] = useState([]);
 
   // opzioni: sedi/ruoli opzionali, società da API se esiste
   const [societa, setSocieta] = useState([]);
@@ -200,20 +214,93 @@ function UtenteDettaglio({
     return () => { alive = false; };
   }, [sediOptions]);
 
+  useEffect(() => {
+    const key = location.state?.listStorageKey;
+    if (!key) {
+      setNavIds([]);
+      return;
+    }
+
+    try {
+      const raw = sessionStorage.getItem(key);
+      const parsed = raw ? JSON.parse(raw) : [];
+      setNavIds(Array.isArray(parsed) ? parsed : []);
+    } catch {
+      setNavIds([]);
+    }
+  }, [location.state, id]);
 
   if (loading) return <div className={styles.container}>Caricamento…</div>;
   if (!form) return <div className={styles.container}>Utente non trovato</div>;
+
+  const currentIdNum = Number(id);
+  const currentIndex = navIds.findIndex((x) => Number(x) === currentIdNum);
+
+  const prevId = currentIndex > 0 ? navIds[currentIndex - 1] : null;
+  const nextId = currentIndex >= 0 && currentIndex < navIds.length - 1
+    ? navIds[currentIndex + 1]
+    : null;
+
+  const goPrev = () => {
+    if (!prevId) return;
+    navigate(`/utenti/${prevId}`, {
+      state: location.state,
+    });
+  };
+
+  const goNext = () => {
+    if (!nextId) return;
+    navigate(`/utenti/${nextId}`, {
+      state: location.state,
+    });
+  };
 
   return (
     <div className={styles.container}>
       {/* Header */}
       <div className={styles.header}>
-        <h1 className={styles.title}>Dettaglio utente: {form.nome} {form.cognome}</h1>
+        <div>
+          <h1 className={styles.title}>
+            Dettaglio utente: {form.nome} {form.cognome}
+          </h1>
+
+          {currentIndex >= 0 && navIds.length > 0 && (
+            <div className={styles.note} style={{ marginTop: 6 }}>
+              Utente {currentIndex + 1} di {navIds.length} nella lista corrente
+            </div>
+          )}
+        </div>
+
         <div className={styles.headerCta}>
           <button className={`btn btn-outline`} onClick={() => navigate(-1)}>
             <FiArrowLeft /> Indietro
           </button>
-          <button className={`btn ${styles.btnPrimary}`} onClick={handleSubmit} disabled={saving}>
+
+          <button
+            type="button"
+            className="btn btn-outline"
+            onClick={goPrev}
+            disabled={!prevId}
+            title="Dipendente precedente"
+          >
+            <FiChevronLeft />
+          </button>
+
+          <button
+            type="button"
+            className="btn btn-outline"
+            onClick={goNext}
+            disabled={!nextId}
+            title="Dipendente successivo"
+          >
+            <FiChevronRight />
+          </button>
+
+          <button
+            className={`btn ${styles.btnPrimary}`}
+            onClick={handleSubmit}
+            disabled={saving}
+          >
             <FiSave /> {saving ? "Salvataggio…" : "Salva"}
           </button>
         </div>

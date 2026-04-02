@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import styles from "./UtentiTable.module.css";
 import {
@@ -24,6 +24,14 @@ function UtentiTable({
   const effectiveFetchUrl =
     fetchUrl || `${API_BASE}/utenti${archived ? "/archiviati" : ""}`;
 
+  const storageKey = archived
+    ? "utentiTableState:archiviati"
+    : "utentiTableState:attivi";
+
+  const listStorageKey = archived
+    ? "utentiTableList:archiviati"
+    : "utentiTableList:attivi";
+
   // dati
   const [utenti, setUtenti] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -42,15 +50,26 @@ function UtentiTable({
   const [bulkContract, setBulkContract] = useState("");
 
   // UI state
-  const [q, setQ] = useState("");
-  const [filterSede, setFilterSede] = useState("tutte");
-  const [filterStato, setFilterStato] = useState("tutti");
-  const [sortBy, setSortBy] = useState("nome");
-  const [sortDir, setSortDir] = useState("asc");
+  const readSavedState = () => {
+    try {
+      const raw = sessionStorage.getItem(storageKey);
+      if (!raw) return null;
+      return JSON.parse(raw);
+    } catch {
+      return null;
+    }
+  };
 
-  // paginazione
-  const [pageSize, setPageSize] = useState(100);
-  const [page, setPage] = useState(1);
+  const savedState = readSavedState();
+
+  const [q, setQ] = useState(savedState?.q ?? "");
+  const [filterSede, setFilterSede] = useState(savedState?.filterSede ?? "tutte");
+  const [filterStato, setFilterStato] = useState(savedState?.filterStato ?? "tutti");
+  const [sortBy, setSortBy] = useState(savedState?.sortBy ?? "nome");
+  const [sortDir, setSortDir] = useState(savedState?.sortDir ?? "asc");
+
+  const [pageSize, setPageSize] = useState(savedState?.pageSize ?? 100);
+  const [page, setPage] = useState(savedState?.page ?? 1);
 
   // selezione multipla
   const [selectedIds, setSelectedIds] = useState([]);
@@ -95,10 +114,6 @@ function UtentiTable({
 
   // reset pagina quando cambia vista
   useEffect(() => {
-    setPage(1);
-    setQ("");
-    setFilterSede("tutte");
-    setFilterStato("tutti");
     setSelectedIds([]);
   }, [archived]);
 
@@ -149,6 +164,17 @@ function UtentiTable({
 
     return out;
   }, [utenti, q, filterSede, filterStato, sortBy, sortDir]);
+
+  useEffect(() => {
+    try {
+      sessionStorage.setItem(
+        listStorageKey,
+        JSON.stringify(filtered.map((u) => u.id).filter(Boolean))
+      );
+    } catch {
+      // ignore storage errors
+    }
+  }, [listStorageKey, filtered]);
 
   const totalItems = filtered.length;
   const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
@@ -204,10 +230,18 @@ function UtentiTable({
     else navigate("/utenti/nuovo");
   };
 
-  const handleRowClick = (u) => {
-    if (typeof onRowClick === "function") onRowClick(u);
-    else navigate(`/utenti/${u?.id || ""}`);
-  };
+  const handleRowClick = useCallback((u) => {
+    if (typeof onRowClick === "function") {
+      onRowClick(u);
+      return;
+    }
+
+    navigate(`/utenti/${u?.id || ""}`, {
+      state: {
+        listStorageKey,
+      },
+    });
+  }, [navigate, onRowClick, listStorageKey]);
 
   const toggleUserSelection = (id) => {
     setSelectedIds((prev) =>
