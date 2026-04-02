@@ -31,6 +31,24 @@ function localDateStr(d = new Date()) {
   return `${y}-${m}-${day}`;
 }
 
+function getMinutiContratto(tipoContratto) {
+  const map = {
+    full_time: 400,   // 6h 40m
+    part_time_2: 120,
+    part_time_3: 180,
+    part_time_4: 240,
+    part_time_6: 360,
+    part_time_8: 480,
+    chiamata_6: 360,
+  };
+
+  return map[tipoContratto] ?? 0;
+}
+
+function addMinutes(date, minutes) {
+  return new Date(date.getTime() + minutes * 60000);
+}
+
 function toSuperscript(n) {
   const map = { '0': '⁰', '1': '¹', '2': '²', '3': '³', '4': '⁴', '5': '⁵', '6': '⁶', '7': '⁷', '8': '⁸', '9': '⁹' };
   return String(n).split('').map(c => map[c] || c).join('');
@@ -111,7 +129,7 @@ router.get('/export', async (req, res) => {
     const filterSql = filters.length ? `WHERE ${filters.join(' AND ')}` : '';
 
     const utentiQuery = `
-      SELECT u.id, u.nome, u.cognome
+      SELECT u.id, u.nome, u.cognome, u.tipo_contratto
       FROM utenti u
       LEFT JOIN societa s ON s.id = u.societa_id
       ${filterSql}
@@ -119,6 +137,10 @@ router.get('/export', async (req, res) => {
     `;
 
     const utenti = await pool.query(utentiQuery, values);
+    const utentiMap = new Map();
+    utenti.rows.forEach((u) => {
+      utentiMap.set(u.id, u);
+    });
 
     if (utenti.rows.length === 0) {
       return res.status(404).json({ error: 'Nessun utente trovato' });
@@ -152,9 +174,14 @@ router.get('/export', async (req, res) => {
           ? (new Date(p.ora_uscita) - new Date(p.ora_entrata)) / 60000
           : 0;
 
-      if (minuti < 210) {
+      const utente = utentiMap.get(p.utente_id);
+      if (!utente) return;
+
+      const minutiPrevisti = getMinutiContratto(utente.tipo_contratto);
+
+      if (minuti < minutiPrevisti) {
         if (minuti > 0) presenzeMap.set(key, labelDurata(minuti));
-        return; // non è una P
+        return;
       }
 
       if (p.note && p.note.trim()) {
@@ -281,6 +308,18 @@ router.post('/timbratura', requireAuth, async (req, res) => {
     return res.status(401).json({ error: 'Utente non autenticato' });
   }
 
+  const utenteRes = await pool.query(
+    `SELECT tipo_contratto FROM utenti WHERE id = $1 LIMIT 1`,
+    [utente_id]
+  );
+
+  if (utenteRes.rows.length === 0) {
+    return res.status(404).json({ error: 'Utente non trovato' });
+  }
+
+  const tipo_contratto = utenteRes.rows[0].tipo_contratto;
+  const minutiPrevisti = getMinutiContratto(tipo_contratto);
+
   const now = new Date();
   const oggi = localDateStr(now);
 
@@ -295,9 +334,21 @@ router.post('/timbratura', requireAuth, async (req, res) => {
       [utente_id, oggi, now]
     );
   } else if (!existing.rows[0].ora_uscita) {
+    const oraEntrata = new Date(existing.rows[0].ora_entrata);
+
+    let oraUscitaFinale = now;
+
+    if (minutiPrevisti > 0) {
+      const minutiLavorati = (now - oraEntrata) / 60000;
+
+      if (minutiLavorati > minutiPrevisti) {
+        oraUscitaFinale = addMinutes(oraEntrata, minutiPrevisti);
+      }
+    }
+
     await pool.query(
       `UPDATE presenze SET ora_uscita = $1 WHERE utente_id = $2 AND data = $3`,
-      [now, utente_id, oggi]
+      [oraUscitaFinale, utente_id, oggi]
     );
   }
 
