@@ -1,11 +1,39 @@
 // frontend/src/components/UtentiPage.js
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
+import { useLocation } from "react-router-dom";
 import UtentiTable from "./UtentiTable";
 import SediTable from "./SediTable";
 import styles from "./UtentiTable.module.css";
 
+const TAB_STORAGE_KEY = "utentiPage:activeTab";
+
 function UtentiPage() {
-  const [activeTab, setActiveTab] = useState("utenti"); // "utenti" | "archiviati" | "sedi"
+  const location = useLocation();
+
+  const getInitialTab = () => {
+    if (location.state?.activeTab) return location.state.activeTab;
+
+    try {
+      const saved = sessionStorage.getItem(TAB_STORAGE_KEY);
+      if (saved) return saved;
+    } catch {}
+
+    return "utenti";
+  };
+
+  const [activeTab, setActiveTab] = useState(getInitialTab); // "utenti" | "archiviati" | "sedi"
+
+  useEffect(() => {
+    try {
+      sessionStorage.setItem(TAB_STORAGE_KEY, activeTab);
+    } catch {}
+  }, [activeTab]);
+
+  useEffect(() => {
+    if (location.state?.activeTab && location.state.activeTab !== activeTab) {
+      setActiveTab(location.state.activeTab);
+    }
+  }, [location.state, activeTab]);
 
   return (
     <>
@@ -43,8 +71,8 @@ function UtentiPage() {
         </div>
       </div>
 
-      {activeTab === "utenti" && <UtentiTable archived={false} />}
-      {activeTab === "archiviati" && <UtentiTable archived />}
+      {activeTab === "utenti" && <UtentiTable archived={false} activeTab="utenti" />}
+      {activeTab === "archiviati" && <UtentiTable archived activeTab="archiviati" />}
       {activeTab === "sedi" && <SediTable />}
     </>
   );

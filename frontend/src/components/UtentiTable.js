@@ -16,6 +16,7 @@ import { API_BASE } from "../api";
 function UtentiTable({
   fetchUrl,
   archived = false,
+  activeTab = "utenti",
   onAddUser,
   onRowClick,
 }) {
@@ -60,16 +61,14 @@ function UtentiTable({
     }
   };
 
-  const savedState = readSavedState();
+  const [q, setQ] = useState(() => readSavedState()?.q ?? "");
+  const [filterSede, setFilterSede] = useState(() => readSavedState()?.filterSede ?? "tutte");
+  const [filterStato, setFilterStato] = useState(() => readSavedState()?.filterStato ?? "tutti");
+  const [sortBy, setSortBy] = useState(() => readSavedState()?.sortBy ?? "nome");
+  const [sortDir, setSortDir] = useState(() => readSavedState()?.sortDir ?? "asc");
 
-  const [q, setQ] = useState(savedState?.q ?? "");
-  const [filterSede, setFilterSede] = useState(savedState?.filterSede ?? "tutte");
-  const [filterStato, setFilterStato] = useState(savedState?.filterStato ?? "tutti");
-  const [sortBy, setSortBy] = useState(savedState?.sortBy ?? "nome");
-  const [sortDir, setSortDir] = useState(savedState?.sortDir ?? "asc");
-
-  const [pageSize, setPageSize] = useState(savedState?.pageSize ?? 100);
-  const [page, setPage] = useState(savedState?.page ?? 1);
+  const [pageSize, setPageSize] = useState(() => readSavedState()?.pageSize ?? 100);
+  const [page, setPage] = useState(() => readSavedState()?.page ?? 1);
 
   // selezione multipla
   const [selectedIds, setSelectedIds] = useState([]);
@@ -168,6 +167,25 @@ function UtentiTable({
   useEffect(() => {
     try {
       sessionStorage.setItem(
+        storageKey,
+        JSON.stringify({
+          q,
+          filterSede,
+          filterStato,
+          sortBy,
+          sortDir,
+          pageSize,
+          page,
+        })
+      );
+    } catch {
+      // ignore storage errors
+    }
+  }, [storageKey, q, filterSede, filterStato, sortBy, sortDir, pageSize, page]);
+
+  useEffect(() => {
+    try {
+      sessionStorage.setItem(
         listStorageKey,
         JSON.stringify(filtered.map((u) => u.id).filter(Boolean))
       );
@@ -239,9 +257,12 @@ function UtentiTable({
     navigate(`/utenti/${u?.id || ""}`, {
       state: {
         listStorageKey,
+        tableStateKey: storageKey,
+        activeTab,
+        backTo: "/utenti",
       },
     });
-  }, [navigate, onRowClick, listStorageKey]);
+  }, [navigate, onRowClick, listStorageKey, storageKey, activeTab]);
 
   const toggleUserSelection = (id) => {
     setSelectedIds((prev) =>

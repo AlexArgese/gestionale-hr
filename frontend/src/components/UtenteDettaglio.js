@@ -131,6 +131,14 @@ function UtenteDettaglio({
     setForm((f) => ({ ...f, sede: updated.join(", ") }));
   };
 
+  const handleBackToList = () => {
+    navigate(location.state?.backTo || "/utenti", {
+      state: {
+        activeTab: location.state?.activeTab || "utenti",
+      },
+    });
+  };
+
   const handleRemoveSede = (nomeSede) => {
     const current = getSelectedSedi();
     const updated = current.filter((s) => s !== nomeSede);
@@ -272,7 +280,7 @@ function UtenteDettaglio({
         </div>
 
         <div className={styles.headerCta}>
-          <button className={`btn btn-outline`} onClick={() => navigate(-1)}>
+          <button className={`btn btn-outline`} onClick={handleBackToList}>
             <FiArrowLeft /> Indietro
           </button>
 
@@ -565,7 +573,9 @@ function UtenteDettaglio({
         </div>
 
         <div className={styles.actions}>
-          <button type="button" className={`btn btn-outline`} onClick={() => navigate(-1)}>Annulla</button>
+          <button type="button" className={`btn btn-outline`} onClick={handleBackToList}>
+            Annulla
+          </button>
           <button type="button" className={`btn ${styles.btnPrimary}`} onClick={handleSubmit} disabled={saving}>
             <FiSave /> {saving ? "Salvataggio…" : "Salva modifiche"}
           </button>
