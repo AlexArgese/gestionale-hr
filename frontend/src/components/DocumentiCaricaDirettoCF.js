@@ -183,7 +183,7 @@ export default function DocumentiCaricaDirettoCF({ tipi = [] }) {
   const utentiByCF = useMemo(() => {
     const m = new Map();
     (utentiCF || []).forEach((u) => {
-      const cf = (u.codice_fiscale || "").toUpperCase().trim();
+      const cf = normalizeForCF(u.codice_fiscale || "");
       if (cf) m.set(cf, u);
     });
     return m;
@@ -311,9 +311,14 @@ export default function DocumentiCaricaDirettoCF({ tipi = [] }) {
     const updated = [...items];
     for (const it of updated) {
       const { cf, thumbDataUrl } = await detectCFAndThumb(it.file, cfWhitelist);
+      const normalizedCF = normalizeForCF(cf || "");
       let utenteId = null;
-      if (cf && utentiByCF.has(cf)) utenteId = utentiByCF.get(cf).id;
-      it.cf = cf || null;
+
+      if (normalizedCF && utentiByCF.has(normalizedCF)) {
+        utenteId = utentiByCF.get(normalizedCF).id;
+      }
+
+      it.cf = normalizedCF || null;
       it.thumb = thumbDataUrl || it.thumb;
       it.utenteId = utenteId;
       setItems([...updated]);

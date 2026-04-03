@@ -23,20 +23,24 @@ function detectAnyCF(pageText) {
 
   const normalized = upper.replace(/\s+/g, " ");
   let m = normalized.match(CF_STRICT);
-  if (m) return m[1];
+  if (m) return normalizeCF(m[1]);
 
-  const flat = upper.replace(/[^A-Z0-9]/g, "");
+  const flat = normalizeCF(upper);
   m = flat.match(CF_STRICT);
-  if (m) return m[1];
+  if (m) return normalizeCF(m[1]);
 
   const any = flat.match(CF_ANY16);
-  return any && any.length ? any[0] : null;
+  return any && any.length ? normalizeCF(any[0]) : null;
 }
-
+function normalizeCF(value = "") {
+  return String(value)
+    .toUpperCase()
+    .replace(/[^A-Z0-9]/g, "");
+}
 /* Map CF -> utente (in base ai dati /utenti/cf/all) */
 function mapCFtoUtente(cf, utentiByCF) {
   if (!cf) return null;
-  return utentiByCF.get(cf.toUpperCase()) || null;
+  return utentiByCF.get(normalizeCF(cf)) || null;
 }
 
 /* OCR fallback */
@@ -101,7 +105,7 @@ export default function DocumentiSplitCF({ tipi = [] }) {
   const utentiByCF = useMemo(() => {
     const m = new Map();
     utentiCF.forEach(u => {
-      const cf = (u.codice_fiscale || "").toUpperCase().trim();
+      const cf = normalizeCF(u.codice_fiscale || "");
       if (cf.length === 16) m.set(cf, u);
     });
     return m;
