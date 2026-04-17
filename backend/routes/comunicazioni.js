@@ -6,7 +6,7 @@ const path = require('path');
 const fs = require('fs');
 const pool = require('../db');
 const requireAuth = require('../middleware/requireAuth');
-const { caricaBufferSuS3, eliminaDaS3, urlFirmatoGet } = require('../lib/s3');
+const { caricaBufferSuS3, eliminaDaS3, urlFirmatoGet, esisteSuS3 } = require('../lib/s3');
 
 const nodemailer = require('nodemailer');
 
@@ -209,6 +209,11 @@ async function sendComunicazioneAttachment({ res, fileUrl, mime = null, inline =
 
   const chiave = normalizzaChiaveS3(fileUrl);
   if (!chiave) return res.status(404).send('File non trovato');
+
+  const presenteSuS3 = await esisteSuS3({ chiave });
+  if (!presenteSuS3) {
+    return res.status(404).send('Allegato non disponibile: file non presente su S3');
+  }
 
   const signedUrl = await urlFirmatoGet({
     chiave,

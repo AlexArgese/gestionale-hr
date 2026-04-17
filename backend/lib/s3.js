@@ -1,5 +1,11 @@
 // backend/lib/s3.js
-const { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand } = require("@aws-sdk/client-s3");
+const {
+  S3Client,
+  PutObjectCommand,
+  GetObjectCommand,
+  DeleteObjectCommand,
+  HeadObjectCommand,
+} = require("@aws-sdk/client-s3");
 const { getSignedUrl } = require("@aws-sdk/s3-request-presigner");
 
 const REGIONE = process.env.AWS_REGION;
@@ -43,6 +49,17 @@ async function scaricaBufferDaS3({ chiave }) {
   return await streamToBuffer(r.Body);
 }
 
+async function esisteSuS3({ chiave }) {
+  try {
+    await s3.send(new HeadObjectCommand({ Bucket: BUCKET, Key: chiave }));
+    return true;
+  } catch (err) {
+    const code = err?.name || err?.Code || err?.code || err?.$metadata?.httpStatusCode;
+    if (code === "NotFound" || code === "NoSuchKey" || code === 404) return false;
+    throw err;
+  }
+}
+
 
 async function caricaBufferSuS3({ chiave, buffer, contentType }) {
   await s3.send(
@@ -76,6 +93,7 @@ module.exports = {
   creaChiaveS3,
   caricaBufferSuS3,
   scaricaBufferDaS3,
+  esisteSuS3,
   urlFirmatoGet,
   eliminaDaS3,
 };
