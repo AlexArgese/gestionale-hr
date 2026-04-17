@@ -6,6 +6,7 @@ const path = require('path');
 const fs = require('fs');
 const pool = require('../db');
 const requireAuth = require('../middleware/requireAuth');
+const { urlFirmatoGet } = require('../lib/s3');
 
 const nodemailer = require('nodemailer');
 
@@ -157,6 +158,58 @@ function resolveComunicazioneAttachmentPath(fileUrl) {
   }
 
   return path.join(__dirname, '..', rel);
+}
+
+function normalizzaChiaveS3(pathDb) {
+  if (!pathDb) return null;
+
+  let key = String(pathDb).trim();
+
+  if (/^https?:\/\//i.test(key)) {
+    try {
+      key = new URL(key).pathname || key;
+    } catch {
+      return key;
+    }
+  }
+
+  key = decodeURIComponent(key).replace(/\\/g, '/').replace(/^\/+/, '');
+  if (key.startsWith('s3://')) return key.replace('s3://', '');
+  if (key.startsWith('upload/')) return `uploads/${key.slice('upload/'.length)}`;
+  return key;
+}
+
+async function sendComunicazioneAttachment({ res, fileUrl, mime = null, inline = true }) {
+  const abs = resolveComunicazioneAttachmentPath(fileUrl);
+  if (abs && fs.existsSync(abs)) {
+    if (!mime) {
+      const ext = path.extname(abs).toLowerCase();
+      if (ext === '.pdf') mime = 'application/pdf';
+      else if (ext === '.png') mime = 'image/png';
+      else if (ext === '.jpg' || ext === '.jpeg') mime = 'image/jpeg';
+      else if (ext === '.webp') mime = 'image/webp';
+      else if (ext === '.gif') mime = 'image/gif';
+      else mime = 'application/octet-stream';
+    }
+
+    res.setHeader('Content-Type', mime);
+    res.setHeader('Content-Disposition', `${inline ? 'inline' : 'attachment'}; filename="${path.basename(abs).replace(/"/g, '')}"`);
+    res.setHeader('Cache-Control', 'no-store');
+
+    return inline ? res.sendFile(abs) : res.download(abs);
+  }
+
+  const chiave = normalizzaChiaveS3(fileUrl);
+  if (!chiave) return res.status(404).send('File non trovato');
+
+  const signedUrl = await urlFirmatoGet({
+    chiave,
+    scadeSecondi: 120,
+    nomeDownload: path.basename(chiave),
+    inline,
+  });
+
+  return res.redirect(signedUrl);
 }
 
 async function requireUserId(req) {
@@ -606,30 +659,7 @@ router.get('/:id/view', async (req, res) => {
 
     if (!rel) return res.status(404).send('File non trovato');
 
-    const abs = resolveComunicazioneAttachmentPath(rel);
-    if (!fs.existsSync(abs)) return res.status(404).send('File non trovato');
-
-    // mime fallback da estensione se manca
-    if (!mime) {
-      const ext = path.extname(abs).toLowerCase();
-      if (ext === '.pdf') mime = 'application/pdf';
-      else if (ext === '.png') mime = 'image/png';
-      else if (ext === '.jpg' || ext === '.jpeg') mime = 'image/jpeg';
-      else if (ext === '.webp') mime = 'image/webp';
-      else mime = 'application/octet-stream';
-    }
-
-    // ✅ inline = anteprima nel browser / iframe
-    res.setHeader('Content-Type', mime);
-
-    // nome file “carino”
-    const filename = path.basename(abs).replace(/"/g, '');
-    res.setHeader('Content-Disposition', `inline; filename="${filename}"`);
-
-    // (opzionale ma consigliato) cache disabilitata per admin
-    res.setHeader('Cache-Control', 'no-store');
-
-    return res.sendFile(abs);
+    return await sendComunicazioneAttachment({ res, fileUrl: rel, mime, inline: true });
   } catch (err) {
     console.error('GET /comunicazioni/:id/view', err);
     res.status(500).json({ error: 'Errore preview' });
@@ -649,9 +679,7 @@ router.get('/:id/download', async (req, res) => {
       [req.params.id]
     );
     if (a.rows.length) {
-      const abs = resolveComunicazioneAttachmentPath(a.rows[0].file_url);
-      if (!fs.existsSync(abs)) return res.status(404).send('File non trovato');
-      return res.download(abs);
+      return await sendComunicazioneAttachment({ res, fileUrl: a.rows[0].file_url, inline: false });
     }
 
     // Fallback: campo legacy allegato_url su "comunicazioni"
@@ -662,9 +690,7 @@ router.get('/:id/download', async (req, res) => {
     const rel = result.rows[0]?.allegato_url;
     if (!rel) return res.status(404).send('File non trovato');
 
-    const abs = resolveComunicazioneAttachmentPath(rel);
-    if (!fs.existsSync(abs)) return res.status(404).send('File non trovato');
-    res.download(abs);
+    return await sendComunicazioneAttachment({ res, fileUrl: rel, inline: false });
   } catch (err) {
     console.error('GET /comunicazioni/:id/download', err);
     res.status(500).json({ error: 'Errore download' });
@@ -692,24 +718,7 @@ router.get('/attachments/:attachmentId/view', async (req, res) => {
     const rel = a.rows[0].file_url;
     let mime = a.rows[0].mime_type || null;
 
-    const abs = resolveComunicazioneAttachmentPath(rel);
-    if (!fs.existsSync(abs)) return res.status(404).send('File non trovato');
-
-    if (!mime) {
-      const ext = path.extname(abs).toLowerCase();
-      if (ext === '.pdf') mime = 'application/pdf';
-      else if (ext === '.png') mime = 'image/png';
-      else if (ext === '.jpg' || ext === '.jpeg') mime = 'image/jpeg';
-      else if (ext === '.webp') mime = 'image/webp';
-      else if (ext === '.gif') mime = 'image/gif';
-      else mime = 'application/octet-stream';
-    }
-
-    res.setHeader('Content-Type', mime);
-    res.setHeader('Content-Disposition', `inline; filename="${path.basename(abs).replace(/"/g, '')}"`);
-    res.setHeader('Cache-Control', 'no-store');
-
-    return res.sendFile(abs);
+    return await sendComunicazioneAttachment({ res, fileUrl: rel, mime, inline: true });
   } catch (err) {
     console.error('GET /comunicazioni/attachments/:attachmentId/view', err);
     res.status(500).json({ error: 'Errore preview allegato' });
@@ -734,10 +743,7 @@ router.get('/attachments/:attachmentId/download', async (req, res) => {
 
     if (!a.rows.length) return res.status(404).send('File non trovato');
 
-    const abs = resolveComunicazioneAttachmentPath(a.rows[0].file_url);
-    if (!fs.existsSync(abs)) return res.status(404).send('File non trovato');
-
-    return res.download(abs);
+    return await sendComunicazioneAttachment({ res, fileUrl: a.rows[0].file_url, inline: false });
   } catch (err) {
     console.error('GET /comunicazioni/attachments/:attachmentId/download', err);
     res.status(500).json({ error: 'Errore download allegato' });
