@@ -958,8 +958,8 @@ router.get('/', requireAuth, async (req, res) => {
       `SELECT
          MIN(d.id)                                  AS id,
          COALESCE(d.batch_id::text, d.url_file)     AS group_key,
-         d.batch_id,
-         d.url_file,
+         MAX(d.batch_id)                            AS batch_id,
+         MAX(d.url_file)                            AS url_file,
          MAX(d.tipo_documento)                      AS tipo_documento,
          MAX(d.nome_file)                           AS nome_file,
          MIN(d.data_upload)                         AS data_upload,
@@ -983,7 +983,7 @@ router.get('/', requireAuth, async (req, res) => {
        FROM documenti d
        LEFT JOIN utenti  u ON u.id = d.utente_id
        LEFT JOIN societa s ON s.id = u.societa_id
-       GROUP BY COALESCE(d.batch_id::text, d.url_file), d.batch_id, d.url_file
+       GROUP BY COALESCE(d.batch_id::text, d.url_file)
        ORDER BY MIN(d.data_upload) DESC
        LIMIT $1`,
       [limit]
@@ -1138,20 +1138,30 @@ router.delete('/:id', requireAuth, async (req, res) => {
 
     await pool.query('DELETE FROM documenti WHERE id = $1', [id]);
 
-    // ✅ elimina sempre da S3
+    // Elimina da S3 solo se nessun altro record condivide lo stesso file
     const chiave1 = normalizzaChiaveS3(url_file);
     const chiave2 = url_file_signed ? normalizzaChiaveS3(url_file_signed) : null;
 
-    try {
-      if (chiave1) await eliminaDaS3({ chiave: chiave1 });
-    } catch (e) {
-      console.warn("Elimina S3 originale fallito:", e?.message || e);
+    if (chiave1) {
+      const stillUsed = await pool.query(
+        'SELECT 1 FROM documenti WHERE url_file = $1 LIMIT 1', [url_file]
+      );
+      if (!stillUsed.rows.length) {
+        try { await eliminaDaS3({ chiave: chiave1 }); } catch (e) {
+          console.warn("Elimina S3 originale fallito:", e?.message || e);
+        }
+      }
     }
 
-    try {
-      if (chiave2) await eliminaDaS3({ chiave: chiave2 });
-    } catch (e) {
-      console.warn("Elimina S3 firmato fallito:", e?.message || e);
+    if (chiave2) {
+      const stillUsedSigned = await pool.query(
+        'SELECT 1 FROM documenti WHERE url_file_signed = $1 OR url_file = $1 LIMIT 1', [url_file_signed]
+      );
+      if (!stillUsedSigned.rows.length) {
+        try { await eliminaDaS3({ chiave: chiave2 }); } catch (e) {
+          console.warn("Elimina S3 firmato fallito:", e?.message || e);
+        }
+      }
     }
 
     return res.json({ message: 'Documento eliminato' });

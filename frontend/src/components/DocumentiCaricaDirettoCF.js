@@ -387,7 +387,6 @@ export default function DocumentiCaricaDirettoCF({ tipi = [] }) {
     setBanner({ type: "info", text: "Caricamento in corso…" });
 
     try {
-      const batchId = crypto.randomUUID();
       const auth = getAuth();
       const idToken = await auth.currentUser?.getIdToken(true);
       if (!idToken) {
@@ -412,6 +411,10 @@ export default function DocumentiCaricaDirettoCF({ tipi = [] }) {
           continue;
         }
 
+        if (targetsForFile.length === 0) continue;
+
+        tot += 1;
+
         const placementRaw = signature_placements?.[it.id] || null;
         const placement =
           placementRaw && typeof placementRaw === "object"
@@ -423,51 +426,36 @@ export default function DocumentiCaricaDirettoCF({ tipi = [] }) {
               }
             : null;
 
-        for (const uid of targetsForFile) {
-          tot += 1;
-          const fd = new FormData();
-          const matchedUser = uid
-            ? utentiFull.find((x) => String(x.id) === String(uid))
-            : null;
+        const firstUser = targetsForFile.length === 1
+          ? utentiFull.find((x) => String(x.id) === String(targetsForFile[0]))
+          : null;
 
-          const fallbackUserName = it.name?.replace(/\.[^.]+$/, "") || "Documento";
-          const defaultFileName = buildDefaultFileName(
-            matchedUser,
-            tipoDocumento,
-            fallbackUserName
+        const fallbackUserName = it.name?.replace(/\.[^.]+$/, "") || "Documento";
+        const defaultFileName = buildDefaultFileName(firstUser, tipoDocumento, fallbackUserName);
+        const finalFileName = (customFileNames[it.id] || it.fileName || defaultFileName).trim();
+
+        const fd = new FormData();
+        fd.append("file", it.file, `${finalFileName}.pdf`);
+        fd.append("nome_file", finalFileName);
+        fd.append("tipo_documento", tipoDocumento);
+        fd.append("utente_ids", JSON.stringify(targetsForFile));
+        fd.append("require_signature", require_signature ? "true" : "false");
+        if (placement) fd.append("signature_placement", JSON.stringify(placement));
+        if (dataScadenza) fd.append("data_scadenza", dataScadenza);
+
+        const res = await fetch(`${API}/documenti/upload-multi`, {
+          method: "POST",
+          body: fd,
+          headers: { Authorization: `Bearer ${idToken}` },
+        });
+        if (res.ok) ok += 1;
+        else
+          console.error(
+            "Upload fallito (targets:",
+            targetsForFile,
+            "):",
+            await res.text().catch(() => "")
           );
-
-          const finalFileName = (
-            customFileNames[it.id] ||
-            it.fileName ||
-            defaultFileName
-          ).trim();
-
-          fd.append("file", it.file, `${finalFileName}.pdf`);
-          fd.append("nome_file", finalFileName);
-          fd.append("tipo_documento", tipoDocumento);
-          fd.append("utente_id", uid);
-          fd.append("batch_id", batchId);
-          fd.append("require_signature", require_signature ? "true" : "false");
-          if (placement) {
-            fd.append("signature_placement", JSON.stringify(placement));
-          }
-          if (dataScadenza) fd.append("data_scadenza", dataScadenza);
-
-          const res = await fetch(`${API}/documenti/upload`, {
-            method: "POST",
-            body: fd,
-            headers: { Authorization: `Bearer ${idToken}` },
-          });
-          if (res.ok) ok += 1;
-          else
-            console.error(
-              "Upload fallito (uid:",
-              uid,
-              "):",
-              await res.text().catch(() => "")
-            );
-        }
       }
 
       if (tot === 0) {
