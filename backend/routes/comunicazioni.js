@@ -239,9 +239,23 @@ router.get('/:id', requireAuth, async (req, res) => {
       `SELECT COUNT(*)::int AS comments_count FROM comunicazioni_comments WHERE comunicazione_id=$1`,
       [req.params.id]
     );
+    const attRes = await pool.query(
+      `SELECT id, file_url, mime_type, width, height
+       FROM comunicazione_attachments
+       WHERE comunicazione_id = $1
+       ORDER BY id ASC`,
+      [req.params.id]
+    );
+
+    const attachments = attRes.rows.length
+      ? attRes.rows
+      : (c.allegato_url
+          ? [{ id: -1, file_url: c.allegato_url, mime_type: null, width: null, height: null }]
+          : []);
 
     res.json({
       ...c,
+      attachments,
       liked: likedRes.rows[0].liked,
       likes_count: likesCountRes.rows[0].likes_count,
       comments_count: commentsCountRes.rows[0].comments_count,
