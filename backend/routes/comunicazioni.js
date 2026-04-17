@@ -129,6 +129,36 @@ const upload = multer({ storage });
 /* ------------------------------------------
    Helpers
 ------------------------------------------- */
+function resolveComunicazioneAttachmentPath(fileUrl) {
+  if (!fileUrl) return null;
+
+  let rel = String(fileUrl).trim();
+
+  if (/^https?:\/\//i.test(rel)) {
+    try {
+      rel = new URL(rel).pathname || rel;
+    } catch {
+      // lascio invariato se non e' una URL valida
+    }
+  }
+
+  rel = decodeURIComponent(rel).replace(/\\/g, '/').replace(/^\/+/, '');
+
+  const uploadsIdx = rel.indexOf('uploads/');
+  if (uploadsIdx >= 0) rel = rel.slice(uploadsIdx);
+
+  const candidates = [rel];
+  if (rel.startsWith('upload/')) candidates.push(`uploads/${rel.slice('upload/'.length)}`);
+  if (rel.startsWith('uploads/')) candidates.push(`upload/${rel.slice('uploads/'.length)}`);
+
+  for (const candidate of candidates) {
+    const abs = path.join(__dirname, '..', candidate);
+    if (fs.existsSync(abs)) return abs;
+  }
+
+  return path.join(__dirname, '..', rel);
+}
+
 async function requireUserId(req) {
   const q = await pool.query('SELECT id FROM utenti WHERE email = $1 LIMIT 1', [req.user.email]);
   if (!q.rows.length) throw Object.assign(new Error('Utente non trovato'), { status: 404 });
@@ -576,7 +606,7 @@ router.get('/:id/view', async (req, res) => {
 
     if (!rel) return res.status(404).send('File non trovato');
 
-    const abs = path.join(__dirname, '..', rel);
+    const abs = resolveComunicazioneAttachmentPath(rel);
     if (!fs.existsSync(abs)) return res.status(404).send('File non trovato');
 
     // mime fallback da estensione se manca
@@ -619,7 +649,7 @@ router.get('/:id/download', async (req, res) => {
       [req.params.id]
     );
     if (a.rows.length) {
-      const abs = path.join(__dirname, '..', a.rows[0].file_url);
+      const abs = resolveComunicazioneAttachmentPath(a.rows[0].file_url);
       if (!fs.existsSync(abs)) return res.status(404).send('File non trovato');
       return res.download(abs);
     }
@@ -632,7 +662,7 @@ router.get('/:id/download', async (req, res) => {
     const rel = result.rows[0]?.allegato_url;
     if (!rel) return res.status(404).send('File non trovato');
 
-    const abs = path.join(__dirname, '..', rel);
+    const abs = resolveComunicazioneAttachmentPath(rel);
     if (!fs.existsSync(abs)) return res.status(404).send('File non trovato');
     res.download(abs);
   } catch (err) {
@@ -662,7 +692,7 @@ router.get('/attachments/:attachmentId/view', async (req, res) => {
     const rel = a.rows[0].file_url;
     let mime = a.rows[0].mime_type || null;
 
-    const abs = path.join(__dirname, '..', rel);
+    const abs = resolveComunicazioneAttachmentPath(rel);
     if (!fs.existsSync(abs)) return res.status(404).send('File non trovato');
 
     if (!mime) {
@@ -704,7 +734,7 @@ router.get('/attachments/:attachmentId/download', async (req, res) => {
 
     if (!a.rows.length) return res.status(404).send('File non trovato');
 
-    const abs = path.join(__dirname, '..', a.rows[0].file_url);
+    const abs = resolveComunicazioneAttachmentPath(a.rows[0].file_url);
     if (!fs.existsSync(abs)) return res.status(404).send('File non trovato');
 
     return res.download(abs);
