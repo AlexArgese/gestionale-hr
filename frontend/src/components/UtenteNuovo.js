@@ -85,6 +85,25 @@ function UtenteNuovo({
     setForm((f) => ({ ...f, [k]: v }));
   };
 
+  const getSelectedSedi = () => {
+    if (!form.sede) return [];
+    return form.sede.split(",").map((s) => s.trim()).filter((s) => s.length > 0);
+  };
+
+  const handleAddSede = (nomeSede) => {
+    if (!nomeSede) return;
+    const current = getSelectedSedi();
+    if (current.includes(nomeSede)) return;
+    setForm((f) => ({ ...f, sede: [...current, nomeSede].join(", ") }));
+  };
+
+  const handleRemoveSede = (nomeSede) => {
+    const updated = getSelectedSedi().filter((s) => s !== nomeSede);
+    setForm((f) => ({ ...f, sede: updated.join(", ") }));
+  };
+
+  const sediList = sedi.map((s) => labelSede(s));
+
   const validEmail = (v) => /^\S+@\S+\.\S+$/.test(v);
   const normalizeDateOrNull = (v) => (v && /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : null);
 
@@ -203,15 +222,42 @@ function UtenteNuovo({
           </div>
 
           <div className={styles.group}>
-            <label className={styles.label}>Sede</label>
+            <label className={styles.label}>Sedi</label>
             <div className={styles.inputIcon}>
               <FiMapPin className={styles.icon} />
-              <select className="select" value={form.sede} onChange={onChange("sede")}>
-                <option value="">Seleziona sede</option>
-                {sedi.map((s) => (
-                  <option key={valueSede(s)} value={valueSede(s)}>{labelSede(s)}</option>
+              <select
+                className="select"
+                value=""
+                onChange={(e) => {
+                  const value = e.target.value;
+                  if (value) { handleAddSede(value); e.target.value = ""; }
+                }}
+              >
+                <option value="">Aggiungi sede…</option>
+                {sediList.map((s) => (
+                  <option key={s} value={s}>{s}</option>
                 ))}
               </select>
+            </div>
+            <div className={styles.sediSelectedWrap}>
+              {getSelectedSedi().length === 0 && (
+                <span className={styles.note}>Nessuna sede assegnata</span>
+              )}
+              {getSelectedSedi().length > 0 && (
+                <>
+                  <div className={styles.sediChips}>
+                    {getSelectedSedi().map((s) => (
+                      <span key={s} className={styles.sedeChip}>
+                        {s}
+                        <button type="button" className={styles.sedeChipRemove} onClick={() => handleRemoveSede(s)}>×</button>
+                      </span>
+                    ))}
+                  </div>
+                  <div className={styles.note} style={{ marginTop: 6 }}>
+                    Valore salvato: <span className={styles.mono}>{getSelectedSedi().join(", ")}</span>
+                  </div>
+                </>
+              )}
             </div>
           </div>
 

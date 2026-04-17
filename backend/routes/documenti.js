@@ -940,6 +940,29 @@ router.get('/da-firmare', requireAuth, async (req, res) => {
 
 
 /* ==================================================================== */
+/*  GET /documenti  — cronologia globale (gestionale)                    */
+/* ==================================================================== */
+router.get('/', requireAuth, async (req, res) => {
+  try {
+    const limit = Math.min(parseInt(req.query.limit) || 50, 200);
+    const { rows } = await pool.query(
+      `SELECT d.id, d.tipo_documento, d.nome_file, d.data_upload, d.data_scadenza,
+              d.require_signature, d.yousign_status,
+              u.nome AS utente_nome, u.cognome AS utente_cognome
+         FROM documenti d
+         LEFT JOIN utenti u ON u.id = d.utente_id
+        ORDER BY d.data_upload DESC
+        LIMIT $1`,
+      [limit]
+    );
+    res.json(rows);
+  } catch (err) {
+    console.error('GET /documenti', err);
+    res.status(500).json({ error: 'Errore interno server' });
+  }
+});
+
+/* ==================================================================== */
 /*  GET /documenti/:id/download                                          */
 /* ==================================================================== */
 router.get('/:id/download', requireAuth, async (req, res) => {

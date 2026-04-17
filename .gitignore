@@ -38,3 +38,5 @@ backend/out.pdf
 *.sql
 *.dump
 *.pdf
+
+ClockEasy/

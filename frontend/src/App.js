@@ -13,6 +13,7 @@ import NuovaComunicazione from './components/NuovaComunicazione';
 import PaginaQR from './components/PaginaQR';
 import Login from './Login';
 import DocumentiPage from './components/DocumentiPage';
+import DocumentiOperazionePage from './components/DocumentiOperazionePage';
 import SedeNuova from './components/SedeNuova';
 import SedeDettaglio from './components/SedeDettaglio';
 import './styles/globals.css';
@@ -156,6 +157,7 @@ function AppContent() {
               <Route path="/presenze" element={<PresenzeExport />} />
               <Route path="/qr" element={<PaginaQR />} />
               <Route path="/documenti" element={<DocumentiPage />} />
+              <Route path="/documenti/:mode" element={<DocumentiOperazionePage />} />
               {/*<Route path="/documenti/gestione" element={<DocumentiGestione />} />*/}
               <Route path="/wb-manager" element={<Navigate to="/" replace />} />
               <Route path="*" element={<DashboardHome />} />

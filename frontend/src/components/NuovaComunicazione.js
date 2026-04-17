@@ -26,11 +26,11 @@ export default function NuovaComunicazione() {
   const [inviaATutti, setInviaATutti] = useState(true);
 
   // filtri
-  const [societa, setSocieta] = useState([]);
-  const [sedi, setSedi] = useState([]);
+  const [societaList, setSocietaList] = useState([]);
+  const [sediList, setSediList] = useState([]);
 
-  const [societaId, setSocietaId] = useState("");
-  const [sedeId, setSedeId] = useState("");
+  const [selectedSocieta, setSelectedSocieta] = useState([]); // array di { id, label }
+  const [selectedSedi, setSelectedSedi] = useState([]);       // array di stringhe nome
 
   const [sending, setSending] = useState(false);
 
@@ -38,14 +38,33 @@ export default function NuovaComunicazione() {
   useEffect(() => {
     Promise.all([
       fetch(`${API}/societa`, { credentials: "include" }).then(r => r.ok ? r.json() : []),
-      fetch(`${API}/static/sedi`, { credentials: "include" }).then(r => r.ok ? r.json() : []),
+      fetch(`${API}/sedi`, { credentials: "include" }).then(r => r.ok ? r.json() : []),
     ])
     .then(([soc, sed]) => {
-      setSocieta(Array.isArray(soc) ? soc : []);
-      setSedi(Array.isArray(sed) ? sed : []);
+      setSocietaList(Array.isArray(soc) ? soc : []);
+      const arr = Array.isArray(sed) ? sed : (sed?.items || []);
+      setSediList(arr.map(s => s?.nome || s).filter(Boolean));
     })
     .catch(() => {});
   }, []);
+
+  const handleAddSocieta = (id, label) => {
+    if (!id || selectedSocieta.some(s => String(s.id) === String(id))) return;
+    setSelectedSocieta(prev => [...prev, { id, label }]);
+  };
+
+  const handleRemoveSocieta = (id) => {
+    setSelectedSocieta(prev => prev.filter(s => String(s.id) !== String(id)));
+  };
+
+  const handleAddSede = (nome) => {
+    if (!nome || selectedSedi.includes(nome)) return;
+    setSelectedSedi(prev => [...prev, nome]);
+  };
+
+  const handleRemoveSede = (nome) => {
+    setSelectedSedi(prev => prev.filter(s => s !== nome));
+  };
 
   const canSubmit = useMemo(() => {
     if (!titolo.trim() || !contenuto.trim()) return false;
@@ -87,8 +106,8 @@ export default function NuovaComunicazione() {
         if (manualMode) {
           fd.append("utente_ids", JSON.stringify(selectedIds));
         } else {
-          if (societaId) fd.append("societa_id", societaId);
-          if (sedeId) fd.append("sede_id", sedeId);
+          if (selectedSocieta.length) fd.append("societa_ids", JSON.stringify(selectedSocieta.map(s => s.id)));
+          if (selectedSedi.length) fd.append("sede_ids", JSON.stringify(selectedSedi));
         }
       }
 
@@ -231,7 +250,7 @@ export default function NuovaComunicazione() {
                 onChange={(e) => {
                   const v = e.target.checked;
                   setManualMode(v);
-                  if (v) { setSocietaId(""); setSedeId(""); }
+                  if (v) { setSelectedSocieta([]); setSelectedSedi([]); }
                 }}
               />
               <label htmlFor="manualMode" className={styles.note}>
@@ -253,36 +272,61 @@ export default function NuovaComunicazione() {
 
           {!inviaATutti && (
             <>
+              {/* Società multi-select */}
               <div className={styles.group}>
-                <label className={styles.label} htmlFor="societa">Società</label>
+                <label className={styles.label}>Società</label>
                 <select
-                  id="societa"
                   className={styles.select}
-                  value={societaId}
-                  onChange={(e) => setSocietaId(e.target.value)}
+                  value=""
                   disabled={manualMode}
+                  onChange={(e) => {
+                    const opt = e.target.options[e.target.selectedIndex];
+                    handleAddSocieta(e.target.value, opt.text);
+                    e.target.value = "";
+                  }}
                 >
-                  <option value="">Tutte</option>
-                  {societa.map(s => (
-                    <option key={s.id} value={s.id}>{s.ragione_sociale}</option>
+                  <option value="">Aggiungi società…</option>
+                  {societaList.map(s => (
+                    <option key={s.id} value={s.id}>{s.ragione_sociale || s.nome || s.denominazione}</option>
                   ))}
                 </select>
+                <div className={styles.chipsWrap}>
+                  {selectedSocieta.length === 0 && <span className={styles.note}>Nessuna (tutte)</span>}
+                  {selectedSocieta.map(s => (
+                    <span key={s.id} className={styles.filterChip}>
+                      {s.label}
+                      <button type="button" className={styles.filterChipRemove} onClick={() => handleRemoveSocieta(s.id)}>×</button>
+                    </span>
+                  ))}
+                </div>
               </div>
 
+              {/* Sedi multi-select */}
               <div className={styles.group}>
-                <label className={styles.label} htmlFor="sede">Sede</label>
+                <label className={styles.label}>Sedi</label>
                 <select
-                  id="sede"
                   className={styles.select}
-                  value={sedeId}
-                  onChange={(e) => setSedeId(e.target.value)}
+                  value=""
                   disabled={manualMode}
+                  onChange={(e) => {
+                    handleAddSede(e.target.value);
+                    e.target.value = "";
+                  }}
                 >
-                  <option value="">Tutte</option>
-                  {sedi.map((s, i) => (
-                    <option key={i} value={s}>{s}</option>
+                  <option value="">Aggiungi sede…</option>
+                  {sediList.map(s => (
+                    <option key={s} value={s}>{s}</option>
                   ))}
                 </select>
+                <div className={styles.chipsWrap}>
+                  {selectedSedi.length === 0 && <span className={styles.note}>Nessuna (tutte)</span>}
+                  {selectedSedi.map(s => (
+                    <span key={s} className={styles.filterChip}>
+                      {s}
+                      <button type="button" className={styles.filterChipRemove} onClick={() => handleRemoveSede(s)}>×</button>
+                    </span>
+                  ))}
+                </div>
               </div>
             </>
           )}
