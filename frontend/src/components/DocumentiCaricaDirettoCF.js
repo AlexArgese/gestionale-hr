@@ -387,6 +387,7 @@ export default function DocumentiCaricaDirettoCF({ tipi = [] }) {
     setBanner({ type: "info", text: "Caricamento in corso…" });
 
     try {
+      const batchId = crypto.randomUUID();
       const auth = getAuth();
       const idToken = await auth.currentUser?.getIdToken(true);
       if (!idToken) {
@@ -446,6 +447,7 @@ export default function DocumentiCaricaDirettoCF({ tipi = [] }) {
           fd.append("nome_file", finalFileName);
           fd.append("tipo_documento", tipoDocumento);
           fd.append("utente_id", uid);
+          fd.append("batch_id", batchId);
           fd.append("require_signature", require_signature ? "true" : "false");
           if (placement) {
             fd.append("signature_placement", JSON.stringify(placement));

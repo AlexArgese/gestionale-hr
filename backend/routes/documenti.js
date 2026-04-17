@@ -4,6 +4,7 @@
  */
 const express = require('express');
 const router  = express.Router();
+const { randomUUID } = require('crypto');
 const pool    = require('../db');
 const multer  = require('multer');
 const path    = require('path');
@@ -185,15 +186,15 @@ async function resolveTargetUserId(req) {
   return { targetUserId, autoreId };
 }
 
-async function insertDocumentoRows({ utenteIds, tipo, nome_file, relPath, caricato_da, data_scadenza, require_signature }) {
+async function insertDocumentoRows({ utenteIds, tipo, nome_file, relPath, caricato_da, data_scadenza, require_signature, batch_id }) {
   const rows = [];
   for (const uid of utenteIds) {
     const r = await pool.query(
       `INSERT INTO documenti
-         (utente_id, tipo_documento, nome_file, url_file, caricato_da, data_upload, data_scadenza, require_signature)
-       VALUES ($1,$2,$3,$4,$5,NOW(),$6,$7)
+         (utente_id, tipo_documento, nome_file, url_file, caricato_da, data_upload, data_scadenza, require_signature, batch_id)
+       VALUES ($1,$2,$3,$4,$5,NOW(),$6,$7,$8)
        RETURNING id, utente_id, nome_file, url_file, require_signature`,
-      [uid, tipo, nome_file, relPath, caricato_da, data_scadenza || null, !!require_signature]
+      [uid, tipo, nome_file, relPath, caricato_da, data_scadenza || null, !!require_signature, batch_id || null]
     );
     rows.push(r.rows[0]);
   }
@@ -481,6 +482,7 @@ router.post('/upload', requireAuth, (req, res) => {
       if (!req.file) return res.status(400).json({ error: 'File mancante' });
 
       const { tipo_documento, data_scadenza, nome_file } = req.body;
+      const batch_id = req.body.batch_id || null;
       const require_signature = parseBool(req.body.require_signature || req.body.requireSignature);
       let signaturePlacement = null;
       if (req.body.signature_placement || req.body.signaturePlacement) {
@@ -527,6 +529,7 @@ router.post('/upload', requireAuth, (req, res) => {
         caricato_da: autoreId,
         data_scadenza,
         require_signature,
+        batch_id,
       });
 
       res.json({
@@ -617,6 +620,7 @@ router.post('/upload-multi', requireAuth, (req, res) => {
       }
 
       const autoreId = await resolveAutoreId(req);
+      const batch_id = randomUUID();
 
       const safeNomeFile = String(req.body?.nome_file || req.file.originalname).trim() || req.file.originalname;
       const finalNomeFile = safeNomeFile.toLowerCase().endsWith('.pdf')
@@ -645,6 +649,7 @@ router.post('/upload-multi', requireAuth, (req, res) => {
         caricato_da: autoreId,
         data_scadenza,
         require_signature,
+        batch_id,
       });
 
       res.json({ message: `Documento assegnato a ${uniq.length} dipendenti.` });
@@ -715,6 +720,7 @@ router.post('/split', requireAuth, (req, res) => {
         });
 
       const caricato_da = await resolveAutoreId(req);
+      const batch_id = randomUUID();
       const createdDocs = [];
 
       // ✅ per ogni parte: genera pdf bytes -> carica su S3 -> inserisci su DB
@@ -754,6 +760,7 @@ router.post('/split', requireAuth, (req, res) => {
           caricato_da,
           data_scadenza,
           require_signature,
+          batch_id,
         });
 
         createdDocs.push(...inserted);
@@ -838,6 +845,7 @@ router.post('/merge', requireAuth, (req, res) => {
       });
 
       const caricato_da = await resolveAutoreId(req);
+      const batch_id = randomUUID();
 
       const inserted = await insertDocumentoRows({
         utenteIds: uniq,
@@ -847,6 +855,7 @@ router.post('/merge', requireAuth, (req, res) => {
         caricato_da,
         data_scadenza,
         require_signature,
+        batch_id,
       });
 
       res.json({ message: `Documento unito e assegnato a ${ids.length} dipendenti.` });
@@ -947,14 +956,16 @@ router.get('/', requireAuth, async (req, res) => {
     const limit = Math.min(parseInt(req.query.limit) || 100, 500);
     const { rows } = await pool.query(
       `SELECT
-         MIN(d.id)                        AS id,
+         MIN(d.id)                                  AS id,
+         COALESCE(d.batch_id::text, d.url_file)     AS group_key,
+         d.batch_id,
          d.url_file,
-         MAX(d.tipo_documento)            AS tipo_documento,
-         MAX(d.nome_file)                 AS nome_file,
-         MIN(d.data_upload)               AS data_upload,
-         MAX(d.data_scadenza::text)       AS data_scadenza,
-         BOOL_OR(d.require_signature)     AS require_signature,
-         COUNT(*)::int                    AS n_destinatari,
+         MAX(d.tipo_documento)                      AS tipo_documento,
+         MAX(d.nome_file)                           AS nome_file,
+         MIN(d.data_upload)                         AS data_upload,
+         MAX(d.data_scadenza::text)                 AS data_scadenza,
+         BOOL_OR(d.require_signature)               AS require_signature,
+         COUNT(*)::int                              AS n_destinatari,
          json_agg(
            json_build_object(
              'id',                     d.id,
@@ -968,11 +979,11 @@ router.get('/', requireAuth, async (req, res) => {
              'yousign_signature_link', d.yousign_signature_link,
              'signed_at',              d.signed_at
            ) ORDER BY u.cognome, u.nome
-         )                                AS destinatari
+         )                                          AS destinatari
        FROM documenti d
        LEFT JOIN utenti  u ON u.id = d.utente_id
        LEFT JOIN societa s ON s.id = u.societa_id
-       GROUP BY d.url_file
+       GROUP BY COALESCE(d.batch_id::text, d.url_file), d.batch_id, d.url_file
        ORDER BY MIN(d.data_upload) DESC
        LIMIT $1`,
       [limit]
@@ -988,27 +999,29 @@ router.get('/', requireAuth, async (req, res) => {
 /*  DELETE /documenti/batch — elimina tutti i record di un batch         */
 /* ==================================================================== */
 router.delete('/batch', requireAuth, async (req, res) => {
-  const { url_file } = req.body;
-  if (!url_file) return res.status(400).json({ error: 'url_file richiesto' });
+  const { batch_id, url_file } = req.body;
+  if (!batch_id && !url_file) return res.status(400).json({ error: 'batch_id o url_file richiesto' });
 
   try {
-    const q = await pool.query(
-      'SELECT id, url_file, url_file_signed FROM documenti WHERE url_file = $1',
-      [url_file]
-    );
+    const q = batch_id
+      ? await pool.query('SELECT id, url_file, url_file_signed FROM documenti WHERE batch_id = $1', [batch_id])
+      : await pool.query('SELECT id, url_file, url_file_signed FROM documenti WHERE url_file = $1', [url_file]);
+
     if (!q.rows.length) return res.status(404).json({ error: 'Documento non trovato' });
 
     try { await pool.query('DELETE FROM firme WHERE documento_id = ANY($1::int[])', [q.rows.map(r => r.id)]); } catch {}
 
-    await pool.query('DELETE FROM documenti WHERE url_file = $1', [url_file]);
+    if (batch_id) await pool.query('DELETE FROM documenti WHERE batch_id = $1', [batch_id]);
+    else          await pool.query('DELETE FROM documenti WHERE url_file = $1', [url_file]);
 
-    // elimina file S3 una sola volta
-    const chiave = normalizzaChiaveS3(url_file);
-    try { if (chiave) await eliminaDaS3({ chiave }); } catch (e) { console.warn('S3 batch delete:', e?.message); }
-
-    const signed = q.rows.find(r => r.url_file_signed)?.url_file_signed;
-    if (signed) {
-      try { await eliminaDaS3({ chiave: normalizzaChiaveS3(signed) }); } catch {}
+    // elimina file S3 una sola volta (tutti condividono lo stesso url_file nel caso upload-multi/split/merge)
+    const uniqueFiles = [...new Set(q.rows.map(r => r.url_file).filter(Boolean))];
+    for (const f of uniqueFiles) {
+      try { await eliminaDaS3({ chiave: normalizzaChiaveS3(f) }); } catch (e) { console.warn('S3 batch delete:', e?.message); }
+    }
+    const signedFiles = [...new Set(q.rows.map(r => r.url_file_signed).filter(Boolean))];
+    for (const f of signedFiles) {
+      try { await eliminaDaS3({ chiave: normalizzaChiaveS3(f) }); } catch {}
     }
 
     res.json({ ok: true, deleted: q.rows.length });

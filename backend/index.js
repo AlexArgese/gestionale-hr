@@ -52,6 +52,11 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 // ROUTES esistenti
+// Auto-migrazione batch_id
+require('./db').query(
+  `ALTER TABLE documenti ADD COLUMN IF NOT EXISTS batch_id UUID`
+).catch(e => console.warn('migrate batch_id:', e.message));
+
 const utentiRoutes = require('./routes/utenti');
 const societaRoutes = require('./routes/societa');
 const staticRoutes = require('./routes/static');

@@ -92,16 +92,20 @@ export default function DocumentiPage() {
   };
 
   // Elimina l'intero batch
-  const eliminaBatch = async (urlFile) => {
+  const eliminaBatch = async (doc) => {
     if (!window.confirm("Eliminare il documento per TUTTI i destinatari? L'azione è irreversibile.")) return;
     try {
+      const body = doc.batch_id
+        ? { batch_id: doc.batch_id }
+        : { url_file: doc.url_file };
       const res = await fetch(`${API}/documenti/batch`, {
         method: "DELETE",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ url_file: urlFile }),
+        body: JSON.stringify(body),
       });
       if (!res.ok) throw new Error();
-      setCronologia(prev => prev.filter(d => d.url_file !== urlFile));
+      const key = doc.batch_id || doc.url_file;
+      setCronologia(prev => prev.filter(d => (d.batch_id || d.url_file) !== key));
       setSelectedDoc(null);
     } catch {
       alert("Errore durante l'eliminazione.");
@@ -162,11 +166,11 @@ export default function DocumentiPage() {
           <div className={styles.cronList}>
             {cronologia.map(doc => (
               <CronologiaItem
-                key={doc.url_file}
+                key={doc.batch_id || doc.url_file}
                 doc={doc}
-                isSelected={selectedDoc?.url_file === doc.url_file}
+                isSelected={(selectedDoc?.batch_id || selectedDoc?.url_file) === (doc.batch_id || doc.url_file)}
                 onClick={() => setSelectedDoc(doc)}
-                onDelete={() => eliminaBatch(doc.url_file)}
+                onDelete={() => eliminaBatch(doc)}
               />
             ))}
           </div>
@@ -179,7 +183,7 @@ export default function DocumentiPage() {
           doc={selectedDoc}
           onClose={() => setSelectedDoc(null)}
           onEliminaSingolo={eliminaSingolo}
-          onEliminaBatch={eliminaBatch}
+          onEliminaBatch={() => eliminaBatch(selectedDoc)}
         />
       )}
     </div>
@@ -255,6 +259,7 @@ function CronologiaItem({ doc, isSelected, onClick, onDelete }) {
 
 /* ─── DocDetailDrawer ─────────────────────────────────────── */
 function DocDetailDrawer({ doc, onClose, onEliminaSingolo, onEliminaBatch }) {
+  // onEliminaBatch viene chiamata senza argomenti (il doc è già nel closure)
   const sediUniche = [...new Set(
     (doc.destinatari || []).flatMap(d =>
       (d.sede || "").split(",").map(s => s.trim()).filter(Boolean)
