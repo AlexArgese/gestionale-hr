@@ -940,25 +940,81 @@ router.get('/da-firmare', requireAuth, async (req, res) => {
 
 
 /* ==================================================================== */
-/*  GET /documenti  — cronologia globale (gestionale)                    */
+/*  GET /documenti  — cronologia globale raggruppata per batch           */
 /* ==================================================================== */
 router.get('/', requireAuth, async (req, res) => {
   try {
-    const limit = Math.min(parseInt(req.query.limit) || 50, 200);
+    const limit = Math.min(parseInt(req.query.limit) || 100, 500);
     const { rows } = await pool.query(
-      `SELECT d.id, d.tipo_documento, d.nome_file, d.data_upload, d.data_scadenza,
-              d.require_signature, d.yousign_status,
-              u.nome AS utente_nome, u.cognome AS utente_cognome
-         FROM documenti d
-         LEFT JOIN utenti u ON u.id = d.utente_id
-        ORDER BY d.data_upload DESC
-        LIMIT $1`,
+      `SELECT
+         MIN(d.id)                        AS id,
+         d.url_file,
+         MAX(d.tipo_documento)            AS tipo_documento,
+         MAX(d.nome_file)                 AS nome_file,
+         MIN(d.data_upload)               AS data_upload,
+         MAX(d.data_scadenza::text)       AS data_scadenza,
+         BOOL_OR(d.require_signature)     AS require_signature,
+         COUNT(*)::int                    AS n_destinatari,
+         json_agg(
+           json_build_object(
+             'id',                     d.id,
+             'utente_id',              d.utente_id,
+             'nome',                   u.nome,
+             'cognome',                u.cognome,
+             'sede',                   u.sede,
+             'email',                  u.email,
+             'societa_nome',           s.ragione_sociale,
+             'yousign_status',         d.yousign_status,
+             'yousign_signature_link', d.yousign_signature_link,
+             'signed_at',              d.signed_at
+           ) ORDER BY u.cognome, u.nome
+         )                                AS destinatari
+       FROM documenti d
+       LEFT JOIN utenti  u ON u.id = d.utente_id
+       LEFT JOIN societa s ON s.id = u.societa_id
+       GROUP BY d.url_file
+       ORDER BY MIN(d.data_upload) DESC
+       LIMIT $1`,
       [limit]
     );
     res.json(rows);
   } catch (err) {
     console.error('GET /documenti', err);
     res.status(500).json({ error: 'Errore interno server' });
+  }
+});
+
+/* ==================================================================== */
+/*  DELETE /documenti/batch — elimina tutti i record di un batch         */
+/* ==================================================================== */
+router.delete('/batch', requireAuth, async (req, res) => {
+  const { url_file } = req.body;
+  if (!url_file) return res.status(400).json({ error: 'url_file richiesto' });
+
+  try {
+    const q = await pool.query(
+      'SELECT id, url_file, url_file_signed FROM documenti WHERE url_file = $1',
+      [url_file]
+    );
+    if (!q.rows.length) return res.status(404).json({ error: 'Documento non trovato' });
+
+    try { await pool.query('DELETE FROM firme WHERE documento_id = ANY($1::int[])', [q.rows.map(r => r.id)]); } catch {}
+
+    await pool.query('DELETE FROM documenti WHERE url_file = $1', [url_file]);
+
+    // elimina file S3 una sola volta
+    const chiave = normalizzaChiaveS3(url_file);
+    try { if (chiave) await eliminaDaS3({ chiave }); } catch (e) { console.warn('S3 batch delete:', e?.message); }
+
+    const signed = q.rows.find(r => r.url_file_signed)?.url_file_signed;
+    if (signed) {
+      try { await eliminaDaS3({ chiave: normalizzaChiaveS3(signed) }); } catch {}
+    }
+
+    res.json({ ok: true, deleted: q.rows.length });
+  } catch (err) {
+    console.error('DELETE /documenti/batch', err);
+    res.status(500).json({ error: 'Errore eliminazione batch' });
   }
 });
 

@@ -164,9 +164,11 @@
   border-radius: 10px;
   border: 1px solid #F1F5F9;
   background: #FAFBFC;
-  transition: background .1s;
+  cursor: pointer;
+  transition: background .1s, border-color .1s;
 }
-.cronItem:hover { background: #F4F6FA; }
+.cronItem:hover        { background: #F0F4FF; border-color: #C7D2FE; }
+.cronItemSelected      { background: #EEF2FF; border-color: #6A57D3; }
 
 .cronExtBadge {
   flex-shrink: 0;
@@ -197,6 +199,29 @@
   font-size: 11px;
   color: var(--txt-muted, #64748B);
   margin-top: 2px;
+}
+.cronBadgeRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 4px;
+}
+.destBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: #EDE9FE;
+  color: #6A57D3;
+}
+.modeArrow {
+  flex-shrink: 0;
+  color: var(--txt-muted, #94A3B8);
+  font-size: 14px;
+  margin-left: auto;
 }
 
 .firmaBadge {
@@ -281,6 +306,234 @@
   padding: var(--s4);
   overflow: visible;
 }
+
+/* ===== DRAWER ===== */
+.drawerOverlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, .3);
+  z-index: 400;
+}
+.drawer {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 460px;
+  max-width: 96vw;
+  background: #fff;
+  box-shadow: -8px 0 40px rgba(15, 23, 42, .15);
+  z-index: 401;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* Header drawer */
+.drawerHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 16px 18px;
+  border-bottom: 1px solid #E5E7EB;
+  background: #FAFBFC;
+  flex-shrink: 0;
+}
+.drawerHeaderLeft {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+.drawerExt {
+  width: 44px;
+  height: 44px;
+  flex-shrink: 0;
+  border-radius: 10px;
+  background: linear-gradient(135deg, #D0933C22, #6A57D333);
+  border: 1px solid #E2E8F0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 900;
+  color: #6A57D3;
+}
+.drawerNome {
+  font-size: 14px;
+  font-weight: 800;
+  color: #0F172A;
+  word-break: break-all;
+}
+.drawerTipo {
+  font-size: 11px;
+  color: #64748B;
+  margin-top: 2px;
+}
+.drawerClose {
+  flex-shrink: 0;
+  background: transparent;
+  border: 1px solid #E2E8F0;
+  border-radius: 8px;
+  padding: 6px;
+  cursor: pointer;
+  color: #64748B;
+  display: flex;
+  align-items: center;
+  font-size: 16px;
+}
+.drawerClose:hover { background: #F1F5F9; }
+
+/* Body drawer */
+.drawerBody {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+/* Info grid */
+.drawerInfoGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.drawerInfoCell {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 10px 12px;
+  background: #F8FAFC;
+  border: 1px solid #E5E7EB;
+  border-radius: 10px;
+}
+.drawerInfoIcon {
+  color: #6A57D3;
+  font-size: 14px;
+  margin-top: 2px;
+  flex-shrink: 0;
+}
+.drawerInfoLabel {
+  font-size: 10px;
+  font-weight: 700;
+  color: #94A3B8;
+  text-transform: uppercase;
+  letter-spacing: .05em;
+}
+.drawerInfoVal {
+  font-size: 13px;
+  font-weight: 700;
+  color: #0F172A;
+  margin-top: 1px;
+}
+
+/* Sezioni */
+.drawerSection { display: flex; flex-direction: column; gap: 8px; }
+.drawerSectionTitle {
+  font-size: 11px;
+  font-weight: 800;
+  color: #64748B;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+/* Tag sedi/società */
+.tagRow { display: flex; flex-wrap: wrap; gap: 6px; }
+.tag {
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  background: #EDE9FE;
+  color: #6A57D3;
+  border: 1px solid #C4B5FD;
+}
+
+/* Lista destinatari */
+.destList { display: flex; flex-direction: column; gap: 6px; }
+.destRow {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: #FAFBFC;
+  border: 1px solid #F1F5F9;
+}
+.destAvatar {
+  width: 34px;
+  height: 34px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #D0933C, #6A57D3);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  font-weight: 800;
+}
+.destInfo { flex: 1; min-width: 0; }
+.destNome  { font-size: 13px; font-weight: 700; color: #0F172A; }
+.destSub   { font-size: 11px; color: #64748B; margin-top: 1px; }
+.destActions {
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
+  align-items: center;
+}
+.firmaLink {
+  display: inline-block;
+  margin-top: 4px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #6A57D3;
+  text-decoration: none;
+}
+.firmaLink:hover { text-decoration: underline; }
+
+/* Footer drawer */
+.drawerFooter {
+  padding: 12px 18px;
+  border-top: 1px solid #E5E7EB;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+  background: #FAFBFC;
+}
+.btnOutline {
+  padding: 8px 16px;
+  border-radius: 10px;
+  border: 1px solid #E2E8F0;
+  background: #fff;
+  font-size: 13px;
+  font-weight: 700;
+  color: #334155;
+  cursor: pointer;
+}
+.btnOutline:hover { background: #F1F5F9; }
+.btnDanger {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  border-radius: 10px;
+  border: 1px solid #FCA5A5;
+  background: #FEF2F2;
+  font-size: 13px;
+  font-weight: 700;
+  color: #B91C1C;
+  cursor: pointer;
+}
+.btnDanger:hover { background: #FEE2E2; }
 
 /* ===== Responsive ===== */
 @media (max-width: 900px) {
