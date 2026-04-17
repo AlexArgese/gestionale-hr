@@ -958,7 +958,7 @@ router.get('/', requireAuth, async (req, res) => {
       `SELECT
          MIN(d.id)                                  AS id,
          COALESCE(d.batch_id::text, d.url_file)     AS group_key,
-         MAX(d.batch_id)                            AS batch_id,
+         MAX(d.batch_id::text)::uuid                AS batch_id,
          MAX(d.url_file)                            AS url_file,
          MAX(d.tipo_documento)                      AS tipo_documento,
          MAX(d.nome_file)                           AS nome_file,
