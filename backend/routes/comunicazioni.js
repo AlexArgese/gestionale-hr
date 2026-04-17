@@ -7,6 +7,7 @@ const fs = require('fs');
 const pool = require('../db');
 const requireAuth = require('../middleware/requireAuth');
 const { caricaBufferSuS3, eliminaDaS3, urlFirmatoGet, esisteSuS3 } = require('../lib/s3');
+const { sendExpoPush } = require('../services/expoPush');
 
 const nodemailer = require('nodemailer');
 
@@ -75,15 +76,54 @@ async function resolveRecipients({ destinatariIds, societaId, sedeId, client }) 
   const q = await client.query(
     `SELECT id, email
      FROM utenti
-     ${where}
-       AND email IS NOT NULL`,
+     ${where}`,
     params
   );
 
   return {
     ids: q.rows.map(r => r.id),
-    emails: q.rows.map(r => r.email),
+    emails: q.rows.map(r => r.email).filter(Boolean),
   };
+}
+
+async function getPushTokensForUserIds(utenteIds) {
+  const ids = [...new Set(
+    (Array.isArray(utenteIds) ? utenteIds : [])
+      .map((id) => Number(id))
+      .filter((id) => Number.isInteger(id) && id > 0)
+  )];
+
+  if (!ids.length) return [];
+
+  const q = await pool.query(
+    `SELECT expo_push_token
+       FROM push_tokens
+      WHERE utente_id = ANY($1::int[])
+        AND attivo = TRUE`,
+    [ids]
+  );
+
+  return [...new Set(q.rows.map((r) => r.expo_push_token).filter(Boolean))];
+}
+
+async function notifyNewCommunicationRecipients({ utenteIds, comunicazioneId, titolo }) {
+  const tokens = await getPushTokensForUserIds(utenteIds);
+  if (!tokens.length) return;
+
+  await sendExpoPush(tokens, {
+    title: 'Nuova comunicazione',
+    body: (titolo || 'Hai ricevuto una nuova comunicazione').trim(),
+    data: {
+      type: 'NEW_COMMUNICATION',
+      comunicazioneId,
+    },
+  });
+}
+
+function fireAndForgetCommunicationNotifications({ utenteIds, comunicazioneId, titolo }) {
+  notifyNewCommunicationRecipients({ utenteIds, comunicazioneId, titolo }).catch((err) => {
+    console.error('fireAndForgetCommunicationNotifications error:', err);
+  });
 }
 
 
@@ -547,6 +587,7 @@ router.post('/', upload.array('allegato'), async (req, res) => {
 
   const client = await pool.connect();
   let comm = null;
+  let recipientIds = [];
   let recipientEmails = [];
   const uploadedKeys = [];
 
@@ -569,7 +610,26 @@ router.post('/', upload.array('allegato'), async (req, res) => {
       }
 
       destinatariJson = idsOk; // ✅ app: arriva solo a loro
+      recipientIds = idsOk;
       if (shouldSendEmail) recipientEmails = q.rows.map(r => r.email).filter(Boolean);
+    }
+
+    if (!sendToAll && (!Array.isArray(manualIds) || !manualIds.length) && Array.isArray(destinatariJson) && destinatariJson.length) {
+      const r = await resolveRecipients({
+        destinatariIds: destinatariJson,
+        societaId: null,
+        sedeId: null,
+        client
+      });
+
+      if (r.ids.length === 0) {
+        await client.query('ROLLBACK');
+        return res.status(404).json({ error: 'Nessun destinatario valido' });
+      }
+
+      destinatariJson = r.ids;
+      recipientIds = r.ids;
+      if (shouldSendEmail) recipientEmails = r.emails;
     }
 
     // 2) se NON invio a tutti e NON ho destinatari espliciti,
@@ -582,6 +642,7 @@ router.post('/', upload.array('allegato'), async (req, res) => {
         client
       });
       destinatariJson = r.ids; // <-- fondamentale per far arrivare in APP solo a loro
+      recipientIds = r.ids;
       if (shouldSendEmail) recipientEmails = r.emails;
     }
 
@@ -635,18 +696,27 @@ router.post('/', upload.array('allegato'), async (req, res) => {
       }
     }
 
-    // 4) se invio a tutti e send_email=true, calcolo ora email con filtri (societa + sede se presente)
-    if (shouldSendEmail && sendToAll) {
+    // 4) se invio a tutti, risolvo i destinatari reali per push/email
+    if (sendToAll) {
       const r = await resolveRecipients({
         destinatariIds: null,
         societaId: societaIdNum,
         sedeId: sedeIdVal,
         client
       });
-      recipientEmails = r.emails;
+      recipientIds = r.ids;
+      if (shouldSendEmail) recipientEmails = r.emails;
     }
 
     await client.query('COMMIT');
+
+    if (recipientIds.length) {
+      fireAndForgetCommunicationNotifications({
+        utenteIds: recipientIds,
+        comunicazioneId: comm.id,
+        titolo,
+      });
+    }
 
     // invio mail DOPO commit
     if (shouldSendEmail) {

@@ -270,7 +270,7 @@ export default function NuovaComunicazione() {
             </div>
           )}
 
-          {!inviaATutti && (
+          {!inviaATutti && !manualMode && (
             <>
               {/* Società multi-select */}
               <div className={styles.group}>
@@ -278,7 +278,6 @@ export default function NuovaComunicazione() {
                 <select
                   className={styles.select}
                   value=""
-                  disabled={manualMode}
                   onChange={(e) => {
                     const opt = e.target.options[e.target.selectedIndex];
                     handleAddSocieta(e.target.value, opt.text);
@@ -307,7 +306,6 @@ export default function NuovaComunicazione() {
                 <select
                   className={styles.select}
                   value=""
-                  disabled={manualMode}
                   onChange={(e) => {
                     handleAddSede(e.target.value);
                     e.target.value = "";
