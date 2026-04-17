@@ -6,7 +6,7 @@ const path = require('path');
 const fs = require('fs');
 const pool = require('../db');
 const requireAuth = require('../middleware/requireAuth');
-const { urlFirmatoGet } = require('../lib/s3');
+const { caricaBufferSuS3, eliminaDaS3, urlFirmatoGet } = require('../lib/s3');
 
 const nodemailer = require('nodemailer');
 
@@ -177,6 +177,14 @@ function normalizzaChiaveS3(pathDb) {
   if (key.startsWith('s3://')) return key.replace('s3://', '');
   if (key.startsWith('upload/')) return `uploads/${key.slice('upload/'.length)}`;
   return key;
+}
+
+function creaChiaveComunicazioneS3({ comunicazioneId, nomeFile }) {
+  const safeName = String(nomeFile || 'allegato')
+    .trim()
+    .replace(/[^a-zA-Z0-9._-]+/g, '_');
+
+  return `uploads/comunicazioni/${Number(comunicazioneId) || 0}/${Date.now()}_${safeName}`;
 }
 
 async function sendComunicazioneAttachment({ res, fileUrl, mime = null, inline = true }) {
@@ -535,6 +543,7 @@ router.post('/', upload.array('allegato'), async (req, res) => {
   const client = await pool.connect();
   let comm = null;
   let recipientEmails = [];
+  const uploadedKeys = [];
 
   try {
     await client.query('BEGIN');
@@ -592,11 +601,33 @@ router.post('/', upload.array('allegato'), async (req, res) => {
     comm = commRes.rows[0];
 
     for (const f of files) {
-      await client.query(
-        `INSERT INTO comunicazione_attachments (comunicazione_id, file_url, mime_type, width, height)
-         VALUES ($1, $2, $3, NULL, NULL)`,
-        [comm.id, path.join('uploads', f.filename), f.mimetype || null]
-      );
+      const tempPath = f.path || path.join(UPLOAD_DIR, f.filename);
+      const chiaveS3 = creaChiaveComunicazioneS3({
+        comunicazioneId: comm.id,
+        nomeFile: f.originalname || f.filename,
+      });
+
+      try {
+        const buffer = fs.readFileSync(tempPath);
+        await caricaBufferSuS3({
+          chiave: chiaveS3,
+          buffer,
+          contentType: f.mimetype || 'application/octet-stream',
+        });
+        uploadedKeys.push(chiaveS3);
+
+        await client.query(
+          `INSERT INTO comunicazione_attachments (comunicazione_id, file_url, mime_type, width, height)
+           VALUES ($1, $2, $3, NULL, NULL)`,
+          [comm.id, chiaveS3, f.mimetype || null]
+        );
+      } finally {
+        try {
+          if (tempPath && fs.existsSync(tempPath)) fs.unlinkSync(tempPath);
+        } catch (unlinkErr) {
+          console.warn('Cleanup file temporaneo comunicazione fallito:', unlinkErr?.message || unlinkErr);
+        }
+      }
     }
 
     // 4) se invio a tutti e send_email=true, calcolo ora email con filtri (societa + sede se presente)
@@ -624,6 +655,9 @@ router.post('/', upload.array('allegato'), async (req, res) => {
     res.json(comm);
   } catch (err) {
     await client.query('ROLLBACK');
+    if (uploadedKeys.length) {
+      await Promise.allSettled(uploadedKeys.map((chiave) => eliminaDaS3({ chiave })));
+    }
     console.error('POST /comunicazioni', err.stack || err);
     res.status(500).json({ error: 'Errore inserimento comunicazione' });
   } finally {
