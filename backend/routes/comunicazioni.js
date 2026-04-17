@@ -641,6 +641,79 @@ router.get('/:id/download', async (req, res) => {
   }
 });
 
+// GET preview singolo attachment by attachment id
+router.get('/attachments/:attachmentId/view', async (req, res) => {
+  try {
+    const attId = Number(req.params.attachmentId);
+    if (!Number.isInteger(attId) || attId <= 0) {
+      return res.status(400).json({ error: 'Attachment ID non valido' });
+    }
+
+    const a = await pool.query(
+      `SELECT file_url, mime_type
+       FROM comunicazione_attachments
+       WHERE id = $1
+       LIMIT 1`,
+      [attId]
+    );
+
+    if (!a.rows.length) return res.status(404).send('File non trovato');
+
+    const rel = a.rows[0].file_url;
+    let mime = a.rows[0].mime_type || null;
+
+    const abs = path.join(__dirname, '..', rel);
+    if (!fs.existsSync(abs)) return res.status(404).send('File non trovato');
+
+    if (!mime) {
+      const ext = path.extname(abs).toLowerCase();
+      if (ext === '.pdf') mime = 'application/pdf';
+      else if (ext === '.png') mime = 'image/png';
+      else if (ext === '.jpg' || ext === '.jpeg') mime = 'image/jpeg';
+      else if (ext === '.webp') mime = 'image/webp';
+      else if (ext === '.gif') mime = 'image/gif';
+      else mime = 'application/octet-stream';
+    }
+
+    res.setHeader('Content-Type', mime);
+    res.setHeader('Content-Disposition', `inline; filename="${path.basename(abs).replace(/"/g, '')}"`);
+    res.setHeader('Cache-Control', 'no-store');
+
+    return res.sendFile(abs);
+  } catch (err) {
+    console.error('GET /comunicazioni/attachments/:attachmentId/view', err);
+    res.status(500).json({ error: 'Errore preview allegato' });
+  }
+});
+
+// GET download singolo attachment by attachment id
+router.get('/attachments/:attachmentId/download', async (req, res) => {
+  try {
+    const attId = Number(req.params.attachmentId);
+    if (!Number.isInteger(attId) || attId <= 0) {
+      return res.status(400).json({ error: 'Attachment ID non valido' });
+    }
+
+    const a = await pool.query(
+      `SELECT file_url
+       FROM comunicazione_attachments
+       WHERE id = $1
+       LIMIT 1`,
+      [attId]
+    );
+
+    if (!a.rows.length) return res.status(404).send('File non trovato');
+
+    const abs = path.join(__dirname, '..', a.rows[0].file_url);
+    if (!fs.existsSync(abs)) return res.status(404).send('File non trovato');
+
+    return res.download(abs);
+  } catch (err) {
+    console.error('GET /comunicazioni/attachments/:attachmentId/download', err);
+    res.status(500).json({ error: 'Errore download allegato' });
+  }
+});
+
 
 // DELETE comunicazione
 router.delete('/:id', async (req, res) => {
