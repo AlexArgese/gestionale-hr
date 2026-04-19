@@ -9,18 +9,7 @@ const requireAuth = require('../middleware/requireAuth');
 const { caricaBufferSuS3, eliminaDaS3, urlFirmatoGet, esisteSuS3 } = require('../lib/s3');
 const { sendExpoPush } = require('../services/expoPush');
 
-const nodemailer = require('nodemailer');
-
-const mailTransporter = process.env.SMTP_HOST
-  ? nodemailer.createTransport({
-      host: process.env.SMTP_HOST,
-      port: Number(process.env.SMTP_PORT || 587),
-      secure: String(process.env.SMTP_SECURE || 'false') === 'true', // true solo per 465
-      auth: process.env.SMTP_USER
-        ? { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS }
-        : undefined,
-    })
-  : null;
+const { safeSendMail } = require('../lib/notifier');
 
 function parseBool(v) {
   if (typeof v === 'boolean') return v;
@@ -129,26 +118,13 @@ function fireAndForgetCommunicationNotifications({ utenteIds, comunicazioneId, t
 
 
 async function sendCommunicationEmail({ emails, titolo, contenuto }) {
-  if (!mailTransporter) throw new Error('SMTP non configurato (SMTP_HOST mancante)');
   if (!emails.length) return;
 
   const subject = `[ClockEasy] ${titolo || 'Nuova comunicazione'}`;
+  const text = `${titolo || 'Nuova comunicazione'}\n\n${contenuto || ''}\n\n— ClockEasy`;
 
-  // semplice e robusto (evita HTML fancy)
-  const text =
-`${titolo || 'Nuova comunicazione'}
-
-${contenuto || ''}
-
-— ClockEasy`;
-
-  await mailTransporter.sendMail({
-    from: process.env.SMTP_FROM || process.env.SMTP_USER,
-    to: process.env.SMTP_FROM || process.env.SMTP_USER,
-    bcc: emails,
-    subject,
-    text,
-  });
+  const result = await safeSendMail({ to: emails, subject, text });
+  if (!result.ok) throw new Error(result.reason);
 }
 /* ------------------------------------------
    Multer: upload allegato SINGOLO (legacy)

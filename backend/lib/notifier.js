@@ -2,30 +2,36 @@
 const nodemailer = require('nodemailer');
 
 const enabled = !!process.env.SMTP_HOST;
-let transporter = null;
+const DEFAULT_FROM = process.env.EMAIL_FROM || process.env.SMTP_FROM || 'ClockEasy <no-reply@localhost>';
 
+let transporter = null;
 if (enabled) {
   transporter = nodemailer.createTransport({
     host: process.env.SMTP_HOST,
     port: Number(process.env.SMTP_PORT || 587),
-    secure: String(process.env.SMTP_SECURE || 'false') === 'true',
-    auth: process.env.SMTP_USER ? {
+    secure: false,
+    auth: {
       user: process.env.SMTP_USER,
-      pass: process.env.SMTP_PASS
-    } : undefined,
+      pass: process.env.SMTP_PASS,
+    },
   });
 }
 
-async function safeSendMail(opts) {
+async function safeSendMail({ to, subject, html, text, bcc, replyTo }) {
   if (!enabled) return { ok: false, reason: 'smtp_disabled' };
   try {
     const info = await transporter.sendMail({
-      from: process.env.SMTP_FROM || 'ClockEasy WB <no-reply@localhost>',
-      ...opts
+      from: DEFAULT_FROM,
+      to,
+      subject,
+      ...(html    ? { html }    : {}),
+      ...(text    ? { text }    : {}),
+      ...(bcc     ? { bcc }     : {}),
+      ...(replyTo ? { replyTo } : {}),
     });
     return { ok: true, messageId: info.messageId };
   } catch (e) {
-    console.error('WB mail error:', e.message);
+    console.error('Mail error:', e.message);
     return { ok: false, reason: e.message };
   }
 }

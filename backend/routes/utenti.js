@@ -1,21 +1,10 @@
 const express = require('express');
 const router = express.Router();
 const pool = require('../db');
-const nodemailer = require('nodemailer');
 require('dotenv').config();
 const admin = require('../firebase-admin');
 const requireAuth = require('../middleware/requireAuth');
-
-/* Transporter Gmail */
-const transporter = nodemailer.createTransport({
-  host: process.env.SMTP_HOST,
-  port: process.env.SMTP_PORT,
-  secure: process.env.SMTP_SECURE === 'true',
-  auth: {
-    user: process.env.SMTP_USER,
-    pass: process.env.SMTP_PASS,
-  },
-});
+const { safeSendMail } = require('../lib/notifier');
 
 /* =========================================================================
    GET /utenti/cf/all  -> mapping rapido per CF (deve stare PRIMA di /:id)
@@ -105,14 +94,13 @@ router.post('/', async (req, res) => {
 
     const signupLink = `https://expo.dev/@tuaOrg/clockeasy-app?email=${encodeURIComponent(email)}`;
 
-    await transporter.sendMail({
-      from   : `"ClockEasy HR" <${process.env.SMTP_USER}>`,
+    await safeSendMail({
       to     : email,
       subject: 'Completa la registrazione su ClockEasy',
       html   : `
         <p>Ciao ${nome},</p>
         <p>Il tuo account è stato creato su <b>ClockEasy</b>.</p>
-        <p>Clicca il pulsante qui sotto per completare la registrazione nell’app:</p>
+        <p>Clicca il pulsante qui sotto per completare la registrazione nell'app:</p>
         <p>
           <a href="${signupLink}" style="
              padding:10px 20px;
