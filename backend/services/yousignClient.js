@@ -5,7 +5,7 @@ const FormData = require("form-data");
 
 
 const baseURL =
-  process.env.YOUSIGN_BASE_URL || "https://api-sandbox.yousign.app/v3";
+  process.env.YOUSIGN_BASE_URL || "https://api.yousign.app/v3";
 const apiKey = process.env.YOUSIGN_API_KEY;
 
 if (!apiKey) {
