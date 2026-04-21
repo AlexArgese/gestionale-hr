@@ -50,6 +50,30 @@ async function createSignatureRequest({ name, deliveryMode = "email" }) {
 
 
 async function downloadSignatureRequestDocument(signatureRequestId, documentId) {
+  if (typeof fetch === "function") {
+    const url = `${baseURL}/signature_requests/${signatureRequestId}/documents/${documentId}/download`;
+    const res = await fetch(url, {
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        Accept: "application/pdf",
+        "Accept-Encoding": "identity",
+      },
+    });
+
+    if (!res.ok) {
+      const body = await res.text().catch(() => "");
+      console.error("[Yousign] download failed", {
+        status: res.status,
+        body,
+        statusText: res.statusText,
+      });
+      throw new Error(`Yousign download failed: ${res.status} ${res.statusText}`);
+    }
+
+    const ab = await res.arrayBuffer();
+    return Buffer.from(ab);
+  }
+
   try {
     const res = await api.get(
       `/signature_requests/${signatureRequestId}/documents/${documentId}/download`,

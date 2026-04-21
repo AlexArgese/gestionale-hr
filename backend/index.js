@@ -47,6 +47,9 @@ app.use((req, res, next) => {
   next();
 });
 
+const yousignWebhookRoutes = require("./routes/yousignWebhook");
+app.use("/yousign", yousignWebhookRoutes);
+
 // Parser
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
@@ -68,7 +71,6 @@ const authRoutes = require('./routes/auth');
 const profileRoutes = require('./routes/profilo');
 const sediRoutes = require('./routes/sedi');
 const firmaRoutes = require("./routes/firma");
-const yousignWebhookRoutes = require("./routes/yousignWebhook");
 const pushRoutes = require("./routes/push");
 
 
@@ -89,7 +91,6 @@ app.use('/auth', authRoutes);
 app.use('/profilo', profileRoutes);
 app.use('/sedi', sediRoutes);
 app.use("/firma", firmaRoutes);
-app.use("/yousign", yousignWebhookRoutes);
 app.use("/push", pushRoutes);
 
 
