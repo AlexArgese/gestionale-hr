@@ -4,7 +4,6 @@ const pool = require('../db');
 const { decryptToJson, encryptJson } = require('../lib/crypto');
 const requireAuth = require('../middleware/requireAuth');
 const { allowRoles } = require('../middleware/rbac');
-const { getWbManagerId } = require('../lib/wbManager');
 
 const router = express.Router();
 router.use(requireAuth, allowRoles('wb_manager'));
@@ -13,11 +12,19 @@ router.use(requireAuth, allowRoles('wb_manager'));
 router.get('/reports', async (req, res) => {
   try {
     const { status, q } = req.query;
-    const managerId = await getWbManagerId();
-    const params = [managerId];
-    let where = `WHERE manager_id = $1`;
-    if (status) { params.push(status); where += ` AND status = $${params.length}`; }
-    if (q) { params.push(`%${q}%`); where += ` AND (protocol_code ILIKE $${params.length} OR title ILIKE $${params.length})`; }
+    const params = [];
+    const conditions = [];
+
+    if (status) {
+      params.push(status);
+      conditions.push(`status = $${params.length}`);
+    }
+    if (q) {
+      params.push(`%${q}%`);
+      conditions.push(`(protocol_code ILIKE $${params.length} OR title ILIKE $${params.length})`);
+    }
+
+    const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
     const { rows } = await pool.query(
       `SELECT id, protocol_code, title, is_anonymous, created_at, status, category_id,
               acknowledged_at, first_response_at, closed_at, last_update,
@@ -37,11 +44,10 @@ router.get('/reports', async (req, res) => {
 router.get('/reports/by-protocol/:code', async (req, res) => {
   try {
     const { code } = req.params;
-    const managerId = await getWbManagerId();
     const { rows } = await pool.query(
       `SELECT id, protocol_code, title, status, created_at, last_update
-       FROM wb_reports WHERE protocol_code=$1 AND manager_id=$2`,
-      [code, managerId]
+       FROM wb_reports WHERE protocol_code=$1`,
+      [code]
     );
     if (!rows.length) return res.status(404).json({ error: 'Not found' });
     res.json(rows[0]);
@@ -54,10 +60,13 @@ router.get('/reports/by-protocol/:code', async (req, res) => {
 router.get('/reports/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    const managerId = await getWbManagerId();
     const { rows: base } = await pool.query(
-      `SELECT * FROM wb_reports WHERE id=$1 AND manager_id=$2`,
-      [id, managerId]
+      `SELECT r.*,
+              u.nome AS reporter_nome, u.cognome AS reporter_cognome, u.email AS reporter_email
+         FROM wb_reports r
+         LEFT JOIN utenti u ON u.id = r.reporter_user_id
+        WHERE r.id=$1`,
+      [id]
     );
     if (!base.length) return res.status(404).json({ error: 'Not found' });
     const report = base[0];
@@ -97,7 +106,14 @@ router.get('/reports/:id', async (req, res) => {
         closed_at: report.closed_at,
         last_update: report.last_update,
         policy_accepted: report.policy_accepted,
-        policy_version: report.policy_version
+        policy_version: report.policy_version,
+        reporter: report.is_anonymous
+          ? null
+          : {
+              id: report.reporter_user_id,
+              full_name: [report.reporter_nome, report.reporter_cognome].filter(Boolean).join(' ').trim(),
+              email: report.reporter_email
+            }
       },
       messages
     });
@@ -114,10 +130,9 @@ router.post('/reports/:id/messages', async (req, res) => {
     const { body } = req.body;
     if (!body) return res.status(400).json({ error: 'Missing body' });
 
-    const managerId = await getWbManagerId();
     const { rows: base } = await pool.query(
-      `SELECT id, first_response_at FROM wb_reports WHERE id=$1 AND manager_id=$2`,
-      [id, managerId]
+      `SELECT id, first_response_at FROM wb_reports WHERE id=$1`,
+      [id]
     );
     if (!base.length) return res.status(404).json({ error: 'Not found' });
 
@@ -150,10 +165,9 @@ router.patch('/reports/:id', async (req, res) => {
     const { id } = req.params;
     const { status, category_id, acknowledge } = req.body;
 
-    const managerId = await getWbManagerId();
     const { rows: base } = await pool.query(
-      `SELECT id FROM wb_reports WHERE id=$1 AND manager_id=$2`,
-      [id, managerId]
+      `SELECT id FROM wb_reports WHERE id=$1`,
+      [id]
     );
     if (!base.length) return res.status(404).json({ error: 'Not found' });
 

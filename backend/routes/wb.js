@@ -3,8 +3,9 @@ const express = require('express');
 const crypto = require('crypto');
 const pool = require('../db');
 const { encryptJson, decryptToJson } = require('../lib/crypto');
-const { getWbManagerId, getWbManagerEmail } = require('../lib/wbManager');
+const { getWbManagerId } = require('../lib/wbManager');
 const { safeSendMail } = require('../lib/notifier');
+const { resolveWbNotificationRecipients, sendNewReportEmail } = require('../lib/wbMailer');
 const { createReportLimiter, anonMessageLimiter } = require('../middleware/wb_rate_limit');
 const requireAuth = require('../middleware/requireAuth');
 const { allowRoles } = require('../middleware/rbac');
@@ -17,11 +18,7 @@ function generateProtocol() {
 }
 
 const resolveRecipients = async () => {
-  const override = (process.env.WB_NOTIFY_TO || '').trim();
-  if (override) {
-    return override.split(',').map(s => s.trim()).filter(Boolean);
-  }
-  return [await getWbManagerEmail()];
+  return resolveWbNotificationRecipients();
 };
 
 
@@ -70,19 +67,14 @@ router.post('/anon/reports', createReportLimiter, async (req, res) => {
 
     // Notifica email (best effort)
     try {
-      const to = await resolveRecipients();
-      const subject = `[WB] Nuova segnalazione ${protocol}`;
-      const text =
-`È stata inviata una nuova segnalazione anonima.
-
-Protocollo: ${protocol}
-Titolo: ${title}
-Categoria: ${catId ?? '(nessuna)'}
-Data: ${new Date().toISOString()}
-
-Accedi al pannello avvocato e cerca per protocollo.`;
-      await safeSendMail({ to, subject, text, replyTo: process.env.WB_MAIL_REPLY_TO });
-    } catch (_) {}
+      const result = await sendNewReportEmail({
+        protocol,
+        title,
+        isAnonymous: true,
+        categoryId: catId,
+      });
+      if (!result.ok) console.warn('WB mail (anonima) non inviata:', result.reason);
+    } catch (e) { console.warn('WB mail (anonima) errore:', e.message); }
 
     res.json({ protocol, replyToken });
   } catch (e) {
@@ -214,15 +206,15 @@ router.post('/reports', requireAuth, async (req, res) => {
       [protocol, title, enc, req.user.id, managerId, catId]
     );
 
-    // notifica email (riusa resolveRecipients che hai aggiunto)
+    // Notifica email al wb_manager (best effort)
     try {
-      const { sendNewReportEmail } = require('../lib/wbMailer');
-      await sendNewReportEmail({
+      const result = await sendNewReportEmail({
         protocol,
         title,
         isAnonymous: false,
         categoryId: catId,
       });
+      if (!result.ok) console.warn('WB mail (non anonima) non inviata:', result.reason);
     } catch (e) { console.warn('WB mail (non anonima) errore:', e.message); }
 
     return res.json({ reportId: rows[0].id, protocol: rows[0].protocol_code });
@@ -321,7 +313,7 @@ router.get('/manager/reports/:id', requireAuth, allowRoles('wb_manager'), async 
   try {
     const { id } = req.params;
 
-    // prendo il report di cui QUESTO manager è responsabile
+    // Tutti gli utenti con ruolo wb_manager possono vedere le segnalazioni WB.
     const rep = await pool.query(
       `SELECT r.id, r.protocol_code, r.title, r.description_encrypted, r.is_anonymous,
               r.reporter_user_id, r.created_at, r.status, r.category_id,
@@ -329,8 +321,8 @@ router.get('/manager/reports/:id', requireAuth, allowRoles('wb_manager'), async 
               u.nome AS reporter_nome, u.cognome AS reporter_cognome, u.email AS reporter_email
          FROM wb_reports r
          LEFT JOIN utenti u ON u.id = r.reporter_user_id
-        WHERE r.id = $1 AND r.manager_id = $2`,
-      [id, req.user.id]   // il manager vede solo i “suoi” report
+        WHERE r.id = $1`,
+      [id]
     );
     if (!rep.rows.length) return res.status(404).json({ error: 'Not found' });
 
