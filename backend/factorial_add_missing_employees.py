@@ -32,8 +32,9 @@ FACTORIAL_HEADERS = {
     "x-api-key": FACTORIAL_API_KEY,
 }
 
-DEFAULT_RUOLO      = "dipendente"
-DEFAULT_SOCIETA_ID = 1
+DEFAULT_RUOLO           = "dipendente"
+DEFAULT_SOCIETA_ID      = 1
+DEFAULT_TIPO_CONTRATTO  = "full_time"
 
 
 def normalize_name(s: str) -> str:
@@ -71,11 +72,14 @@ def main():
     print("\n[1/4] Carico utenti dal DB...")
     conn = psycopg2.connect(DATABASE_URL)
     cur  = conn.cursor()
-    cur.execute("SELECT id, nome, cognome FROM utenti")
+    cur.execute("SELECT id, nome, cognome, email FROM utenti")
     existing = {}
-    for uid, nome, cognome in cur.fetchall():
+    existing_by_email = {}
+    for uid, nome, cognome, email in cur.fetchall():
         key = normalize_name(f"{nome} {cognome}")
         existing[key] = uid
+        if email:
+            existing_by_email[email.strip().lower()] = uid
     print(f"  Trovati {len(existing)} utenti nel DB.")
 
     # 2. Carica sedi da Factorial
@@ -105,9 +109,11 @@ def main():
         if not first or not last:
             continue
 
-        key = normalize_name(f"{first} {last}")
+        key         = normalize_name(f"{first} {last}")
+        key_swapped = normalize_name(f"{last} {first}")
+        email_norm  = (emp.get("email") or "").strip().lower()
 
-        if key in existing:
+        if key in existing or key_swapped in existing or (email_norm and email_norm in existing_by_email):
             saltati += 1
             continue
 
@@ -128,6 +134,7 @@ def main():
             print(f"  [DRY] Inserirebbe: {first} {last}")
             print(f"        email          : {email}")
             print(f"        stato_attivo   : {stato_attivo}")
+            print(f"        tipo_contratto : {DEFAULT_TIPO_CONTRATTO}")
             print(f"        data_assunzione: {data_assunzione}")
             print(f"        data_nascita   : {data_nascita}")
             print(f"        codice_fiscale : {cf}")
@@ -139,9 +146,10 @@ def main():
                     """
                     INSERT INTO utenti
                         (nome, cognome, email, ruolo, stato_attivo, societa_id,
+                         tipo_contratto,
                          data_assunzione, data_nascita, codice_fiscale, cellulare,
                          indirizzo_residenza, cap_residenza, citta_residenza, iban, sede)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                     """,
                     (
                         first.upper(),
@@ -150,6 +158,7 @@ def main():
                         DEFAULT_RUOLO,
                         stato_attivo,
                         DEFAULT_SOCIETA_ID,
+                        DEFAULT_TIPO_CONTRATTO,
                         data_assunzione,
                         data_nascita,
                         cf,

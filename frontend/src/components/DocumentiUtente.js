@@ -16,6 +16,18 @@ const getYear = (v) => {
   catch { return "—"; }
 };
 
+const sortYearsDesc = ([a], [b]) => {
+  const yearA = Number(a);
+  const yearB = Number(b);
+  const aIsYear = Number.isFinite(yearA);
+  const bIsYear = Number.isFinite(yearB);
+
+  if (aIsYear && bIsYear) return yearB - yearA;
+  if (aIsYear) return -1;
+  if (bIsYear) return 1;
+  return b.localeCompare(a);
+};
+
 
 const mapDoc = (d) => ({
   id: d.id,
@@ -74,16 +86,25 @@ export default function DocumentiUtente({ userId, baseUrl = API }) {
     }
     for (const cat of Object.keys(g)) {
       g[cat] = Object.fromEntries(
-        Object.entries(g[cat]).sort(([a], [b]) => b.localeCompare(a))
+        Object.entries(g[cat]).sort(sortYearsDesc)
       );
     }
     return g;
   }, [docs]);
 
-  const toggleCat  = (cat)       => setOpenCats(p  => ({ ...p, [cat]: !p[cat] }));
+  const toggleCat = (cat) => {
+    const willOpen = !openCats[cat];
+
+    setOpenCats(p => ({ ...p, [cat]: !p[cat] }));
+    if (willOpen) {
+      setOpenYears(years => Object.fromEntries(
+        Object.entries(years).filter(([key]) => !key.startsWith(`${cat}|`))
+      ));
+    }
+  };
   const toggleYear = (cat, year) => setOpenYears(p => ({ ...p, [`${cat}|${year}`]: !p[`${cat}|${year}`] }));
   const isCatOpen  = (cat)       => !!openCats[cat];
-  const isYearOpen = (cat, year) => openYears[`${cat}|${year}`] !== false; // default aperto  
+  const isYearOpen = (cat, year) => !!openYears[`${cat}|${year}`];
 
   const deleteDoc = async (doc) => {
     if (!window.confirm(`Eliminare "${doc.name}"?`)) return;
