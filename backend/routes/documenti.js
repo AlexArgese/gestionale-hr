@@ -205,6 +205,43 @@ function parseBool(v) {
   return v === true || v === "true" || v === 1 || v === "1" || v === "on";
 }
 
+function parseSignaturePlacement(body) {
+  if (body?.signature_placement || body?.signaturePlacement) {
+    try {
+      return JSON.parse(body.signature_placement || body.signaturePlacement);
+    } catch {
+      return null;
+    }
+  }
+  return null;
+}
+
+async function markYousignInitError(documentoId, e, context) {
+  console.error(`Yousign start failed (${context}):`, {
+    documentoId,
+    message: e.message,
+    status: e.response?.status,
+    data: e.response?.data,
+    stack: e.stack,
+  });
+
+  try {
+    await pool.query(
+      `UPDATE documenti
+          SET yousign_status = $1,
+              yousign_signature_request_id = NULL,
+              yousign_document_id = NULL,
+              yousign_signer_id = NULL,
+              yousign_signature_link = NULL,
+              yousign_signature_link_expires_at = NULL
+        WHERE id = $2`,
+      ['init_error', documentoId]
+    );
+  } catch (dbErr) {
+    console.error("Errore update init_error:", dbErr);
+  }
+}
+
 async function startYousignForDocumento({ documentoId, utenteId, nomeFile, urlFile, signaturePlacement }) {
   // 1) dati utente (serve email)
   const u = await pool.query(
@@ -484,14 +521,7 @@ router.post('/upload', requireAuth, (req, res) => {
       const { tipo_documento, data_scadenza, nome_file } = req.body;
       const batch_id = req.body.batch_id || null;
       const require_signature = parseBool(req.body.require_signature || req.body.requireSignature);
-      let signaturePlacement = null;
-      if (req.body.signature_placement || req.body.signaturePlacement) {
-        try {
-          signaturePlacement = JSON.parse(req.body.signature_placement || req.body.signaturePlacement);
-        } catch {
-          signaturePlacement = null;
-        }
-      }
+      const signaturePlacement = parseSignaturePlacement(req.body);
 
       if (!validateTipo(tipo_documento)) {
         return res.status(400).json({ error: 'Tipo documento non valido' });
@@ -549,30 +579,7 @@ router.post('/upload', requireAuth, (req, res) => {
           nomeFile: req.file.originalname,
           urlFile: relPath,
           signaturePlacement,
-        }).catch(async (e) => {
-          console.error("Yousign start failed (upload):", {
-            message: e.message,
-            status: e.response?.status,
-            data: e.response?.data,
-            stack: e.stack,
-          });
-
-          try {
-            await pool.query(
-              `UPDATE documenti
-                  SET yousign_status = $1,
-                      yousign_signature_request_id = NULL,
-                      yousign_document_id = NULL,
-                      yousign_signer_id = NULL,
-                      yousign_signature_link = NULL,
-                      yousign_signature_link_expires_at = NULL
-                WHERE id = $2`,
-              ['init_error', inserted[0].id]
-            );
-          } catch (dbErr) {
-            console.error("Errore update init_error:", dbErr);
-          }
-        });
+        }).catch((e) => markYousignInitError(inserted[0].id, e, "upload"));
       }
     } catch (e) {
       console.error('Errore upload documento:', e);
@@ -597,6 +604,7 @@ router.post('/upload-multi', requireAuth, (req, res) => {
 
       const { tipo_documento, utente_ids, data_scadenza } = req.body;
       const require_signature = parseBool(req.body.require_signature || req.body.requireSignature);
+      const signaturePlacement = parseSignaturePlacement(req.body);
 
       if (!validateTipo(tipo_documento)) {
         return res.status(400).json({ error: 'Tipo documento non valido' });
@@ -627,36 +635,76 @@ router.post('/upload-multi', requireAuth, (req, res) => {
         ? safeNomeFile
         : `${safeNomeFile}.pdf`;
 
-      const chiaveS3 = creaChiaveS3({
-        utenteId: 0,
-        tipoDocumento: tipoNorm,
-        nomeFile: finalNomeFile,
+      let inserted = [];
+
+      if (require_signature) {
+        for (const uid of uniq) {
+          const chiaveS3 = creaChiaveS3({
+            utenteId: uid,
+            tipoDocumento: tipoNorm,
+            nomeFile: finalNomeFile,
+          });
+
+          await caricaBufferSuS3({
+            chiave: chiaveS3,
+            buffer: req.file.buffer,
+            contentType: req.file.mimetype,
+          });
+
+          const rows = await insertDocumentoRows({
+            utenteIds: [uid],
+            tipo: tipoNorm,
+            nome_file: finalNomeFile,
+            relPath: chiaveS3,
+            caricato_da: autoreId,
+            data_scadenza,
+            require_signature,
+            batch_id,
+          });
+          inserted.push(...rows);
+        }
+      } else {
+        const chiaveS3 = creaChiaveS3({
+          utenteId: 0,
+          tipoDocumento: tipoNorm,
+          nomeFile: finalNomeFile,
+        });
+
+        await caricaBufferSuS3({
+          chiave: chiaveS3,
+          buffer: req.file.buffer,
+          contentType: req.file.mimetype,
+        });
+
+        inserted = await insertDocumentoRows({
+          utenteIds: uniq,
+          tipo: tipoNorm,
+          nome_file: finalNomeFile,
+          relPath: chiaveS3,
+          caricato_da: autoreId,
+          data_scadenza,
+          require_signature,
+          batch_id,
+        });
+      }
+
+      res.json({
+        message: require_signature
+          ? `Documento assegnato a ${uniq.length} dipendenti e firma avviata.`
+          : `Documento assegnato a ${uniq.length} dipendenti.`,
       });
-
-      await caricaBufferSuS3({
-        chiave: chiaveS3,
-        buffer: req.file.buffer,
-        contentType: req.file.mimetype,
-      });
-
-      const relPath = chiaveS3;
-
-      const inserted = await insertDocumentoRows({
-        utenteIds: uniq,
-        tipo: tipoNorm,
-        nome_file: finalNomeFile,
-        relPath,
-        caricato_da: autoreId,
-        data_scadenza,
-        require_signature,
-        batch_id,
-      });
-
-      res.json({ message: `Documento assegnato a ${uniq.length} dipendenti.` });
       fireAndForgetDocumentNotifications(inserted, tipoNorm);
 
       if (require_signature) {
-        console.warn("[Yousign] upload-multi con firma: da gestire caso multi (scelta business).");
+        for (const doc of inserted) {
+          startYousignForDocumento({
+            documentoId: doc.id,
+            utenteId: doc.utente_id,
+            nomeFile: finalNomeFile,
+            urlFile: doc.url_file,
+            signaturePlacement,
+          }).catch((e) => markYousignInitError(doc.id, e, "upload-multi"));
+        }
       }
     } catch (e) {
       console.error('upload-multi:', e);
