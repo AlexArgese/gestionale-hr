@@ -45,11 +45,18 @@ router.post('/anon/reports', createReportLimiter, async (req, res) => {
       `INSERT INTO wb_reports
          (protocol_code, title, description_encrypted, is_anonymous, reporter_user_id,
           status, manager_id, category_id, acknowledged_at, policy_accepted, policy_version)
-       VALUES ($1,$2,$3,true,NULL,'submitted',$4,$5,now(),$6,$7)
+       VALUES ($1,$2,$3,true,NULL,'ricevuta',$4,$5,now(),$6,$7)
        RETURNING id, protocol_code`,
       [protocol, title, enc, managerId, catId, true, policyVersion]
     );
     const reportId = ins.rows[0].id;
+
+    // messaggio automatico di sistema (avviso di ricezione)
+    await pool.query(
+      `INSERT INTO wb_messages (report_id, sender_role, body_encrypted)
+       VALUES ($1,'sistema',$2)`,
+      [reportId, encryptJson({ body: `Segnalazione ricevuta in data ${new Date().toLocaleDateString('it-IT')}. Il Responsabile prenderà in carico la pratica entro 7 giorni. Conserva protocollo e token per accedere a questo thread.` })]
+    );
 
     const replyToken = crypto.randomBytes(32).toString('hex');
     const tokenHash = crypto.createHash('blake2b512').update(replyToken).digest();
@@ -201,9 +208,16 @@ router.post('/reports', requireAuth, async (req, res) => {
       `INSERT INTO wb_reports
          (protocol_code, title, description_encrypted, is_anonymous, reporter_user_id,
           manager_id, status, category_id, acknowledged_at)
-       VALUES ($1,$2,$3,false,$4,$5,'submitted',$6, now())
+       VALUES ($1,$2,$3,false,$4,$5,'ricevuta',$6, now())
        RETURNING id, protocol_code`,
       [protocol, title, enc, req.user.id, managerId, catId]
+    );
+
+    // messaggio automatico di sistema (avviso di ricezione)
+    await pool.query(
+      `INSERT INTO wb_messages (report_id, sender_role, body_encrypted)
+       VALUES ($1,'sistema',$2)`,
+      [rows[0].id, encryptJson({ body: `Segnalazione ricevuta in data ${new Date().toLocaleDateString('it-IT')}. Il Responsabile prenderà in carico la pratica entro 7 giorni e fornirà riscontro entro 3 mesi.` })]
     );
 
     // Notifica email al wb_manager (best effort)

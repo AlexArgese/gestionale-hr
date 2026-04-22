@@ -1,5 +1,6 @@
 const { safeSendMail } = require('./notifier');
 const { getWbManagerEmails } = require('./wbManager');
+const pool = require('../db');
 
 function parseEmailList(value) {
   return String(value || '')
@@ -77,4 +78,60 @@ Messaggio automatico, non rispondere a questa email.`;
   });
 }
 
-module.exports = { resolveWbNotificationRecipients, sendNewReportEmail };
+async function sendReporterNotificationEmail({ reportId, protocol, title, type }) {
+  try {
+    const { rows } = await pool.query(
+      `SELECT u.email FROM wb_reports r
+         JOIN utenti u ON u.id = r.reporter_user_id
+        WHERE r.id = $1 AND r.is_anonymous = false
+          AND u.email IS NOT NULL AND trim(u.email) <> ''`,
+      [reportId]
+    );
+    if (!rows.length) return { ok: false, reason: 'no_reporter_email' };
+    const to = rows[0].email.trim();
+
+    const subjects = {
+      risposta: `[WB] Nuova risposta sulla tua segnalazione ${protocol}`,
+      stato:    `[WB] Aggiornamento stato segnalazione ${protocol}`,
+    };
+    const bodies = {
+      risposta: `Il Responsabile ha inviato una risposta sulla tua segnalazione.\n\nProtocollo: ${protocol}\nTitolo: ${title}\n\nAccedi all'app ClockEasy → Profilo → Azioni → Whistleblowing → Le mie segnalazioni per leggere il messaggio.`,
+      stato:    `Lo stato della tua segnalazione è stato aggiornato.\n\nProtocollo: ${protocol}\nTitolo: ${title}\n\nAccedi all'app ClockEasy → Profilo → Azioni → Whistleblowing → Le mie segnalazioni per verificare lo stato attuale.`,
+    };
+
+    const subject = subjects[type] ?? subjects.risposta;
+    const text    = bodies[type]   ?? bodies.risposta;
+
+    return safeSendMail({ to, subject, text, replyTo: process.env.WB_MAIL_REPLY_TO });
+  } catch (e) {
+    console.warn('sendReporterNotificationEmail error:', e.message);
+    return { ok: false, reason: e.message };
+  }
+}
+
+async function sendManagerDeadlineEmail({ type, protocols }) {
+  const to = await resolveWbNotificationRecipients();
+  if (!to.length) return { ok: false, reason: 'no_wb_manager_email' };
+
+  const subjects = {
+    ack:      '[WB] ⚠️ Segnalazioni senza presa in carico entro 7 giorni',
+    riscontro:'[WB] 🔴 Segnalazioni senza riscontro entro 3 mesi',
+  };
+  const intros = {
+    ack:      'Le seguenti segnalazioni non hanno ancora ricevuto presa in carico (scadenza 7 gg):',
+    riscontro:'Le seguenti segnalazioni non hanno ancora ricevuto riscontro (scadenza 3 mesi):',
+  };
+
+  const list = protocols.map(p => `  • ${p}`).join('\n');
+  const subject = subjects[type];
+  const text = `${intros[type]}\n\n${list}\n\nAccedi al pannello WB di ClockEasy per gestirle.\n\nMessaggio automatico, non rispondere.`;
+
+  return safeSendMail({ to, subject, text, replyTo: process.env.WB_MAIL_REPLY_TO });
+}
+
+module.exports = {
+  resolveWbNotificationRecipients,
+  sendNewReportEmail,
+  sendReporterNotificationEmail,
+  sendManagerDeadlineEmail,
+};

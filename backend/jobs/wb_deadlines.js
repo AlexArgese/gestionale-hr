@@ -2,6 +2,7 @@
 const cron = require('node-cron');
 const pool = require('../db');
 const { getWbManagerId } = require('../lib/wbManager');
+const { sendManagerDeadlineEmail } = require('../lib/wbMailer');
 
 // Esegue ogni giorno alle 08:00 (Europe/Rome)
 function startWbDeadlinesJob() {
@@ -26,12 +27,23 @@ function startWbDeadlinesJob() {
       );
 
       if (needAck.length) {
-        console.log('🟡 Reminder ACK 7gg:', needAck.map(r => r.protocol_code));
-        // TODO: invia email/Slack all’avvocato
+        const protocols = needAck.map(r => r.protocol_code);
+        console.log('[WB] Reminder ACK 7gg:', protocols);
+        try {
+          await sendManagerDeadlineEmail({ type: 'ack', protocols });
+        } catch (e) {
+          console.warn('[WB] deadline mail ack errore:', e.message);
+        }
       }
+
       if (needResp.length) {
-        console.log('🔴 Reminder RISCONTRO 3 mesi:', needResp.map(r => r.protocol_code));
-        // TODO: invia email/Slack
+        const protocols = needResp.map(r => r.protocol_code);
+        console.log('[WB] Reminder RISCONTRO 3 mesi:', protocols);
+        try {
+          await sendManagerDeadlineEmail({ type: 'riscontro', protocols });
+        } catch (e) {
+          console.warn('[WB] deadline mail riscontro errore:', e.message);
+        }
       }
     } catch (e) {
       console.error('WB deadlines job error:', e);

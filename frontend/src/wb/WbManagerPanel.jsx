@@ -17,14 +17,22 @@ import {
 } from 'react-icons/io5';
 
 const STATI = [
-  'submitted',
-  'triage',
-  'in_review',
-  'need_info',
-  'closed_substantiated',
-  'closed_unsubstantiated',
-  'closed_other',
+  'ricevuta',
+  'in_corso',
+  'in_attesa',
+  'chiusa_fondata',
+  'chiusa_infondata',
+  'chiusa',
 ];
+
+const STATO_LABEL = {
+  ricevuta:          'Ricevuta',
+  in_corso:          'In corso',
+  in_attesa:         'In attesa',
+  chiusa_fondata:    'Chiusa - fondata',
+  chiusa_infondata:  'Chiusa - infondata',
+  chiusa:            'Chiusa',
+};
 
 export default function WbManagerPanel({ apiBase }) {
   const [loading, setLoading] = useState(true);
@@ -420,7 +428,7 @@ export default function WbManagerPanel({ apiBase }) {
                             {r.protocol_code}
                           </div>
                           <span className={`${styles.badge} ${styles[badgeClass(r.status)]}`}>
-                            {r.status}
+                            {STATO_LABEL[r.status] ?? r.status}
                           </span>
                         </div>
 
@@ -489,7 +497,7 @@ export default function WbManagerPanel({ apiBase }) {
                             <span className={styles['meta-dot']}>•</span>
                             <span className={styles.small}>Stato:</span>
                             <span className={`${styles.badge} ${styles[badgeClass(detail.report.status)]}`}>
-                              {detail.report.status}
+                              {STATO_LABEL[detail.report.status] ?? detail.report.status}
                             </span>
 
                             <span className={styles['meta-dot']}>•</span>
@@ -526,7 +534,7 @@ export default function WbManagerPanel({ apiBase }) {
                       >
                         {STATI.map((s) => (
                           <option key={s} value={s}>
-                            {s}
+                            {STATO_LABEL[s] ?? s}
                           </option>
                         ))}
                       </select>
@@ -558,7 +566,7 @@ export default function WbManagerPanel({ apiBase }) {
                             }`}
                           >
                             <div className={styles['bubble-meta']}>
-                              {m.sender === 'manager' ? 'Avvocato' : 'Segnalante'}
+                              {m.sender === 'manager' ? 'Responsabile' : m.sender === 'sistema' ? 'Sistema' : 'Segnalante'}
                               <span className={styles['meta-dot']}>•</span>
                               {fmt(m.created_at)}
                               {m._synthetic ? (
@@ -718,11 +726,10 @@ export default function WbManagerPanel({ apiBase }) {
 /* ===== Helpers badge → class names coerenti con CSS ===== */
 function badgeClass(status) {
   if (!status) return 'neutral';
-  if (status.startsWith('closed_')) return 'closed';
-  if (status === 'in_review') return 'review';
-  if (status === 'need_info') return 'warn';
-  if (status === 'triage') return 'triage';
-  if (status === 'submitted') return 'submitted';
+  if (status.startsWith('chiusa_')) return 'closed';
+  if (status === 'in_corso') return 'review';
+  if (status === 'in_attesa') return 'warn';
+  if (status === 'ricevuta') return 'submitted';
   return 'neutral';
 }
 function avBadge(av) {

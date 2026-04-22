@@ -4,6 +4,7 @@ const pool = require('../db');
 const { decryptToJson, encryptJson } = require('../lib/crypto');
 const requireAuth = require('../middleware/requireAuth');
 const { allowRoles } = require('../middleware/rbac');
+const { sendReporterNotificationEmail } = require('../lib/wbMailer');
 
 const router = express.Router();
 router.use(requireAuth, allowRoles('wb_manager'));
@@ -152,6 +153,19 @@ router.post('/reports/:id/messages', async (req, res) => {
       [id]
     );
 
+    // notifica email al segnalante nominativo (best effort)
+    try {
+      const r = await pool.query(`SELECT protocol_code, title FROM wb_reports WHERE id=$1`, [id]);
+      if (r.rows.length) {
+        await sendReporterNotificationEmail({
+          reportId: id,
+          protocol: r.rows[0].protocol_code,
+          title: r.rows[0].title,
+          type: 'risposta',
+        });
+      }
+    } catch (_) {}
+
     res.json({ success: true });
   } catch (e) {
     console.error(e);
@@ -189,6 +203,21 @@ router.patch('/reports/:id', async (req, res) => {
        VALUES ($1,'manager','REPORT_UPDATED',$2)`,
       [id, { status, category_id, acknowledge }]
     );
+
+    // notifica email al segnalante nominativo se lo stato è cambiato (best effort)
+    if (status) {
+      try {
+        const r = await pool.query(`SELECT protocol_code, title FROM wb_reports WHERE id=$1`, [id]);
+        if (r.rows.length) {
+          await sendReporterNotificationEmail({
+            reportId: id,
+            protocol: r.rows[0].protocol_code,
+            title: r.rows[0].title,
+            type: 'stato',
+          });
+        }
+      } catch (_) {}
+    }
 
     res.json({ updated: true });
   } catch (e) {
