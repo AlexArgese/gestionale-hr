@@ -123,8 +123,10 @@ async function sendCommunicationEmail({ emails, titolo, contenuto }) {
   const subject = `[ClockEasy] ${titolo || 'Nuova comunicazione'}`;
   const text = `${titolo || 'Nuova comunicazione'}\n\n${contenuto || ''}\n\n— ClockEasy`;
 
-  const result = await safeSendMail({ to: emails, subject, text });
-  if (!result.ok) throw new Error(result.reason);
+  for (const email of emails) {
+    const result = await safeSendMail({ to: email, subject, text });
+    if (!result.ok) console.error('Email comunicazione fallita per %s: %s', email, result.reason);
+  }
 }
 /* ------------------------------------------
    Multer: upload allegato SINGOLO (legacy)
@@ -696,10 +698,15 @@ router.post('/', upload.array('allegato'), async (req, res) => {
 
     // invio mail DOPO commit
     if (shouldSendEmail) {
-      try {
-        await sendCommunicationEmail({ emails: recipientEmails, titolo, contenuto });
-      } catch (mailErr) {
-        console.error('Email comunicazione fallita:', mailErr);
+      if (!recipientEmails.length) {
+        console.warn('send_email=1 ma nessuna email destinatario trovata (comunicazione id=%s)', comm?.id);
+      } else {
+        try {
+          await sendCommunicationEmail({ emails: recipientEmails, titolo, contenuto });
+          console.log('Email comunicazione id=%s inviata a %d destinatari', comm?.id, recipientEmails.length);
+        } catch (mailErr) {
+          console.error('Email comunicazione id=%s fallita (%d destinatari):', comm?.id, recipientEmails.length, mailErr.message);
+        }
       }
     }
 
