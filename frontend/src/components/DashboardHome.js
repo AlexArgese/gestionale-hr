@@ -9,6 +9,7 @@ import { API_BASE } from "../api";
 
 import { FiUsers, FiAlertCircle } from 'react-icons/fi';
 import { BsBriefcase } from 'react-icons/bs';
+import AppAdoptionWidget from './AppAdoptionWidget';
 
 const API = API_BASE;
 
@@ -113,6 +114,9 @@ function DashboardHome() {
           </ResponsiveContainer>
         </div>
       </div>
+
+      {/* APP ADOPTION */}
+      <AppAdoptionWidget />
 
       {/* AVVISI */}
       <div className={styles.section}>

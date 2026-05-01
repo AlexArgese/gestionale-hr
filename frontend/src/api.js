@@ -1,17 +1,7 @@
 // frontend/src/api.js
 import { auth } from "./firebase";
 
-// Supporta sia Vite (import.meta.env) che CRA (process.env)
-const ENV_API_BASE =
-  (typeof import.meta !== "undefined" &&
-    import.meta.env &&
-    import.meta.env.VITE_API_BASE) ||
-  (typeof process !== "undefined" &&
-    process.env &&
-    process.env.REACT_APP_API_BASE) ||
-  "";
-
-export const API_BASE = (ENV_API_BASE || "https://clockeasy-api.onrender.com").replace(/\/$/, "");
+export const API_BASE = (process.env.REACT_APP_API_BASE || "https://clockeasy-api.onrender.com").replace(/\/$/, "");
 
 export async function getIdToken() {
   const user = auth.currentUser;
