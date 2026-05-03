@@ -175,16 +175,27 @@ router.get('/app/con-app', async (_, res) => {
         u.sede,
         STRING_AGG(DISTINCT p.platform, ', ') AS piattaforme,
         MIN(p.created_at) AS prima_registrazione_app,
-        MAX(p.updated_at) AS ultimo_utilizzo_app
+        COALESCE(
+          GREATEST(
+            MAX(p.updated_at),
+            (SELECT MAX(pr.data)::timestamptz FROM presenze pr WHERE pr.utente_id = u.id),
+            (SELECT MAX(d.signed_at)           FROM documenti d  WHERE d.utente_id  = u.id AND d.signed_at IS NOT NULL),
+            (SELECT MAX(lc.data_lettura)        FROM letture_comunicazioni lc WHERE lc.utente_id = u.id)
+          ),
+          MIN(p.created_at)
+        ) AS ultimo_utilizzo_app
       FROM utenti u
-      JOIN push_tokens p ON p.utente_id = u.id
+      LEFT JOIN push_tokens p ON p.utente_id = u.id AND p.attivo = true
       WHERE u.stato_attivo = true
         AND u.archiviato = false
         AND u.app_access_revoked = false
         AND u.app_account_deleted_at IS NULL
-        AND p.attivo = true
+        AND (
+          p.id IS NOT NULL
+          OR EXISTS (SELECT 1 FROM presenze pr WHERE pr.utente_id = u.id)
+        )
       GROUP BY u.id, u.nome, u.cognome, u.email, u.sede
-      ORDER BY ultimo_utilizzo_app DESC
+      ORDER BY ultimo_utilizzo_app DESC NULLS LAST
     `);
     res.json(result.rows);
   } catch (e) {
@@ -314,6 +325,9 @@ router.get('/app/senza-app', async (_, res) => {
         AND NOT EXISTS (
           SELECT 1 FROM push_tokens p
           WHERE p.utente_id = u.id AND p.attivo = true
+        )
+        AND NOT EXISTS (
+          SELECT 1 FROM presenze pr WHERE pr.utente_id = u.id
         )
       ORDER BY u.cognome, u.nome
     `);
