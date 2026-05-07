@@ -32,24 +32,25 @@ function PresenzeExport() {
   const [nota, setNota] = useState('');
 
   useEffect(() => {
-    // Carico utenti per sezione note
     fetch(`${API}/utenti`)
       .then((r) => r.json())
       .then((data) => {
-        const utenti = data.map((u) => ({
+        setUtentiOptions(data.map((u) => ({
           label: `${u.nome} ${u.cognome}`,
           value: u.id,
-        }));
-        const societa = [...new Set(data.map((u) => u.ragione_sociale))]
-          .filter(Boolean)
-          .map((s) => ({ label: s, value: s }));
-        setSocietaOptions(societa);
-
-        setUtentiOptions(utenti);
+        })));
       })
-      .catch(() => {
-        // eventualmente gestisci errore
-      });
+      .catch(() => {});
+
+    fetch(`${API}/societa`)
+      .then((r) => r.json())
+      .then((data) => {
+        setSocietaOptions(data.map((s) => ({
+          label: s.ragione_sociale,
+          value: s.ragione_sociale,
+        })));
+      })
+      .catch(() => {});
 
     // Carico sedi dalla tabella sedi
     fetch(`${API}/sedi`)
