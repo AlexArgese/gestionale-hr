@@ -1,0 +1,288 @@
+{
+  "dry_run": false,
+  "eseguito_il": "2026-05-07T21:50:28.900877+00:00",
+  "summary": {
+    "totale": 46,
+    "riparati": 46,
+    "errori": 0
+  },
+  "riparati": [
+    {
+      "doc_id": 22780,
+      "factorial_id": 38910618,
+      "dipendente": "DE JESUS PERES ELEONORA",
+      "nuovo_url": "uploads/documenti/1/altro/07-07-2025_38910618_versione_completa_rilevazione_presenze_7_2025_hours_and_minutes.zip"
+    },
+    {
+      "doc_id": 22779,
+      "factorial_id": 38911469,
+      "dipendente": "DE JESUS PERES ELEONORA",
+      "nuovo_url": "uploads/documenti/1/altro/07-07-2025_38911469_versione_completa_rilevazione_presenze_7_2025_hours_and_minutes.zip"
+    },
+    {
+      "doc_id": 22778,
+      "factorial_id": 38920854,
+      "dipendente": "DE JESUS PERES ELEONORA",
+      "nuovo_url": "uploads/documenti/1/altro/07-07-2025_38920854_versione_completa_rilevazione_presenze_7_2025_hours_and_minutes.zip"
+    },
+    {
+      "doc_id": 23442,
+      "factorial_id": 4852801,
+      "dipendente": "CASTELLANA FEDERICA",
+      "nuovo_url": "uploads/documenti/108/buste-paga/24-06-2022_4852801_CEDOLINO BASE DI MAGGIO (Centro di costo 01_000) - LEO 3000 S.P.A - CASTELLANA FEDERICA (0731) Nr. 0 Pag. 1.radBD49F.pdf"
+    },
+    {
+      "doc_id": 23441,
+      "factorial_id": 4852807,
+      "dipendente": "CASTELLANA FEDERICA",
+      "nuovo_url": "uploads/documenti/108/buste-paga/24-06-2022_4852807_CEDOLINO BASE DI MAGGIO (Centro di costo 01_000) - LEO 3000 S.P.A - CASTELLANA FEDERICA (0731) Nr. 0 Pag. 1.radBD49F.pdf"
+    },
+    {
+      "doc_id": 23440,
+      "factorial_id": 4852886,
+      "dipendente": "CASTELLANA FEDERICA",
+      "nuovo_url": "uploads/documenti/108/buste-paga/24-06-2022_4852886_CEDOLINO BASE DI MAGGIO (Centro di costo 01_000) - LEO 3000 S.P.A - CASTELLANA FEDERICA (0731) Nr. 0 Pag. 1.radBD49F.pdf"
+    },
+    {
+      "doc_id": 20566,
+      "factorial_id": 7953032,
+      "dipendente": "COFANO LAURA",
+      "nuovo_url": "uploads/documenti/109/contratto/06-01-2023_7953032_Contratto Cofano Laura.pdf"
+    },
+    {
+      "doc_id": 24731,
+      "factorial_id": 7953113,
+      "dipendente": "COFANO LAURA",
+      "nuovo_url": "uploads/documenti/109/contratto/06-01-2023_7953113_Contratto Cofano Laura.pdf"
+    },
+    {
+      "doc_id": 22683,
+      "factorial_id": 45256821,
+      "dipendente": "GJONI AIDA",
+      "nuovo_url": "uploads/documenti/110/buste-paga/29-11-2025_45256821_CEDOLINO PAGA - PARK HOTEL OTTOBRE 2025-19.pdf"
+    },
+    {
+      "doc_id": 22677,
+      "factorial_id": 45256836,
+      "dipendente": "GJONI AIDA",
+      "nuovo_url": "uploads/documenti/110/buste-paga/29-11-2025_45256836_CEDOLINO PAGA - PARK HOTEL OTTOBRE 2025-19.pdf"
+    },
+    {
+      "doc_id": 24576,
+      "factorial_id": 10210406,
+      "dipendente": "SABATELLI FLAVIA",
+      "nuovo_url": "uploads/documenti/133/contratto/07-04-2023_10210406_UNILAV SABATELLI FLAVIA.pdf"
+    },
+    {
+      "doc_id": 24568,
+      "factorial_id": 10217125,
+      "dipendente": "SABATELLI FLAVIA",
+      "nuovo_url": "uploads/documenti/133/contratto/07-04-2023_10217125_UNILAV SABATELLI FLAVIA.pdf"
+    },
+    {
+      "doc_id": 24912,
+      "factorial_id": 4660320,
+      "dipendente": "CONVERSANO DOMENICO",
+      "nuovo_url": "uploads/documenti/144/contratto/08-06-2022_4660320_CONVERSANO DOMENICO CONTRATTO.pdf"
+    },
+    {
+      "doc_id": 24910,
+      "factorial_id": 4660460,
+      "dipendente": "CONVERSANO DOMENICO",
+      "nuovo_url": "uploads/documenti/144/contratto/08-06-2022_4660460_CONVERSANO DOMENICO CONTRATTO.pdf"
+    },
+    {
+      "doc_id": 23756,
+      "factorial_id": 38165683,
+      "dipendente": "CASTROVILLI ALESSIA",
+      "nuovo_url": "uploads/documenti/156/contratto/21-06-2025_38165683_Contratto Castrovilli Alessia.pdf"
+    },
+    {
+      "doc_id": 23755,
+      "factorial_id": 38165687,
+      "dipendente": "CASTROVILLI ALESSIA",
+      "nuovo_url": "uploads/documenti/156/contratto/21-06-2025_38165687_Contratto Castrovilli Alessia.pdf"
+    },
+    {
+      "doc_id": 23830,
+      "factorial_id": 35477445,
+      "dipendente": "LEONE VITO ANTONIO",
+      "nuovo_url": "uploads/documenti/162/contratto/20-04-2025_35477445_Contratto Leone Vito Antonio.pdf"
+    },
+    {
+      "doc_id": 23829,
+      "factorial_id": 35477860,
+      "dipendente": "LEONE VITO ANTONIO",
+      "nuovo_url": "uploads/documenti/162/contratto/20-04-2025_35477860_Contratto Leone Vito Antonio.pdf"
+    },
+    {
+      "doc_id": 23506,
+      "factorial_id": 50168550,
+      "dipendente": "DI TANO CHRISTIAN",
+      "nuovo_url": "uploads/documenti/177/contratto/03-03-2026_50168550_Contratto Di Tano Christian.pdf"
+    },
+    {
+      "doc_id": 23505,
+      "factorial_id": 50172931,
+      "dipendente": "DI TANO CHRISTIAN",
+      "nuovo_url": "uploads/documenti/177/contratto/03-03-2026_50172931_Contratto Di Tano Christian.pdf"
+    },
+    {
+      "doc_id": 23929,
+      "factorial_id": 34023200,
+      "dipendente": "NEGLIA PASQUA",
+      "nuovo_url": "uploads/documenti/201/contratto/21-03-2025_34023200_Contratto Neglia Pasqua.pdf"
+    },
+    {
+      "doc_id": 23928,
+      "factorial_id": 34023320,
+      "dipendente": "NEGLIA PASQUA",
+      "nuovo_url": "uploads/documenti/201/contratto/21-03-2025_34023320_Contratto Neglia Pasqua.pdf"
+    },
+    {
+      "doc_id": 23125,
+      "factorial_id": 22215177,
+      "dipendente": "RUBINO ALESSIA",
+      "nuovo_url": "uploads/documenti/212/contratto/23-05-2024_22215177_Contratto Rubino A."
+    },
+    {
+      "doc_id": 23124,
+      "factorial_id": 22215190,
+      "dipendente": "RUBINO ALESSIA",
+      "nuovo_url": "uploads/documenti/212/contratto/23-05-2024_22215190_Contratto Rubino A."
+    },
+    {
+      "doc_id": 23647,
+      "factorial_id": 42635177,
+      "dipendente": "POTENZA MARITAYLA",
+      "nuovo_url": "uploads/documenti/264/contratto/02-10-2025_42635177_Contratto Potenza Maritayla.pdf"
+    },
+    {
+      "doc_id": 23645,
+      "factorial_id": 42639788,
+      "dipendente": "POTENZA MARITAYLA",
+      "nuovo_url": "uploads/documenti/264/contratto/02-10-2025_42639788_Contratto Potenza Maritayla.pdf"
+    },
+    {
+      "doc_id": 23446,
+      "factorial_id": 3576625,
+      "dipendente": "LAGANA' GIOVANNI",
+      "nuovo_url": "uploads/documenti/364/contratto/04-03-2022_3576625_LAGANA' GIOVANNI CONTRATTO.pdf"
+    },
+    {
+      "doc_id": 23445,
+      "factorial_id": 3576681,
+      "dipendente": "LAGANA' GIOVANNI",
+      "nuovo_url": "uploads/documenti/364/contratto/04-03-2022_3576681_LAGANA' GIOVANNI CONTRATTO.pdf"
+    },
+    {
+      "doc_id": 23439,
+      "factorial_id": 4853146,
+      "dipendente": "ARCONZO MARINELLA",
+      "nuovo_url": "uploads/documenti/393/buste-paga/24-06-2022_4853146_CEDOLINO BASE DI MAGGIO (Centro di costo 01_000) - LEO 3000 S.P.A - ARCONZO MARINELLA (0744) Nr. 0 Pag. 1.rad34073.pdf"
+    },
+    {
+      "doc_id": 23438,
+      "factorial_id": 4853163,
+      "dipendente": "ARCONZO MARINELLA",
+      "nuovo_url": "uploads/documenti/393/buste-paga/24-06-2022_4853163_CEDOLINO BASE DI MAGGIO (Centro di costo 01_000) - LEO 3000 S.P.A - ARCONZO MARINELLA (0744) Nr. 0 Pag. 1.rad34073.pdf"
+    },
+    {
+      "doc_id": 1734,
+      "factorial_id": 3884909,
+      "dipendente": "DE LUCI VINCENZO",
+      "nuovo_url": "uploads/documenti/402/contratto/02-04-2022_3884909_DE LUCI VINCENZO CONTRATTO.pdf"
+    },
+    {
+      "doc_id": 24969,
+      "factorial_id": 3884910,
+      "dipendente": "DE LUCI VINCENZO",
+      "nuovo_url": "uploads/documenti/402/contratto/02-04-2022_3884910_DE LUCI VINCENZO CONTRATTO.pdf"
+    },
+    {
+      "doc_id": 24913,
+      "factorial_id": 4660305,
+      "dipendente": "PREZIOSO LEONARDO",
+      "nuovo_url": "uploads/documenti/441/contratto/08-06-2022_4660305_PREZIOSO LEONARDO CONTRATTO.pdf"
+    },
+    {
+      "doc_id": 24909,
+      "factorial_id": 4660502,
+      "dipendente": "PREZIOSO LEONARDO",
+      "nuovo_url": "uploads/documenti/441/contratto/08-06-2022_4660502_PREZIOSO LEONARDO CONTRATTO.pdf"
+    },
+    {
+      "doc_id": 7800,
+      "factorial_id": 4660282,
+      "dipendente": "POTENZA SERENA",
+      "nuovo_url": "uploads/documenti/450/contratto/08-06-2022_4660282_POTENZA SERENA CONTRATTO.pdf"
+    },
+    {
+      "doc_id": 24908,
+      "factorial_id": 4660539,
+      "dipendente": "POTENZA SERENA",
+      "nuovo_url": "uploads/documenti/450/contratto/08-06-2022_4660539_POTENZA SERENA CONTRATTO.pdf"
+    },
+    {
+      "doc_id": 2598,
+      "factorial_id": 6805996,
+      "dipendente": "MILETI SANTE",
+      "nuovo_url": "uploads/documenti/452/contratto/03-11-2022_6805996_Contratto di Assunzione Mileti Sante.pdf"
+    },
+    {
+      "doc_id": 24774,
+      "factorial_id": 6807429,
+      "dipendente": "MILETI SANTE",
+      "nuovo_url": "uploads/documenti/452/contratto/03-11-2022_6807429_Contratto di Assunzione Mileti Sante.pdf"
+    },
+    {
+      "doc_id": 10705,
+      "factorial_id": 11348173,
+      "dipendente": "SALEMI FILIPPO",
+      "nuovo_url": "uploads/documenti/534/contratto/31-05-2023_11348173_Contratto Salemi F.pdf"
+    },
+    {
+      "doc_id": 24521,
+      "factorial_id": 11350233,
+      "dipendente": "SALEMI FILIPPO",
+      "nuovo_url": "uploads/documenti/534/contratto/31-05-2023_11350233_Contratto Salemi F.pdf"
+    },
+    {
+      "doc_id": 12931,
+      "factorial_id": 10210585,
+      "dipendente": "CARAMIA SILVIA",
+      "nuovo_url": "uploads/documenti/540/contratto/07-04-2023_10210585_UNILAV CARAMIA SILVIA.pdf"
+    },
+    {
+      "doc_id": 24570,
+      "factorial_id": 10217122,
+      "dipendente": "CARAMIA SILVIA",
+      "nuovo_url": "uploads/documenti/540/contratto/07-04-2023_10217122_UNILAV CARAMIA SILVIA.pdf"
+    },
+    {
+      "doc_id": 23736,
+      "factorial_id": 38533035,
+      "dipendente": "FIUME ILARIA",
+      "nuovo_url": "uploads/documenti/561/contratto/30-06-2025_38533035_Contratto Fiume Ilaria.pdf"
+    },
+    {
+      "doc_id": 23732,
+      "factorial_id": 38533348,
+      "dipendente": "FIUME ILARIA",
+      "nuovo_url": "uploads/documenti/561/contratto/30-06-2025_38533348_Contratto Fiume Ilaria.pdf"
+    },
+    {
+      "doc_id": 24119,
+      "factorial_id": 27088075,
+      "dipendente": "PANTALEO VITA",
+      "nuovo_url": "uploads/documenti/623/contratto/01-10-2024_27088075_Contratto Pantaleo Vita.pdf"
+    },
+    {
+      "doc_id": 24118,
+      "factorial_id": 27088486,
+      "dipendente": "PANTALEO VITA",
+      "nuovo_url": "uploads/documenti/623/contratto/01-10-2024_27088486_Contratto Pantaleo Vita.pdf"
+    }
+  ],
+  "errori": []
+}

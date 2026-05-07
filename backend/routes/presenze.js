@@ -19,6 +19,33 @@ setInterval(() => {
   }
 }, 30 * 1000);
 
+// ✅ Auto-chiude turni rimasti aperti dopo 24h: ora_uscita = ora_entrata + ore_contratto
+setInterval(async () => {
+  try {
+    const openShifts = await pool.query(
+      `SELECT p.id, p.ora_entrata, u.tipo_contratto
+         FROM presenze p
+         JOIN utenti u ON u.id = p.utente_id
+        WHERE p.ora_uscita IS NULL
+          AND p.ora_entrata < NOW() - INTERVAL '24 hours'`
+    );
+    for (const row of openShifts.rows) {
+      const minutiPrevisti = getMinutiContratto(row.tipo_contratto);
+      if (minutiPrevisti === 0) continue;
+      const oraUscita = addMinutes(new Date(row.ora_entrata), minutiPrevisti);
+      await pool.query(
+        `UPDATE presenze SET ora_uscita = $1 WHERE id = $2`,
+        [oraUscita, row.id]
+      );
+    }
+    if (openShifts.rows.length > 0) {
+      console.log(`[auto-close] Chiusi ${openShifts.rows.length} turni aperti da >24h`);
+    }
+  } catch (e) {
+    console.error('[auto-close] Errore chiusura turni', e);
+  }
+}, 60 * 60 * 1000); // ogni ora
+
 function generateToken() {
   return crypto.randomBytes(16).toString('hex');
 }
@@ -165,27 +192,35 @@ router.get('/export', async (req, res) => {
     const noteApici = {};
     let noteCounter = 1;
 
-    const presenzeMap = new Map();
+    // Prima passata: somma i minuti di tutti i turni per (utente, giorno)
+    // Supporta più turni nella stessa giornata
+    const minutiAccumulati = new Map(); // key → { utenteId, minutiTotali, nota }
     presenze.rows.forEach((p) => {
       const key = `${p.utente_id}-${p.data_str}`;
-
       const minuti =
         p.ora_entrata && p.ora_uscita
           ? (new Date(p.ora_uscita) - new Date(p.ora_entrata)) / 60000
           : 0;
+      const current = minutiAccumulati.get(key) || { utenteId: p.utente_id, minutiTotali: 0, nota: null };
+      current.minutiTotali += minuti;
+      if (p.note && p.note.trim()) current.nota = p.note.trim();
+      minutiAccumulati.set(key, current);
+    });
 
-      const utente = utentiMap.get(p.utente_id);
+    // Seconda passata: determina la label in base al totale minuti della giornata
+    const presenzeMap = new Map();
+    minutiAccumulati.forEach(({ utenteId, minutiTotali, nota }, key) => {
+      const utente = utentiMap.get(utenteId);
       if (!utente) return;
 
       const minutiPrevisti = getMinutiContratto(utente.tipo_contratto);
 
-      if (minuti < minutiPrevisti) {
-        if (minuti > 0) presenzeMap.set(key, labelDurata(minuti));
+      if (minutiTotali < minutiPrevisti) {
+        if (minutiTotali > 0) presenzeMap.set(key, labelDurata(minutiTotali));
         return;
       }
 
-      if (p.note && p.note.trim()) {
-        const nota = p.note.trim();
+      if (nota) {
         if (!noteApici[nota]) {
           const sup = toSuperscript(noteCounter);
           noteApici[nota] = sup;
@@ -322,33 +357,46 @@ router.post('/timbratura', requireAuth, async (req, res) => {
 
   const now = new Date();
   const oggi = localDateStr(now);
+  const ieri = localDateStr(new Date(now.getTime() - 24 * 60 * 60 * 1000));
 
-  const existing = await pool.query(
-    `SELECT * FROM presenze WHERE utente_id = $1 AND data = $2`,
-    [utente_id, oggi]
+  // Cerca turno aperto di ieri (notturno o uscita dimenticata): il primo scan lo chiude
+  const turnoApertoIeri = await pool.query(
+    `SELECT * FROM presenze WHERE utente_id = $1 AND data = $2 AND ora_uscita IS NULL LIMIT 1`,
+    [utente_id, ieri]
   );
 
+  // Se non c'è turno aperto di ieri, cerca il turno aperto più recente di oggi
+  // (filtrando solo IS NULL per supportare più turni nella stessa giornata)
+  const existing = turnoApertoIeri.rows.length > 0
+    ? turnoApertoIeri
+    : await pool.query(
+        `SELECT * FROM presenze WHERE utente_id = $1 AND data = $2 AND ora_uscita IS NULL ORDER BY ora_entrata DESC LIMIT 1`,
+        [utente_id, oggi]
+      );
+
+  const dataRiferimento = turnoApertoIeri.rows.length > 0 ? ieri : oggi;
+
   if (existing.rows.length === 0) {
+    // Nessun turno aperto: inizia un nuovo turno
     await pool.query(
       `INSERT INTO presenze (utente_id, data, ora_entrata) VALUES ($1, $2, $3)`,
       [utente_id, oggi, now]
     );
-  } else if (!existing.rows[0].ora_uscita) {
+  } else {
+    // Chiude il turno aperto trovato (con cappatura contrattuale)
     const oraEntrata = new Date(existing.rows[0].ora_entrata);
-
     let oraUscitaFinale = now;
 
     if (minutiPrevisti > 0) {
       const minutiLavorati = (now - oraEntrata) / 60000;
-
       if (minutiLavorati > minutiPrevisti) {
         oraUscitaFinale = addMinutes(oraEntrata, minutiPrevisti);
       }
     }
 
     await pool.query(
-      `UPDATE presenze SET ora_uscita = $1 WHERE utente_id = $2 AND data = $3`,
-      [oraUscitaFinale, utente_id, oggi]
+      `UPDATE presenze SET ora_uscita = $1 WHERE utente_id = $2 AND data = $3 AND ora_entrata = $4`,
+      [oraUscitaFinale, utente_id, dataRiferimento, existing.rows[0].ora_entrata]
     );
   }
 
@@ -361,12 +409,32 @@ router.get('/oggi', requireAuth, async (req, res) => {
   if (!utente_id) {
     return res.status(401).json({ error: 'Non autenticato' });
   }
-  const oggi = localDateStr(new Date()); // ✅ locale
 
+  const now = new Date();
+  const oggi = localDateStr(now);
+  const ieri = localDateStr(new Date(now.getTime() - 24 * 60 * 60 * 1000));
+
+  // Cerca turno aperto di ieri (turno notturno o uscita dimenticata)
+  // In entrambi i casi il primo scan di oggi deve chiuderlo con la cappatura contrattuale
+  const turnoAperto = await pool.query(
+    `SELECT ora_entrata, ora_uscita
+       FROM presenze
+      WHERE utente_id = $1 AND data = $2 AND ora_uscita IS NULL
+      LIMIT 1`,
+    [utente_id, ieri]
+  );
+
+  if (turnoAperto.rows.length > 0) {
+    return res.json({ ora_entrata: turnoAperto.rows[0].ora_entrata, ora_uscita: null });
+  }
+
+  // Cerca solo il turno aperto più recente di oggi (IS NULL): se tutti i turni
+  // di oggi sono già chiusi, restituisce null → l'app mostra "Timbra l'entrata" per un nuovo turno
   const r = await pool.query(
     `SELECT ora_entrata, ora_uscita
        FROM presenze
-      WHERE utente_id = $1 AND data = $2
+      WHERE utente_id = $1 AND data = $2 AND ora_uscita IS NULL
+      ORDER BY ora_entrata DESC
       LIMIT 1`,
     [utente_id, oggi]
   );

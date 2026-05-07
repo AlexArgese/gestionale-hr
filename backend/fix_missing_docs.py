@@ -174,7 +174,7 @@ def main():
             filename     = (doc.get("filename") or f"documento_{doc_id}.pdf").strip()
             tipo_doc     = normalize_tipo(folder_name, filename)
             categoria    = slugify(tipo_doc)
-            s3_key       = f"uploads/documenti/{utente_id}/{categoria}/{filename}"
+            s3_key       = f"uploads/documenti/{utente_id}/{categoria}/{doc_id}_{filename}"
             missing.append({
                 "factorial_id":  doc_id,
                 "employee_id":   employee_id,

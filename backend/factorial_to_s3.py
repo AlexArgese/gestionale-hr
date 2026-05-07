@@ -210,7 +210,7 @@ def main():
         folder_name = id_to_folder.get(folder_id, "Altro") if folder_id else "Altro"
         tipo_doc    = folder_name.strip().upper()
         categoria   = slugify(folder_name)
-        s3_key      = f"uploads/documenti/{utente_id}/{categoria}/{filename}"
+        s3_key      = f"uploads/documenti/{utente_id}/{categoria}/{doc_id}_{filename}"
 
         if doc_id in existing_factorial_ids:
             aggiornati += 1
