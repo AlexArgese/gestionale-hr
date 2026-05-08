@@ -365,8 +365,8 @@ router.post('/timbratura', requireAuth, async (req, res) => {
     [utente_id, ieri]
   );
 
-  // Se non c'è turno aperto di ieri, cerca il turno aperto più recente di oggi
-  // (filtrando solo IS NULL per supportare più turni nella stessa giornata)
+  // Cerca il turno aperto più recente di oggi (IS NULL): se tutti i turni sono chiusi
+  // o non ce ne sono, existing sarà vuoto → si apre un nuovo turno
   const existing = turnoApertoIeri.rows.length > 0
     ? turnoApertoIeri
     : await pool.query(
@@ -395,11 +395,12 @@ router.post('/timbratura', requireAuth, async (req, res) => {
     }
 
     await pool.query(
-      `UPDATE presenze SET ora_uscita = $1 WHERE utente_id = $2 AND data = $3 AND ora_entrata = $4`,
-      [oraUscitaFinale, utente_id, dataRiferimento, existing.rows[0].ora_entrata]
+      `UPDATE presenze SET ora_uscita = $1 WHERE id = $2`,
+      [oraUscitaFinale, existing.rows[0].id]
     );
   }
 
+  console.log(`[timbratura] OK utente=${utente_id} data=${dataRiferimento} azione=${existing.rows.length === 0 ? 'entrata' : 'uscita'}`);
   res.json({ message: 'Timbratura registrata!' });
 });
 
