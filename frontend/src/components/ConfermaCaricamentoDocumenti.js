@@ -123,8 +123,9 @@ export default function ConfermaCaricamentoDocumenti({
 
     setSignaturePlacements((prev) => {
       const existing = prev[key];
-      // se cambio pagina, porto il box su quella pagina (stessa posizione/dimensioni)
-      if (!existing) return prev;
+      if (!existing) {
+        return { ...prev, [key]: { ...DEFAULT_SIG, pageIndex: activePageIdx, pageW: null, pageH: null } };
+      }
       if (existing.pageIndex !== activePageIdx) {
         return { ...prev, [key]: { ...existing, pageIndex: activePageIdx } };
       }
@@ -320,7 +321,17 @@ export default function ConfermaCaricamentoDocumenti({
                 <input
                   type="checkbox"
                   checked={requireSignature}
-                  onChange={(e) => setRequireSignature(e.target.checked)}
+                  onChange={(e) => {
+                    const checked = e.target.checked;
+                    setRequireSignature(checked);
+                    if (checked && activeFile?.id) {
+                      const key = String(activeFile.id);
+                      setSignaturePlacements((prev) => {
+                        if (prev[key]) return prev;
+                        return { ...prev, [key]: { ...DEFAULT_SIG, pageIndex: activePageIdx, pageW: null, pageH: null } };
+                      });
+                    }
+                  }}
                 />
                 <span className={styles.value}>{requireSignature ? "Sì" : "No"}</span>
               </label>

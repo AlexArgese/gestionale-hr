@@ -171,22 +171,34 @@ export default function DettaglioComunicazione({ canDelete = true }) {
           <div className={styles.content}>{comm.contenuto || ""}</div>
 
           {/* Allegato */}
-          {isPdf ? (
-            <iframe
-              title="allegato"
-              src={previewUrl}
-              style={{ width: '100%', height: 600, border: 'none' }}
-            />
-          ) : (
-            <img alt="allegato" src={previewUrl} />
+          {hasAttachment && (
+            <div className={styles.attachWrap}>
+              <p className={styles.attachTitle}>Allegato</p>
+              <div className={styles.attachBox}>
+                {isPdf ? (
+                  <iframe
+                    title="allegato"
+                    src={previewUrl}
+                    style={{ width: "100%", height: 520, border: "none", display: "block" }}
+                  />
+                ) : (
+                  <img
+                    alt="allegato"
+                    src={previewUrl}
+                    style={{ width: "100%", display: "block", objectFit: "contain" }}
+                  />
+                )}
+              </div>
+            </div>
           )}
-
-          <a className={styles.btnPrimary} href={downloadUrl}>
-            <FiDownload /> Scarica allegato
-          </a>
 
           {/* Azioni admin */}
           <div className={styles.actions}>
+            {hasAttachment && (
+              <a className={styles.btnPrimary} href={downloadUrl}>
+                <FiDownload /> Scarica allegato
+              </a>
+            )}
             {canDelete && (
               <button
                 type="button"
