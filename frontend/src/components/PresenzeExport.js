@@ -19,6 +19,7 @@ function PresenzeExport() {
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [soloPresenti, setSoloPresenti] = useState(false);
+  const [dettagli, setDettagli] = useState(false);
 
   // Opzioni select
   const [sedeOptions, setSedeOptions] = useState([]);
@@ -98,6 +99,7 @@ function PresenzeExport() {
     params.append('end', endDate);
 
     if (soloPresenti) params.append('solo_presenti', '1');
+    if (dettagli) params.append('dettagli', '1');
 
     // Multi-sede cumulativo
     selectedSedi.forEach((s) => {
@@ -211,6 +213,14 @@ function PresenzeExport() {
                 onChange={(e) => setSoloPresenti(e.target.checked)}
               />
               <span className={styles.help}>Mostra solo i presenti</span>
+            </label>
+            <label className={styles.inline}>
+              <input
+                type="checkbox"
+                checked={dettagli}
+                onChange={(e) => setDettagli(e.target.checked)}
+              />
+              <span className={styles.help}>Dettaglio per giornata</span>
             </label>
           </div>
         </div>

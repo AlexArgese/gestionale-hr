@@ -19,11 +19,11 @@ setInterval(() => {
   }
 }, 30 * 1000);
 
-// ✅ Auto-chiude turni rimasti aperti dopo 24h: ora_uscita = ora_entrata + ore_contratto
+// ✅ Auto-chiude turni rimasti aperti dopo 24h con cappatura corretta
 setInterval(async () => {
   try {
     const openShifts = await pool.query(
-      `SELECT p.id, p.ora_entrata, u.tipo_contratto
+      `SELECT p.id, p.utente_id, p.ora_entrata, u.tipo_contratto
          FROM presenze p
          JOIN utenti u ON u.id = p.utente_id
         WHERE p.ora_uscita IS NULL
@@ -32,7 +32,8 @@ setInterval(async () => {
     for (const row of openShifts.rows) {
       const minutiPrevisti = getMinutiContratto(row.tipo_contratto);
       if (minutiPrevisti === 0) continue;
-      const oraUscita = addMinutes(new Date(row.ora_entrata), minutiPrevisti);
+      const oraUscita = await calcolaOraUscitaCappata(row.utente_id, row, minutiPrevisti);
+      if (!oraUscita) continue;
       await pool.query(
         `UPDATE presenze SET ora_uscita = $1 WHERE id = $2`,
         [oraUscita, row.id]
@@ -48,6 +49,27 @@ setInterval(async () => {
 
 function generateToken() {
   return crypto.randomBytes(16).toString('hex');
+}
+
+// Calcola l'ora di uscita cappata tenendo conto dei minuti già lavorati
+// negli altri turni chiusi della stessa giornata
+async function calcolaOraUscitaCappata(utente_id, turno, minutiPrevisti) {
+  const dataStr = localDateStr(new Date(turno.ora_entrata));
+
+  const altriTurni = await pool.query(
+    `SELECT ora_entrata, ora_uscita FROM presenze
+     WHERE utente_id = $1 AND data = $2 AND ora_uscita IS NOT NULL AND id != $3`,
+    [utente_id, dataStr, turno.id]
+  );
+
+  const minutiGiaLavorati = altriTurni.rows.reduce((acc, r) => {
+    return acc + (new Date(r.ora_uscita) - new Date(r.ora_entrata)) / 60000;
+  }, 0);
+
+  const minutiRimasti = minutiPrevisti - minutiGiaLavorati;
+  if (minutiRimasti <= 0) return new Date(turno.ora_entrata); // contratto già esaurito
+
+  return addMinutes(new Date(turno.ora_entrata), minutiRimasti);
 }
 
 // 🔹 Data locale "YYYY-MM-DD" (evita UTC)
@@ -85,8 +107,88 @@ function labelDurata(minuti) {
   if (minuti < 60)  return '<1h';
   if (minuti < 120) return '<2h';
   if (minuti < 180) return '<3h';
-  return '<3h30';
+  if (minuti < 240) return '<4h';
+  return 'P';
 }
+
+/* -------------------------------------------------------------------------- */
+/*                           EXPORT PRESENZE OGGI                             */
+/* -------------------------------------------------------------------------- */
+
+router.get('/export-oggi', async (req, res) => {
+  try {
+    const oggi = localDateStr(new Date());
+    const soloPresenti =
+      req.query.solo_presenti === '1' ||
+      req.query.solo_presenti === 'true' ||
+      req.query.solo_presenti === 'on';
+
+    const values = [oggi]; // $1 = oggi
+
+    const filters = [];
+
+    const sedi = req.query.sede
+      ? Array.isArray(req.query.sede) ? req.query.sede : [req.query.sede]
+      : [];
+
+    if (sedi.length > 0) {
+      const sedeConditions = sedi.map((nomeSede) => {
+        values.push(nomeSede.trim());
+        return `EXISTS (
+          SELECT 1 FROM unnest(string_to_array(COALESCE(u.sede, ''), ',')) AS sede_item
+          WHERE trim(sede_item) = $${values.length}
+        )`;
+      });
+      filters.push(`(${sedeConditions.join(' OR ')})`);
+    }
+
+    const societaParam = req.query.societa
+      ? Array.isArray(req.query.societa) ? req.query.societa : [req.query.societa]
+      : [];
+
+    if (societaParam.length > 0) {
+      const societaConditions = societaParam.map((nome) => {
+        values.push(nome.trim());
+        return `s.ragione_sociale = $${values.length}`;
+      });
+      filters.push(`(${societaConditions.join(' OR ')})`);
+    }
+
+    // solo presenti = solo chi è attualmente dentro (turno aperto)
+    if (soloPresenti) filters.push(`p.ora_uscita IS NULL`);
+
+    const filterSql = filters.length ? `AND ${filters.join(' AND ')}` : '';
+
+    const result = await pool.query(
+      `SELECT u.nome, u.cognome
+         FROM presenze p
+         JOIN utenti u ON u.id = p.utente_id
+         LEFT JOIN societa s ON s.id = u.societa_id
+        WHERE p.data = $1
+        ${filterSql}
+        GROUP BY u.id, u.nome, u.cognome
+        ORDER BY u.cognome, u.nome`,
+      values
+    );
+
+    const oggiLabel = `${oggi.slice(8, 10)}-${oggi.slice(5, 7)}-${oggi.slice(0, 4)}`;
+    const workbook = new ExcelJS.Workbook();
+    const sheet = workbook.addWorksheet(`Presenze ${oggiLabel}`);
+    sheet.addRow([`Dipendenti presenti oggi ${oggiLabel}`]);
+
+    result.rows.forEach((r) => {
+      sheet.addRow([`${r.cognome} ${r.nome}`]);
+    });
+
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename=presenze_oggi_${oggi}.xlsx`);
+    await workbook.xlsx.write(res);
+    res.end();
+  } catch (err) {
+    console.error('Errore export presenze oggi', err);
+    res.status(500).json({ error: 'Errore esportazione' });
+  }
+});
 
 /* -------------------------------------------------------------------------- */
 /*                                   EXPORT                                   */
@@ -99,6 +201,9 @@ router.get('/export', async (req, res) => {
     req.query.solo_presenti === 'true' ||
     req.query.solo_presenti === '1' ||
     req.query.solo_presenti === 'on';
+  const dettagli =
+    req.query.dettagli === 'true' ||
+    req.query.dettagli === '1';
 
   try {
     if (!start || !end) {
@@ -299,6 +404,69 @@ router.get('/export', async (req, res) => {
       }
     }
 
+    if (dettagli) {
+      // Raggruppa i turni per giorno e per utente
+      const byDayUtente = {};
+      presenze.rows.forEach((p) => {
+        if (!utentiMap.has(p.utente_id)) return; // ignora utenti fuori dai filtri
+        if (!byDayUtente[p.data_str]) byDayUtente[p.data_str] = {};
+        if (!byDayUtente[p.data_str][p.utente_id]) byDayUtente[p.data_str][p.utente_id] = [];
+        byDayUtente[p.data_str][p.utente_id].push(p);
+      });
+
+      const fmtT = (d) => new Date(d).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', second: '2-digit', timeZone: 'Europe/Rome' });
+
+      for (const g of giorni) {
+        const dayData = byDayUtente[g.dateStr] || {};
+        const presentUtenti = utenti.rows.filter((u) => dayData[u.id]?.length > 0);
+        if (presentUtenti.length === 0) continue;
+
+        const maxTurni = Math.max(...presentUtenti.map((u) => dayData[u.id].length));
+        const dataLabel = `${g.dateStr.slice(8, 10)}-${g.dateStr.slice(5, 7)}-${g.dateStr.slice(0, 4)}`;
+        const daySheet = workbook.addWorksheet(dataLabel);
+
+        const header = ['Dipendente', 'N° Turni'];
+        for (let i = 1; i <= maxTurni; i++) header.push(`Entrata ${i}`, `Uscita ${i}`);
+        header.push('Durata Totale', 'Simbolo', 'Note');
+        daySheet.addRow(header);
+
+        presentUtenti.forEach((utente) => {
+          const shifts = [...dayData[utente.id]].sort(
+            (a, b) => new Date(a.ora_entrata) - new Date(b.ora_entrata)
+          );
+          const row = [`${utente.cognome} ${utente.nome}`, shifts.length];
+
+          for (let i = 0; i < maxTurni; i++) {
+            const s = shifts[i];
+            if (!s) { row.push('', ''); continue; }
+            row.push(fmtT(s.ora_entrata), s.ora_uscita ? fmtT(s.ora_uscita) : 'In corso');
+          }
+
+          const allClosed = shifts.every((s) => s.ora_uscita);
+          let durataStr;
+          if (allClosed) {
+            const totMin = shifts.reduce((acc, s) => acc + (new Date(s.ora_uscita) - new Date(s.ora_entrata)) / 60000, 0);
+            const h = Math.floor(totMin / 60);
+            const m = Math.round(totMin % 60);
+            durataStr = h > 0 ? `${h}h ${m}m` : `${m}m`;
+          } else {
+            durataStr = shifts.map((s) => {
+              if (!s.ora_uscita) return 'In corso';
+              const min = Math.round((new Date(s.ora_uscita) - new Date(s.ora_entrata)) / 60000);
+              const h = Math.floor(min / 60);
+              const m = min % 60;
+              return h > 0 ? `${h}h ${m}m` : `${m}m`;
+            }).join(' + ');
+          }
+
+          const simbolo = presenzeMap.get(`${utente.id}-${g.dateStr}`) || '';
+          const nota = shifts.find((s) => s.note?.trim())?.note?.trim() || '';
+          row.push(durataStr, simbolo, nota);
+          daySheet.addRow(row);
+        });
+      }
+    }
+
     res.setHeader(
       'Content-Type',
       'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
@@ -336,9 +504,9 @@ router.post('/timbratura', requireAuth, async (req, res) => {
     return res.status(400).json({ error: 'Token scaduto o non valido' });
   }
 
-  delete validTokens[token]; // ✅ token usa-e-getta
+  delete validTokens[token];
 
-  const utente_id = req.user.id; // ✅ preso dal login, non dal client
+  const utente_id = req.user.id;
   if (!utente_id) {
     return res.status(401).json({ error: 'Utente non autenticato' });
   }
@@ -357,50 +525,37 @@ router.post('/timbratura', requireAuth, async (req, res) => {
 
   const now = new Date();
   const oggi = localDateStr(now);
-  const ieri = localDateStr(new Date(now.getTime() - 24 * 60 * 60 * 1000));
 
-  // Cerca turno aperto di ieri (notturno o uscita dimenticata): il primo scan lo chiude
-  const turnoApertoIeri = await pool.query(
-    `SELECT * FROM presenze WHERE utente_id = $1 AND data = $2 AND ora_uscita IS NULL LIMIT 1`,
-    [utente_id, ieri]
+  const lastShift = await pool.query(
+    `SELECT * FROM presenze WHERE utente_id = $1 ORDER BY ora_entrata DESC LIMIT 1`,
+    [utente_id]
   );
 
-  // Cerca il turno aperto più recente di oggi (IS NULL): se tutti i turni sono chiusi
-  // o non ce ne sono, existing sarà vuoto → si apre un nuovo turno
-  const existing = turnoApertoIeri.rows.length > 0
-    ? turnoApertoIeri
-    : await pool.query(
-        `SELECT * FROM presenze WHERE utente_id = $1 AND data = $2 AND ora_uscita IS NULL ORDER BY ora_entrata DESC LIMIT 1`,
-        [utente_id, oggi]
-      );
+  const turnoAperto = lastShift.rows.length > 0 && lastShift.rows[0].ora_uscita === null
+    ? lastShift.rows[0]
+    : null;
 
-  const dataRiferimento = turnoApertoIeri.rows.length > 0 ? ieri : oggi;
-
-  if (existing.rows.length === 0) {
-    // Nessun turno aperto: inizia un nuovo turno
+  if (!turnoAperto) {
     await pool.query(
       `INSERT INTO presenze (utente_id, data, ora_entrata) VALUES ($1, $2, $3)`,
       [utente_id, oggi, now]
     );
+    console.log(`[timbratura] entrata utente=${utente_id} data=${oggi}`);
   } else {
-    // Chiude il turno aperto trovato (con cappatura contrattuale)
-    const oraEntrata = new Date(existing.rows[0].ora_entrata);
     let oraUscitaFinale = now;
 
     if (minutiPrevisti > 0) {
-      const minutiLavorati = (now - oraEntrata) / 60000;
-      if (minutiLavorati > minutiPrevisti) {
-        oraUscitaFinale = addMinutes(oraEntrata, minutiPrevisti);
-      }
+      const cappata = await calcolaOraUscitaCappata(utente_id, turnoAperto, minutiPrevisti);
+      if (cappata < now) oraUscitaFinale = cappata;
     }
 
     await pool.query(
       `UPDATE presenze SET ora_uscita = $1 WHERE id = $2`,
-      [oraUscitaFinale, existing.rows[0].id]
+      [oraUscitaFinale, turnoAperto.id]
     );
+    console.log(`[timbratura] uscita utente=${utente_id} turno_id=${turnoAperto.id}`);
   }
 
-  console.log(`[timbratura] OK utente=${utente_id} data=${dataRiferimento} azione=${existing.rows.length === 0 ? 'entrata' : 'uscita'}`);
   res.json({ message: 'Timbratura registrata!' });
 });
 
@@ -411,38 +566,19 @@ router.get('/oggi', requireAuth, async (req, res) => {
     return res.status(401).json({ error: 'Non autenticato' });
   }
 
-  const now = new Date();
-  const oggi = localDateStr(now);
-  const ieri = localDateStr(new Date(now.getTime() - 24 * 60 * 60 * 1000));
-
-  // Cerca turno aperto di ieri (turno notturno o uscita dimenticata)
-  // In entrambi i casi il primo scan di oggi deve chiuderlo con la cappatura contrattuale
-  const turnoAperto = await pool.query(
-    `SELECT ora_entrata, ora_uscita
-       FROM presenze
-      WHERE utente_id = $1 AND data = $2 AND ora_uscita IS NULL
-      LIMIT 1`,
-    [utente_id, ieri]
-  );
-
-  if (turnoAperto.rows.length > 0) {
-    return res.json({ ora_entrata: turnoAperto.rows[0].ora_entrata, ora_uscita: null });
-  }
-
-  // Cerca solo il turno aperto più recente di oggi (IS NULL): se tutti i turni
-  // di oggi sono già chiusi, restituisce null → l'app mostra "Timbra l'entrata" per un nuovo turno
   const r = await pool.query(
     `SELECT ora_entrata, ora_uscita
        FROM presenze
-      WHERE utente_id = $1 AND data = $2 AND ora_uscita IS NULL
+      WHERE utente_id = $1
       ORDER BY ora_entrata DESC
       LIMIT 1`,
-    [utente_id, oggi]
+    [utente_id]
   );
 
-  if (r.rows.length === 0) {
+  if (r.rows.length === 0 || r.rows[0].ora_uscita !== null) {
     return res.json({ ora_entrata: null, ora_uscita: null });
   }
+
   res.json(r.rows[0]);
 });
 

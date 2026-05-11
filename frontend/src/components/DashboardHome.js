@@ -4,10 +4,11 @@ import {
   ResponsiveContainer, PieChart, Pie, Cell
 } from 'recharts';
 import { useNavigate } from 'react-router-dom';
+import Select from 'react-select';
 import styles from './DashboardHome.module.css';
 import { API_BASE } from "../api";
 
-import { FiUsers, FiAlertCircle, FiBell } from 'react-icons/fi';
+import { FiUsers, FiAlertCircle, FiBell, FiDownload, FiMapPin, FiHome } from 'react-icons/fi';
 import { BsBriefcase } from 'react-icons/bs';
 import AppAdoptionWidget from './AppAdoptionWidget';
 
@@ -22,6 +23,12 @@ function DashboardHome() {
   const [selectedAvvisi, setSelectedAvvisi] = useState(new Set());
   const [sending, setSending] = useState(false);
   const [sendResult, setSendResult] = useState(null);
+
+  // Presenze oggi
+  const [societaOptions, setSocietaOptions] = useState([]);
+  const [sedeOptions, setSedeOptions] = useState([]);
+  const [selectedSocietaOggi, setSelectedSocietaOggi] = useState([]);
+  const [selectedSediOggi, setSelectedSediOggi] = useState([]);
 
   useEffect(() => {
     fetch(`${API}/dashboard/dipendenti/stato`)
@@ -54,6 +61,18 @@ function DashboardHome() {
       .then(r => r.json())
       .then(data => Array.isArray(data) ? setAvvisi(data) : setAvvisi([]))
       .catch(err => console.error('Avvisi:', err.message));
+
+    fetch(`${API}/societa`)
+      .then(r => r.json())
+      .then(data => setSocietaOptions(data.map(s => ({ label: s.ragione_sociale, value: s.ragione_sociale }))))
+      .catch(() => {});
+
+    fetch(`${API}/sedi`)
+      .then(r => r.json())
+      .then(data => setSedeOptions(
+        data.map(s => { const n = s.nome || s.sede || s.label || ''; return n ? { label: n, value: n } : null; }).filter(Boolean)
+      ))
+      .catch(() => {});
   }, []);
 
   const toggleAvviso = (id) => {
@@ -86,6 +105,13 @@ function DashboardHome() {
     } finally {
       setSending(false);
     }
+  };
+
+  const handleDownloadOggi = () => {
+    const params = new URLSearchParams();
+    selectedSocietaOggi.forEach(s => params.append('societa', s.value));
+    selectedSediOggi.forEach(s => params.append('sede', s.value));
+    window.open(`${API}/presenze/export-oggi?${params.toString()}`, '_blank');
   };
 
   const COLORS = ['#D0933C', '#6A57D3', '#82ca9d', '#ff8042'];
@@ -152,6 +178,42 @@ function DashboardHome() {
 
       {/* APP ADOPTION */}
       <AppAdoptionWidget />
+
+      {/* PRESENZE OGGI */}
+      <div className={styles.section}>
+        <div className={styles.sectionHeader}>
+          <h3 className={styles.sectionTitle}>
+            <FiDownload /> Presenze di oggi
+          </h3>
+        </div>
+        <div className={styles.oggi}>
+          <div className={styles.oggiGroup}>
+            <label className={styles.oggiLabel}><FiHome /> Società</label>
+            <Select
+              classNamePrefix="dash-select"
+              options={societaOptions}
+              value={selectedSocietaOggi}
+              onChange={setSelectedSocietaOggi}
+              isMulti isClearable isSearchable closeMenuOnSelect={false}
+              placeholder="Tutte le società"
+            />
+          </div>
+          <div className={styles.oggiGroup}>
+            <label className={styles.oggiLabel}><FiMapPin /> Sedi</label>
+            <Select
+              classNamePrefix="dash-select"
+              options={sedeOptions}
+              value={selectedSediOggi}
+              onChange={setSelectedSediOggi}
+              isMulti isClearable isSearchable closeMenuOnSelect={false}
+              placeholder="Tutte le sedi"
+            />
+          </div>
+          <button className={styles.buttonPrimary} onClick={handleDownloadOggi}>
+            <FiDownload /> Scarica Excel
+          </button>
+        </div>
+      </div>
 
       {/* AVVISI */}
       <div className={styles.section}>
