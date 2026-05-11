@@ -98,6 +98,27 @@ function addMinutes(date, minutes) {
   return new Date(date.getTime() + minutes * 60000);
 }
 
+function styleHeaderRow(row, bgColor = 'D0933C') {
+  row.height = 22;
+  row.eachCell((cell) => {
+    cell.font = { bold: true, color: { argb: 'FFFFFFFF' } };
+    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: `FF${bgColor}` } };
+    cell.alignment = { vertical: 'middle', horizontal: 'center', wrapText: false };
+    cell.border = { bottom: { style: 'thin', color: { argb: 'FFE5E7EB' } } };
+  });
+}
+
+function autoWidths(sheet, min = 8, max = 50) {
+  sheet.columns.forEach((col) => {
+    let w = min;
+    col.eachCell({ includeEmpty: false }, (cell) => {
+      const len = cell.value != null ? String(cell.value).length : 0;
+      if (len > w) w = len;
+    });
+    col.width = Math.min(w + 3, max);
+  });
+}
+
 function toSuperscript(n) {
   const map = { '0': '⁰', '1': '¹', '2': '²', '3': '³', '4': '⁴', '5': '⁵', '6': '⁶', '7': '⁷', '8': '⁸', '9': '⁹' };
   return String(n).split('').map(c => map[c] || c).join('');
@@ -174,11 +195,13 @@ router.get('/export-oggi', async (req, res) => {
     const oggiLabel = `${oggi.slice(8, 10)}-${oggi.slice(5, 7)}-${oggi.slice(0, 4)}`;
     const workbook = new ExcelJS.Workbook();
     const sheet = workbook.addWorksheet(`Presenze ${oggiLabel}`);
-    sheet.addRow([`Dipendenti presenti oggi ${oggiLabel}`]);
+    styleHeaderRow(sheet.addRow([`Dipendenti presenti oggi ${oggiLabel}`]));
+    sheet.views = [{ state: 'frozen', ySplit: 1 }];
 
     result.rows.forEach((r) => {
       sheet.addRow([`${r.cognome} ${r.nome}`]);
     });
+    sheet.getColumn(1).width = 32;
 
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     res.setHeader('Content-Disposition', `attachment; filename=presenze_oggi_${oggi}.xlsx`);
@@ -354,7 +377,11 @@ router.get('/export', async (req, res) => {
     }
 
     const intestazioni = ['Dipendente', ...giorni.map((d) => d.label), 'Totale'];
-    sheet.addRow(intestazioni);
+    styleHeaderRow(sheet.addRow(intestazioni));
+    sheet.views = [{ state: 'frozen', xSplit: 1, ySplit: 1 }];
+    sheet.getColumn(1).width = 28;
+    for (let i = 2; i <= giorni.length + 1; i++) sheet.getColumn(i).width = 7;
+    sheet.getColumn(giorni.length + 2).width = 8;
 
     const righe = [];
     const presenzePerGiorno = new Array(giorni.length).fill(0);
@@ -394,7 +421,11 @@ router.get('/export', async (req, res) => {
     const totalRow = ['Totale'];
     presenzePerGiorno.forEach((c) => totalRow.push(c));
     totalRow.push('');
-    sheet.addRow(totalRow);
+    const totalExcelRow = sheet.addRow(totalRow);
+    totalExcelRow.eachCell((cell) => {
+      cell.font = { bold: true };
+      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF3F4F6' } };
+    });
 
     if (Object.keys(noteLegend).length > 0) {
       sheet.addRow([]);
@@ -428,7 +459,14 @@ router.get('/export', async (req, res) => {
         const header = ['Dipendente', 'N° Turni'];
         for (let i = 1; i <= maxTurni; i++) header.push(`Entrata ${i}`, `Uscita ${i}`);
         header.push('Durata Totale', 'Simbolo', 'Note');
-        daySheet.addRow(header);
+        styleHeaderRow(daySheet.addRow(header));
+        daySheet.views = [{ state: 'frozen', xSplit: 1, ySplit: 1 }];
+        daySheet.getColumn(1).width = 28;
+        daySheet.getColumn(2).width = 10;
+        for (let i = 3; i <= 2 + maxTurni * 2; i++) daySheet.getColumn(i).width = 12;
+        daySheet.getColumn(3 + maxTurni * 2).width = 18;
+        daySheet.getColumn(4 + maxTurni * 2).width = 10;
+        daySheet.getColumn(5 + maxTurni * 2).width = 30;
 
         presentUtenti.forEach((utente) => {
           const shifts = [...dayData[utente.id]].sort(

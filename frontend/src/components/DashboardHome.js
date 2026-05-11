@@ -176,9 +176,6 @@ function DashboardHome() {
         </div>
       </div>
 
-      {/* APP ADOPTION */}
-      <AppAdoptionWidget />
-
       {/* PRESENZE OGGI */}
       <div className={styles.section}>
         <div className={styles.sectionHeader}>
@@ -214,6 +211,9 @@ function DashboardHome() {
           </button>
         </div>
       </div>
+
+      {/* APP ADOPTION */}
+      <AppAdoptionWidget />
 
       {/* AVVISI */}
       <div className={styles.section}>
