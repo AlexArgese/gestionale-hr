@@ -535,6 +535,43 @@
 }
 .btnDanger:hover { background: #FEE2E2; }
 
+.btnRemind {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  border-radius: 10px;
+  border: 1px solid #C4B5FD;
+  background: #EDE9FE;
+  font-size: 13px;
+  font-weight: 700;
+  color: #6A57D3;
+  cursor: pointer;
+}
+.btnRemind:hover { background: #DDD6FE; }
+.btnRemind:disabled { opacity: .55; cursor: not-allowed; }
+
+.actionRemind:hover { background: #EDE9FE; color: #6A57D3; border-color: #C4B5FD; }
+
+.remindSuccess {
+  margin-bottom: 10px;
+  padding: 7px 12px;
+  border-radius: 8px;
+  background: #d1fae5;
+  color: #065f46;
+  font-size: 12px;
+  font-weight: 600;
+}
+.remindError {
+  margin-bottom: 10px;
+  padding: 7px 12px;
+  border-radius: 8px;
+  background: #fee2e2;
+  color: #991b1b;
+  font-size: 12px;
+  font-weight: 600;
+}
+
 /* ===== Responsive ===== */
 @media (max-width: 900px) {
   .layout { flex-direction: column; }

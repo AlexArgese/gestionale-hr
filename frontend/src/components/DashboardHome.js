@@ -7,7 +7,7 @@ import { useNavigate } from 'react-router-dom';
 import styles from './DashboardHome.module.css';
 import { API_BASE } from "../api";
 
-import { FiUsers, FiAlertCircle } from 'react-icons/fi';
+import { FiUsers, FiAlertCircle, FiBell } from 'react-icons/fi';
 import { BsBriefcase } from 'react-icons/bs';
 import AppAdoptionWidget from './AppAdoptionWidget';
 
@@ -19,6 +19,9 @@ function DashboardHome() {
   const [distribuzione, setDistribuzione] = useState([]);
   const [storico, setStorico] = useState([]);
   const [avvisi, setAvvisi] = useState([]);
+  const [selectedAvvisi, setSelectedAvvisi] = useState(new Set());
+  const [sending, setSending] = useState(false);
+  const [sendResult, setSendResult] = useState(null);
 
   useEffect(() => {
     fetch(`${API}/dashboard/dipendenti/stato`)
@@ -52,6 +55,38 @@ function DashboardHome() {
       .then(data => Array.isArray(data) ? setAvvisi(data) : setAvvisi([]))
       .catch(err => console.error('Avvisi:', err.message));
   }, []);
+
+  const toggleAvviso = (id) => {
+    setSelectedAvvisi(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
+  const toggleAll = () => {
+    if (selectedAvvisi.size === avvisi.length) setSelectedAvvisi(new Set());
+    else setSelectedAvvisi(new Set(avvisi.map(a => a.id)));
+  };
+
+  const sendReminders = async () => {
+    setSending(true);
+    setSendResult(null);
+    try {
+      const res = await fetch(`${API}/documenti/remind-firma`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: localStorage.getItem('token') || '' },
+        body: JSON.stringify({ doc_ids: [...selectedAvvisi] }),
+      });
+      const data = await res.json();
+      setSendResult(data);
+      setSelectedAvvisi(new Set());
+    } catch {
+      setSendResult({ error: 'Errore di rete' });
+    } finally {
+      setSending(false);
+    }
+  };
 
   const COLORS = ['#D0933C', '#6A57D3', '#82ca9d', '#ff8042'];
 
@@ -120,9 +155,39 @@ function DashboardHome() {
 
       {/* AVVISI */}
       <div className={styles.section}>
-        <h3 className={styles.sectionTitle}>
-          <FiAlertCircle /> Documenti in attesa di firma
-        </h3>
+        <div className={styles.sectionHeader}>
+          <h3 className={styles.sectionTitle}>
+            <FiAlertCircle /> Documenti in attesa di firma
+          </h3>
+          {avvisi.length > 0 && (
+            <div className={styles.remindToolbar}>
+              <label className={styles.checkAll}>
+                <input
+                  type="checkbox"
+                  checked={selectedAvvisi.size === avvisi.length}
+                  onChange={toggleAll}
+                />
+                Seleziona tutti
+              </label>
+              <button
+                className={styles.buttonPrimary}
+                disabled={selectedAvvisi.size === 0 || sending}
+                onClick={sendReminders}
+              >
+                <FiBell />
+                {sending ? 'Invio…' : `Invia promemoria${selectedAvvisi.size > 0 ? ` (${selectedAvvisi.size})` : ''}`}
+              </button>
+            </div>
+          )}
+        </div>
+
+        {sendResult && (
+          <div className={sendResult.error ? styles.alertError : styles.alertSuccess}>
+            {sendResult.error
+              ? `Errore: ${sendResult.error}`
+              : `Mail inviate: ${sendResult.sent}${sendResult.errors?.length ? ` · ${sendResult.errors.length} non consegnate` : ''}`}
+          </div>
+        )}
 
         {avvisi.length === 0 ? (
           <p className={styles.muted}>Nessun documento in attesa di firma</p>
@@ -130,6 +195,12 @@ function DashboardHome() {
           <ul className={styles.list}>
             {avvisi.map((a, i) => (
               <li key={i} className={styles.listItem}>
+                <input
+                  type="checkbox"
+                  className={styles.avvisoCheck}
+                  checked={selectedAvvisi.has(a.id)}
+                  onChange={() => toggleAvviso(a.id)}
+                />
                 <div>
                   <b
                     className={styles.linkStrong}

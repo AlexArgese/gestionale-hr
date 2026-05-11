@@ -159,3 +159,56 @@
   font-size: 12px;
   font-weight: 600;
 }
+
+.sectionHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+.sectionHeader .sectionTitle { margin-bottom: 0; }
+
+.remindToolbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.checkAll {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--txt-muted);
+  cursor: pointer;
+  user-select: none;
+}
+
+.avvisoCheck {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+  accent-color: var(--brand-2);
+  flex-shrink: 0;
+}
+
+.alertSuccess {
+  margin-bottom: 10px;
+  padding: 8px 12px;
+  border-radius: 10px;
+  background: #d1fae5;
+  color: #065f46;
+  font-size: 13px;
+  font-weight: 600;
+}
+.alertError {
+  margin-bottom: 10px;
+  padding: 8px 12px;
+  border-radius: 10px;
+  background: #fee2e2;
+  color: #991b1b;
+  font-size: 13px;
+  font-weight: 600;
+}

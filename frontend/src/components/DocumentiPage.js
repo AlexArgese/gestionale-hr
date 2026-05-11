@@ -2,8 +2,8 @@ import React, { useEffect, useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   FiFilePlus, FiScissors, FiLayers,
-  FiRefreshCw, FiDownload, FiTrash2, FiPenTool,
-  FiX, FiUsers, FiMapPin, FiCalendar, FiFileText, FiChevronRight,
+  FiRefreshCw, FiDownload, FiTrash2,
+  FiX, FiUsers, FiMapPin, FiCalendar, FiFileText, FiChevronRight, FiBell,
 } from "react-icons/fi";
 import { API_BASE } from "../api";
 import styles from "./DocumentiPage.module.css";
@@ -259,6 +259,31 @@ function CronologiaItem({ doc, isSelected, onClick, onDelete }) {
 
 /* ─── DocDetailDrawer ─────────────────────────────────────── */
 function DocDetailDrawer({ doc, onClose, onEliminaSingolo, onEliminaBatch }) {
+  const [remindSending, setRemindSending] = useState(new Set()); // Set di doc id in invio
+  const [remindResult, setRemindResult] = useState(null);
+
+  const sendRemind = async (docIds) => {
+    setRemindSending(new Set(docIds));
+    setRemindResult(null);
+    try {
+      const res = await fetch(`${API}/documenti/remind-firma`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: localStorage.getItem('token') || '' },
+        body: JSON.stringify({ doc_ids: docIds }),
+      });
+      const data = await res.json();
+      setRemindResult(data);
+    } catch {
+      setRemindResult({ error: 'Errore di rete' });
+    } finally {
+      setRemindSending(new Set());
+    }
+  };
+
+  const pendingIds = (doc.destinatari || [])
+    .filter(d => firmaStatoDa(d) === 'attesa')
+    .map(d => d.id);
+
   // onEliminaBatch viene chiamata senza argomenti (il doc è già nel closure)
   const sediUniche = [...new Set(
     (doc.destinatari || []).flatMap(d =>
@@ -355,6 +380,15 @@ function DocDetailDrawer({ doc, onClose, onEliminaSingolo, onEliminaBatch }) {
           {/* Destinatari */}
           <div className={styles.drawerSection}>
             <div className={styles.drawerSectionTitle}><FiUsers /> Destinatari</div>
+
+            {remindResult && (
+              <div className={remindResult.error ? styles.remindError : styles.remindSuccess}>
+                {remindResult.error
+                  ? `Errore: ${remindResult.error}`
+                  : `Mail inviate: ${remindResult.sent}${remindResult.errors?.length ? ` · ${remindResult.errors.length} non consegnate` : ''}`}
+              </div>
+            )}
+
             <div className={styles.destList}>
               {(doc.destinatari || []).map(d => {
                 const firma = firmaStatoDa(d);
@@ -391,6 +425,16 @@ function DocDetailDrawer({ doc, onClose, onEliminaSingolo, onEliminaBatch }) {
                       )}
                     </div>
                     <div className={styles.destActions}>
+                      {firma === "attesa" && (
+                        <button
+                          className={`${styles.actionBtn} ${styles.actionRemind}`}
+                          onClick={() => sendRemind([d.id])}
+                          disabled={remindSending.has(d.id)}
+                          title="Invia promemoria firma"
+                        >
+                          <FiBell />
+                        </button>
+                      )}
                       <a
                         className={styles.actionBtn}
                         href={`${API}/documenti/${d.id}/download`}
@@ -418,6 +462,15 @@ function DocDetailDrawer({ doc, onClose, onEliminaSingolo, onEliminaBatch }) {
         {/* Footer */}
         <div className={styles.drawerFooter}>
           <button className={styles.btnOutline} onClick={onClose}>Chiudi</button>
+          {pendingIds.length > 0 && (
+            <button
+              className={styles.btnRemind}
+              onClick={() => sendRemind(pendingIds)}
+              disabled={remindSending.size > 0}
+            >
+              <FiBell /> {remindSending.size > 0 ? 'Invio…' : `Promemoria a tutti (${pendingIds.length})`}
+            </button>
+          )}
           <button
             className={styles.btnDanger}
             onClick={() => onEliminaBatch(doc.url_file)}

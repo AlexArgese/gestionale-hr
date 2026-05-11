@@ -1306,4 +1306,82 @@ router.patch('/:id', requireAuth, async (req, res) => {
   }
 });
 
+/* ─── POST /documenti/remind-firma ───────────────────────── */
+router.post('/remind-firma', requireAuth, async (req, res) => {
+  const { doc_ids } = req.body;
+  if (!Array.isArray(doc_ids) || doc_ids.length === 0)
+    return res.status(400).json({ error: 'doc_ids mancanti' });
+
+  const placeholders = doc_ids.map((_, i) => `$${i + 1}`).join(',');
+  let docs;
+  try {
+    docs = await pool.query(
+      `SELECT d.id, d.utente_id, d.nome_file, d.tipo_documento, d.yousign_signature_link,
+              u.nome, u.cognome, u.email
+         FROM documenti d
+         JOIN utenti u ON u.id = d.utente_id
+        WHERE d.id IN (${placeholders})
+          AND d.require_signature = true
+          AND COALESCE(d.yousign_status, '') NOT IN ('completed', 'signed', 'done', 'canceled', 'expired', 'init_error')`,
+      doc_ids
+    );
+  } catch (err) {
+    console.error('remind-firma query', err);
+    return res.status(500).json({ error: 'Errore database' });
+  }
+
+  let sent = 0;
+  const errors = [];
+
+  for (const doc of docs.rows) {
+    // Push notification (awaited per vedere eventuali errori nei log)
+    try {
+      const tokens = await getUserPushTokens(doc.utente_id);
+      if (tokens.length) {
+        await sendExpoPush(tokens, {
+          title: 'Promemoria firma',
+          body: `Firma richiesta: ${doc.nome_file}`,
+          data: { type: 'SIGN_DOCUMENT', documentoId: doc.id },
+        });
+        console.log(`[remind-firma] push inviata utente=${doc.utente_id} tokens=${tokens.length}`);
+      } else {
+        console.log(`[remind-firma] nessun token per utente=${doc.utente_id}`);
+      }
+    } catch (e) {
+      console.error(`[remind-firma] push error utente=${doc.utente_id}`, e.message);
+    }
+
+    if (!doc.email) {
+      errors.push({ id: doc.id, reason: 'email_mancante' });
+      continue;
+    }
+
+    const linkHtml = doc.yousign_signature_link
+      ? `<p style="margin-top:16px">
+           <a href="${doc.yousign_signature_link}" style="display:inline-block;padding:10px 20px;background:#6A57D3;color:#fff;font-weight:700;text-decoration:none;border-radius:8px">
+             Firma il documento →
+           </a>
+         </p>`
+      : `<p style="margin-top:16px;color:#64748B;font-size:13px">
+           Apri l'app ClockEasy per accedere al documento e firmarlo.
+         </p>`;
+
+    const result = await safeSendMail({
+      to: doc.email,
+      subject: `Promemoria firma: ${doc.nome_file}`,
+      html: `
+        <p>Gentile <b>${doc.nome} ${doc.cognome}</b>,</p>
+        <p>ti ricordiamo che è ancora richiesta la tua firma sul documento:</p>
+        <p style="font-weight:700">${doc.nome_file}${doc.tipo_documento ? ` — ${doc.tipo_documento}` : ''}</p>
+        ${linkHtml}
+        <p style="margin-top:24px;color:#64748B;font-size:13px">ClockEasy — Gestionale HR</p>
+      `,
+    });
+    if (result.ok) sent++;
+    else errors.push({ id: doc.id, reason: result.reason });
+  }
+
+  res.json({ sent, errors });
+});
+
 module.exports = router;
