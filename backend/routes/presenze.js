@@ -597,6 +597,37 @@ router.post('/timbratura', requireAuth, async (req, res) => {
   res.json({ message: 'Timbratura registrata!' });
 });
 
+router.patch('/uscita-anticipata', requireAuth, async (req, res) => {
+  const utente_id = req.user.id;
+  const { note } = req.body;
+
+  if (!note || !String(note).trim()) {
+    return res.status(400).json({ error: 'La motivazione è obbligatoria' });
+  }
+
+  const lastShift = await pool.query(
+    `SELECT * FROM presenze WHERE utente_id = $1 ORDER BY ora_entrata DESC LIMIT 1`,
+    [utente_id]
+  );
+
+  const turnoAperto = lastShift.rows.length > 0 && lastShift.rows[0].ora_uscita === null
+    ? lastShift.rows[0]
+    : null;
+
+  if (!turnoAperto) {
+    return res.status(404).json({ error: 'Nessun turno aperto trovato' });
+  }
+
+  const now = new Date();
+  await pool.query(
+    `UPDATE presenze SET ora_uscita = $1, note = $2 WHERE id = $3`,
+    [now, String(note).trim(), turnoAperto.id]
+  );
+
+  console.log(`[uscita-anticipata] utente=${utente_id} turno_id=${turnoAperto.id}`);
+  res.json({ message: 'Uscita anticipata registrata' });
+});
+
 router.get('/oggi', requireAuth, async (req, res) => {
   const utente_id = req.user.id;
 
