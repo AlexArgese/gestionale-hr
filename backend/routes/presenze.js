@@ -35,7 +35,7 @@ setInterval(async () => {
       const oraUscita = await calcolaOraUscitaCappata(row.utente_id, row, minutiPrevisti);
       if (!oraUscita) continue;
       await pool.query(
-        `UPDATE presenze SET ora_uscita = $1 WHERE id = $2`,
+        `UPDATE presenze SET ora_uscita = $1, note = 'uscita dimenticata' WHERE id = $2`,
         [oraUscita, row.id]
       );
     }
@@ -588,8 +588,8 @@ router.post('/timbratura', requireAuth, async (req, res) => {
     }
 
     await pool.query(
-      `UPDATE presenze SET ora_uscita = $1 WHERE id = $2`,
-      [oraUscitaFinale, turnoAperto.id]
+      `UPDATE presenze SET ora_uscita = $1, ora_uscita_reale = $2 WHERE id = $3`,
+      [oraUscitaFinale, now, turnoAperto.id]
     );
     console.log(`[timbratura] uscita utente=${utente_id} turno_id=${turnoAperto.id}`);
   }
@@ -605,27 +605,32 @@ router.patch('/uscita-anticipata', requireAuth, async (req, res) => {
     return res.status(400).json({ error: 'La motivazione è obbligatoria' });
   }
 
-  const lastShift = await pool.query(
-    `SELECT * FROM presenze WHERE utente_id = $1 ORDER BY ora_entrata DESC LIMIT 1`,
-    [utente_id]
-  );
+  try {
+    const lastShift = await pool.query(
+      `SELECT * FROM presenze WHERE utente_id = $1 ORDER BY ora_entrata DESC LIMIT 1`,
+      [utente_id]
+    );
 
-  const turnoAperto = lastShift.rows.length > 0 && lastShift.rows[0].ora_uscita === null
-    ? lastShift.rows[0]
-    : null;
+    const turnoAperto = lastShift.rows.length > 0 && lastShift.rows[0].ora_uscita === null
+      ? lastShift.rows[0]
+      : null;
 
-  if (!turnoAperto) {
-    return res.status(404).json({ error: 'Nessun turno aperto trovato' });
+    if (!turnoAperto) {
+      return res.status(404).json({ error: 'Nessun turno aperto trovato' });
+    }
+
+    const now = new Date();
+    await pool.query(
+      `UPDATE presenze SET ora_uscita = $1, ora_uscita_reale = $1, note = $2 WHERE id = $3`,
+      [now, String(note).trim(), turnoAperto.id]
+    );
+
+    console.log(`[uscita-anticipata] utente=${utente_id} turno_id=${turnoAperto.id}`);
+    res.json({ message: 'Uscita anticipata registrata' });
+  } catch (e) {
+    console.error('[uscita-anticipata] errore DB', e);
+    res.status(500).json({ error: 'Errore interno del server' });
   }
-
-  const now = new Date();
-  await pool.query(
-    `UPDATE presenze SET ora_uscita = $1, note = $2 WHERE id = $3`,
-    [now, String(note).trim(), turnoAperto.id]
-  );
-
-  console.log(`[uscita-anticipata] utente=${utente_id} turno_id=${turnoAperto.id}`);
-  res.json({ message: 'Uscita anticipata registrata' });
 });
 
 router.get('/oggi', requireAuth, async (req, res) => {
