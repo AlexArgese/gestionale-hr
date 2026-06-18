@@ -20,6 +20,7 @@ import './styles/globals.css';
 
 import { fetchMe } from './api';
 import WbManagerPage from './pages/WbManagerPage';
+import WhistleblowingPage from './pages/WhistleblowingPage';
 
 function AppContent() {
   const [user, setUser] = useState(null);
@@ -30,8 +31,14 @@ function AppContent() {
   const location = useLocation();
   const auth = getAuth();
 
+  const isPublicRoute = location.pathname.startsWith('/whistleblowing');
+
   // login/logout Firebase + fetch ruolo dal backend
   useEffect(() => {
+    if (isPublicRoute) {
+      setLoading(false);
+      return;
+    }
     const unsubscribe = onAuthStateChanged(auth, async (u) => {
       setUser(u || null);
       if (!u) {
@@ -52,7 +59,7 @@ function AppContent() {
       }
     });
     return () => unsubscribe();
-  }, [auth, navigate]);
+  }, [auth, navigate, isPublicRoute]);
 
   // logout
   const handleLogout = () => {
@@ -74,6 +81,7 @@ function AppContent() {
 
   // redirect iniziale in base al ruolo
   useEffect(() => {
+    if (isPublicRoute) return;
     if (loading) return;
     if (!user) return; // gestito sopra -> /login
 
@@ -83,7 +91,12 @@ function AppContent() {
       else if (isAdmin) navigate('/', { replace: true }); // home admin
       else navigate('/qr', { replace: true }); // dipendente
     }
-  }, [loading, user, isAdmin, isWbManager, navigate, location.pathname]);
+  }, [loading, user, isAdmin, isWbManager, navigate, location.pathname, isPublicRoute]);
+
+  // Route pubblica — nessuna autenticazione richiesta
+  if (isPublicRoute) {
+    return <WhistleblowingPage />;
+  }
 
   if (!user) {
     // IMPORTANTISSIMO: il tuo Login.js chiama onLogin(); passiamo una no-op per evitare errori
