@@ -1,6 +1,12 @@
 // frontend/src/pages/WhistleblowingPage.jsx
 import React, { useState, useEffect, useRef } from 'react';
 
+const IcoLock = () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>;
+const IcoCheck = () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#16A34A" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg>;
+const IcoAlert = () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>;
+const IcoEye = () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>;
+const IcoEyeOff = () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>;
+
 const API_BASE = 'https://clockeasy-api.onrender.com';
 
 const RELATIONSHIP_OPTIONS = [
@@ -122,7 +128,7 @@ function HomeView({ onNew, onTrack, onLegal, onPrivacy }) {
   return (
     <div style={s.container}>
       <div style={s.heroSection}>
-        <span style={s.badge}>🔒 Spazio sicuro</span>
+        <span style={s.badge}><IcoLock /> Spazio sicuro</span>
         <h1 style={s.heroTitle}>Segnalazione Whistleblowing</h1>
         <p style={s.heroSub}>
           Le informazioni vengono criptate. Solo la persona designata dall'azienda potrà accedervi.
@@ -343,7 +349,7 @@ function WbWizard({ onBack, onDone, onLegal, onPrivacy }) {
           </div>
 
           <div style={s.warnBox}>
-            ⚠️ Se perdi la password non potrai più accedere alla tua segnalazione.
+            <IcoAlert /> Se perdi la password non potrai più accedere alla tua segnalazione.
           </div>
 
           <Field label="Password *">
@@ -356,7 +362,7 @@ function WbWizard({ onBack, onDone, onLegal, onPrivacy }) {
                 autoComplete="new-password" />
               <button type="button" onClick={() => setShowPwd(!showPwd)}
                 style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', fontSize: 15, padding: 0 }}>
-                {showPwd ? '🙈' : '👁️'}
+                {showPwd ? <IcoEyeOff /> : <IcoEye />}
               </button>
             </div>
             {password.length > 0 && <PwdStrength password={password} />}
@@ -383,7 +389,7 @@ function WbWizard({ onBack, onDone, onLegal, onPrivacy }) {
       {step === 2 && receipt && (
         <div style={s.formCard}>
           <div style={s.successHeader}>
-            <span style={{ fontSize: 32 }}>✅</span>
+            <span style={{ flexShrink: 0 }}><IcoCheck /></span>
             <div>
               <h2 style={{ margin: 0, fontSize: 18, color: '#0F172A' }}>Segnalazione inviata</h2>
               <p style={{ margin: '4px 0 0', color: '#64748B', fontSize: 14 }}>Ricevuta in modo sicuro.</p>
@@ -399,7 +405,7 @@ function WbWizard({ onBack, onDone, onLegal, onPrivacy }) {
           </div>
 
           <div style={s.warnBox}>
-            Salva il <strong>codice protocollo</strong> e la tua <strong>password</strong>.
+            <IcoAlert /> Salva il <strong>codice protocollo</strong> e la tua <strong>password</strong>.
             Senza questi dati non potrai seguire la segnalazione.
           </div>
 
@@ -787,7 +793,7 @@ const s = {
   container: { maxWidth: 660, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 20 },
 
   heroSection: { textAlign: 'center', padding: '4px 0' },
-  badge: { display: 'inline-block', background: '#EEF2FF', color: '#6A57D3', borderRadius: 20, padding: '3px 12px', fontSize: 12, fontWeight: 600, marginBottom: 12 },
+  badge: { display: 'inline-flex', alignItems: 'center', gap: 5, background: '#EEF2FF', color: '#6A57D3', borderRadius: 20, padding: '4px 12px', fontSize: 12, fontWeight: 600, marginBottom: 12 },
   heroTitle: { margin: '0 0 10px', fontSize: 'clamp(20px, 4vw, 26px)', fontWeight: 800, color: '#0F172A' },
   heroSub: { margin: '0 auto', color: '#64748B', fontSize: 15, lineHeight: 1.6, maxWidth: 460 },
 
@@ -830,7 +836,7 @@ const s = {
   fileRemove: { background: 'none', border: 'none', color: '#EF4444', cursor: 'pointer', fontWeight: 700, fontSize: 13, padding: '0 2px' },
 
   summaryBox: { background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: 8, padding: '12px 14px', marginBottom: 16 },
-  warnBox: { background: '#FFFBEB', border: '1px solid #FDE68A', borderRadius: 8, padding: '10px 14px', fontSize: 13, color: '#92400E', marginBottom: 16 },
+  warnBox: { background: '#FFFBEB', border: '1px solid #FDE68A', borderRadius: 8, padding: '10px 14px', fontSize: 13, color: '#92400E', marginBottom: 16, display: 'flex', alignItems: 'flex-start', gap: 8 },
   error: { color: '#DC2626', fontSize: 13, margin: '0 0 12px', background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: 7, padding: '8px 12px' },
 
   successHeader: { display: 'flex', alignItems: 'center', gap: 14, marginBottom: 20 },
