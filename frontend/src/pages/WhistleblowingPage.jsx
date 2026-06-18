@@ -56,6 +56,7 @@ const CATEGORIES = [
   'Sicurezza dei trasporti',
   'Sicurezza delle reti e dei sistemi informativi',
   'Tutela dei dati personali e della privacy',
+  'Altro',
 ];
 
 const STATUS_LABELS = { ricevuta: 'Ricevuta', in_lavorazione: 'In lavorazione', chiusa: 'Chiusa', respinta: 'Respinta' };
@@ -158,31 +159,12 @@ function HomeView({ onNew, onTrack, onLegal, onPrivacy }) {
       </div>
 
       {/* CTAs */}
-      <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+      <div style={{ display: 'flex', flexDirection: 'row', gap: 10, justifyContent: 'center' }}>
         <button style={s.btnPrimary} onClick={onNew}>
           <IcoClipboard size={17} color="#fff" /> Nuova segnalazione
         </button>
-        <button style={s.btnOutline} onClick={onTrack}>
-          Segui segnalazione esistente
-        </button>
       </div>
 
-      {/* Legal links */}
-      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
-        <button style={s.linkBtn} onClick={onLegal}>Sistema informativo interno e difesa dell'informatore</button>
-        <span style={{ color: '#CBD5E1', fontSize: 13 }}>·</span>
-        <button style={s.linkBtn} onClick={onPrivacy}>Informativa sulla privacy</button>
-      </div>
-
-      {/* Categories */}
-      <div style={s.card}>
-        <p style={s.cardMeta}>Tipologie di condotte segnalabili</p>
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-          {CATEGORIES.slice(1).map(c => (
-            <span key={c} style={s.chip}>{c}</span>
-          ))}
-        </div>
-      </div>
     </div>
   );
 }
@@ -725,7 +707,7 @@ function PrivacyPage({ onBack }) {
       </p>
       <LS title="1. Titolare del trattamento">
         <p><strong>ClockEasy</strong> è il titolare del trattamento dei dati raccolti tramite questo Canale di Segnalazione.</p>
-        <p style={{ marginTop: 8 }}>Contatti: <strong>privacy@clockeasy.it</strong></p>
+        <p style={{ marginTop: 8 }}>Contatti: <strong>clockeasyapp@gmail.com</strong></p>
       </LS>
       <LS title="2. Dati raccolti">
         <p style={{ fontWeight: 700, marginBottom: 6 }}>Segnalatore (se non anonimo):</p>
@@ -765,7 +747,7 @@ function PrivacyPage({ onBack }) {
           <li><strong>Portabilità</strong> — ricevere i dati in formato leggibile</li>
           <li><strong>Revoca del consenso</strong> — in qualsiasi momento</li>
         </ul>
-        <p style={{ marginTop: 10 }}>Richieste: <strong>privacy@clockeasy.it</strong> — Reclami al Garante: <strong>www.garanteprivacy.it</strong></p>
+        <p style={{ marginTop: 10 }}>Richieste: <strong>clockeasyapp@gmail.com</strong></p>
       </LS>
       <LS title="8. Modifiche">
         <p>ClockEasy si riserva il diritto di aggiornare questa informativa. In caso di modifiche sostanziali gli interessati saranno informati.</p>

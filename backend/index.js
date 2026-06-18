@@ -55,10 +55,43 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 // ROUTES esistenti
-// Auto-migrazione batch_id
+// Auto-migrazioni
 require('./db').query(
   `ALTER TABLE documenti ADD COLUMN IF NOT EXISTS batch_id UUID`
 ).catch(e => console.warn('migrate batch_id:', e.message));
+
+require('./db').query(`
+  ALTER TABLE wb_reports
+    ADD COLUMN IF NOT EXISTS policy_accepted BOOLEAN NOT NULL DEFAULT false,
+    ADD COLUMN IF NOT EXISTS policy_version  TEXT    NOT NULL DEFAULT 'v1'
+`).catch(e => console.warn('migrate wb policy cols:', e.message));
+
+// Aggiorna CHECK su status per usare nomi italiani
+require('./db').query(`
+  ALTER TABLE wb_reports
+    DROP CONSTRAINT IF EXISTS wb_reports_status_chk
+`).then(() => require('./db').query(`
+  ALTER TABLE wb_reports
+    ADD CONSTRAINT wb_reports_status_chk CHECK (
+      status = ANY (ARRAY[
+        'ricevuta','in_corso','in_attesa',
+        'chiusa_fondata','chiusa_infondata','chiusa',
+        'submitted','triage','in_review','need_info',
+        'closed_substantiated','closed_unsubstantiated','closed_other'
+      ])
+    )
+`)).catch(e => console.warn('migrate wb status constraint:', e.message));
+
+// Aggiunge 'sistema' ai sender_role ammessi
+require('./db').query(`
+  ALTER TABLE wb_messages
+    DROP CONSTRAINT IF EXISTS wb_messages_sender_role_check
+`).then(() => require('./db').query(`
+  ALTER TABLE wb_messages
+    ADD CONSTRAINT wb_messages_sender_role_check CHECK (
+      sender_role = ANY (ARRAY['reporter','manager','sistema'])
+    )
+`)).catch(e => console.warn('migrate wb sender_role constraint:', e.message));
 
 const utentiRoutes = require('./routes/utenti');
 const societaRoutes = require('./routes/societa');
