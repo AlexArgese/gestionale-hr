@@ -35,7 +35,7 @@ setInterval(async () => {
       const oraUscita = await calcolaOraUscitaCappata(row.utente_id, row, minutiPrevisti);
       if (!oraUscita) continue;
       await pool.query(
-        `UPDATE presenze SET ora_uscita = $1, note = 'uscita dimenticata' WHERE id = $2`,
+        `UPDATE presenze SET ora_uscita = $1, note = 'Uscita dimenticata. Chiusa automaticamente dopo 24h' WHERE id = $2`,
         [oraUscita, row.id]
       );
     }

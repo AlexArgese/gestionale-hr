@@ -22,15 +22,30 @@ const resolveRecipients = async () => {
 };
 
 
+/* ───────────── CATEGORIE PUBBLICHE ───────────── */
+router.get('/categories', async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT id, name FROM wb_categories WHERE is_active = true ORDER BY name ASC`
+    );
+    res.json({ categories: rows });
+  } catch (e) {
+    console.error('wb categories error:', e);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
 /* ───────────── CREA SEGNALAZIONE ANONIMA ───────────── */
 router.post('/anon/reports', createReportLimiter, async (req, res) => {
   try {
-    const { title, description, categoryId, policyAccepted } = req.body;
+    const { title, description, categoryId, policyAccepted, relationship, password } = req.body;
     if (!title || !description) return res.status(400).json({ error: 'Missing fields' });
     if (policyAccepted !== true) return res.status(400).json({ error: 'Policy must be accepted' });
 
     const protocol = generateProtocol();
-    const enc = encryptJson({ description });
+    // include relationship in encrypted payload when provided
+    const encPayload = relationship ? { description, relationship } : { description };
+    const enc = encryptJson(encPayload);
     const managerId = await getWbManagerId();
 
     let catId = null;
@@ -58,7 +73,10 @@ router.post('/anon/reports', createReportLimiter, async (req, res) => {
       [reportId, encryptJson({ body: `Segnalazione ricevuta in data ${new Date().toLocaleDateString('it-IT')}. Il Responsabile prenderà in carico la pratica entro 7 giorni. Conserva protocollo e token per accedere a questo thread.` })]
     );
 
-    const replyToken = crypto.randomBytes(32).toString('hex');
+    // if a user-defined password is provided (min 8 chars), use it as the reply token
+    const replyToken = (password && String(password).length >= 8)
+      ? String(password)
+      : crypto.randomBytes(32).toString('hex');
     const tokenHash = crypto.createHash('blake2b512').update(replyToken).digest();
     await pool.query(
       `INSERT INTO wb_reply_tokens (token_hash, report_id, expires_at)
