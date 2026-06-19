@@ -321,7 +321,7 @@ export default function WbManagerPanel({ apiBase }) {
     if (!detail) return [];
     const msgs = Array.isArray(detail.messages) ? [...detail.messages] : [];
     const desc = (detail.report?.description || '').trim();
-    if (desc && msgs.length === 0) {
+    if (desc && !msgs.some(m => m.sender === 'reporter')) {
       msgs.unshift({
         sender: 'reporter',
         created_at: detail.report?.created_at,
