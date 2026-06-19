@@ -66,11 +66,18 @@ router.post('/anon/reports', createReportLimiter, async (req, res) => {
     );
     const reportId = ins.rows[0].id;
 
-    // messaggio automatico di sistema (avviso di ricezione)
+    // primo messaggio = descrizione del segnalante (il frontend già include il rapporto)
+    await pool.query(
+      `INSERT INTO wb_messages (report_id, sender_role, body_encrypted)
+       VALUES ($1,'reporter',$2)`,
+      [reportId, encryptJson({ body: description })]
+    );
+
+    // messaggio di sistema: conferma ricezione
     await pool.query(
       `INSERT INTO wb_messages (report_id, sender_role, body_encrypted)
        VALUES ($1,'sistema',$2)`,
-      [reportId, encryptJson({ body: `Segnalazione ricevuta in data ${new Date().toLocaleDateString('it-IT')}. Il Responsabile prenderà in carico la pratica entro 7 giorni. Conserva protocollo e token per accedere a questo thread.` })]
+      [reportId, encryptJson({ body: `Segnalazione ricevuta il ${new Date().toLocaleDateString('it-IT')}. Il Responsabile prenderà in carico la pratica entro 7 giorni lavorativi.` })]
     );
 
     // if a user-defined password is provided (min 8 chars), use it as the reply token
