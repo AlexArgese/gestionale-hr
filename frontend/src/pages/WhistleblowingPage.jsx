@@ -59,8 +59,18 @@ const CATEGORIES = [
   'Altro',
 ];
 
-const STATUS_LABELS = { ricevuta: 'Ricevuta', in_lavorazione: 'In lavorazione', chiusa: 'Chiusa', respinta: 'Respinta' };
-const STATUS_COLORS = { ricevuta: '#D97706', in_lavorazione: '#2563EB', chiusa: '#16A34A', respinta: '#DC2626' };
+const STATUS_LABELS = {
+  ricevuta: 'Ricevuta', submitted: 'Ricevuta',
+  in_corso: 'In lavorazione', in_attesa: 'In attesa', in_lavorazione: 'In lavorazione',
+  chiusa: 'Chiusa', chiusa_fondata: 'Chiusa', chiusa_infondata: 'Chiusa',
+  respinta: 'Respinta',
+};
+const STATUS_COLORS = {
+  ricevuta: '#D97706', submitted: '#D97706',
+  in_corso: '#2563EB', in_attesa: '#7C3AED', in_lavorazione: '#2563EB',
+  chiusa: '#16A34A', chiusa_fondata: '#16A34A', chiusa_infondata: '#64748B',
+  respinta: '#DC2626',
+};
 
 /* ── Root ── */
 export default function WhistleblowingPage() {
@@ -559,7 +569,7 @@ function TrackView({ prefill, onBack }) {
             <div ref={endRef} />
           </div>
 
-          {status !== 'chiusa' && status !== 'respinta' && (
+          {!['chiusa','chiusa_fondata','chiusa_infondata','respinta'].includes(status) && (
             <div style={{ marginTop: 16 }}>
               <textarea style={{ ...s.input, height: 80, resize: 'vertical' }}
                 placeholder="Scrivi un messaggio al responsabile…"
@@ -624,7 +634,7 @@ function Bubble({ msg }) {
         {isMe ? 'Tu' : 'Responsabile'} · {new Date(msg.created_at).toLocaleString('it-IT', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
       </span>
       <div style={{
-        maxWidth: '78%', padding: '10px 14px', fontSize: 14, lineHeight: 1.6, wordBreak: 'break-word',
+        maxWidth: '78%', padding: '10px 14px', fontSize: 14, lineHeight: 1.6, wordBreak: 'break-word', whiteSpace: 'pre-wrap',
         background: isMe ? 'linear-gradient(135deg,#6A57D3,#8B78E6)' : '#F1F5F9',
         color: isMe ? '#fff' : '#0F172A',
         borderRadius: isMe ? '14px 14px 3px 14px' : '14px 14px 14px 3px',
