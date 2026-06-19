@@ -136,12 +136,9 @@ async function runMigrations() {
 }
 
 runMigrations()
-  .then(() => {
+  .catch(err => console.error('Errore migrazioni (non bloccante):', err))
+  .finally(() => {
     app.listen(PORT, () => {
       console.log(`✅ Backend avviato su http://localhost:${PORT}`);
     });
-  })
-  .catch(err => {
-    console.error('Errore migrazioni:', err);
-    process.exit(1);
   });

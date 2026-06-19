@@ -110,8 +110,8 @@ router.post('/anon/reports', createReportLimiter, async (req, res) => {
 
     res.json({ protocol, replyToken });
   } catch (e) {
-    console.error('wb create error:', e);
-    res.status(500).json({ error: 'Server error' });
+    console.error('wb create error:', e.message, e.stack);
+    res.status(500).json({ error: e.message || 'Server error' });
   }
 });
 
