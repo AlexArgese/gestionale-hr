@@ -18,7 +18,6 @@ coverage/
 
 # production build
 build/
-frontend/build/
 
 # logs
 npm-debug.log*

@@ -16,9 +16,8 @@ node_modules/
 # testing
 coverage/
 
-# production build
-build/
-frontend/build/
+# production build (non escludere: Firebase Hosting serve da frontend/build)
+# build/
 
 # logs
 npm-debug.log*
