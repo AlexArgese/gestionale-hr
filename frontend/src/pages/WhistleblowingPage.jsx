@@ -579,7 +579,8 @@ function TrackView({ prefill, onBack }) {
 function ProgressBar({ status }) {
   const steps = ['ricevuta', 'in_lavorazione', 'chiusa'];
   const labels = ['Ricevuta', 'In lavorazione', 'Chiusa'];
-  const idx = steps.indexOf(status);
+  const STATUS_STEP = { ricevuta: 0, in_corso: 1, in_attesa: 1, in_lavorazione: 1, chiusa: 2, chiusa_fondata: 2, chiusa_infondata: 2 };
+  const idx = STATUS_STEP[status] ?? steps.indexOf(status);
   return (
     <div style={{ display: 'flex', alignItems: 'center', marginBottom: 18 }}>
       {steps.map((step, i) => (
