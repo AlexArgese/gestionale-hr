@@ -3,7 +3,7 @@ const rateLimit = require('express-rate-limit');
 
 const createReportLimiter = rateLimit({
   windowMs: 60 * 60 * 1000,  // 1h
-  max: 5,                    // 5 nuove segnalazioni/ora per IP
+  max: 20,                   // 20 nuove segnalazioni/ora per IP
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'Too Many Requests' },
