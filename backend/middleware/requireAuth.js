@@ -14,7 +14,7 @@ module.exports = async function requireAuth(req, res, next) {
       // Recupera il ruolo dal DB utenti
       const result = await pool.query(
         `
-        SELECT id, ruolo, app_access_revoked
+        SELECT id, ruolo, app_access_revoked, team_leader_sedi
         FROM utenti
         WHERE email = $1 AND stato_attivo = true
         `,
@@ -27,6 +27,7 @@ module.exports = async function requireAuth(req, res, next) {
         }
         req.user.ruolo = result.rows[0].ruolo || 'employee';
         req.user.id = result.rows[0].id;
+        req.user.team_leader_sedi = result.rows[0].team_leader_sedi || null;
       } else {
         req.user.ruolo = 'guest';
       }

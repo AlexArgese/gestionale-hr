@@ -13,8 +13,8 @@ router.get('/', requireAuth, async (req, res) => {
   try {
     // Cerca utente usando email del token Firebase
     const utenteQuery = await pool.query(
-      `SELECT id, nome, cognome, email, ruolo, sede, data_nascita,
-              luogo_nascita, provincia_nascita, codice_fiscale,
+      `SELECT id, nome, cognome, email, ruolo, sede, team_leader_sedi,
+              data_nascita, luogo_nascita, provincia_nascita, codice_fiscale,
               indirizzo_residenza, citta_residenza, provincia_residenza,
               cap_residenza, cellulare, contatto_emergenza, data_assunzione
        FROM utenti

@@ -104,6 +104,11 @@ const PORT = process.env.PORT || 3001;
 const db = require('./db');
 
 async function runMigrations() {
+  await db.query(`ALTER TABLE utenti DROP COLUMN IF EXISTS is_team_leader`)
+    .catch(e => console.warn('migrate drop is_team_leader:', e.message));
+  await db.query(`ALTER TABLE utenti ADD COLUMN IF NOT EXISTS team_leader_sedi TEXT`)
+    .catch(e => console.warn('migrate team_leader_sedi:', e.message));
+
   await db.query(`ALTER TABLE documenti ADD COLUMN IF NOT EXISTS batch_id UUID`)
     .catch(e => console.warn('migrate batch_id:', e.message));
 

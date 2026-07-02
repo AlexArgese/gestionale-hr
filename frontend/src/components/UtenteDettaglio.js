@@ -16,6 +16,7 @@ import {
   FiHash,
   FiBriefcase,
   FiGrid,
+  FiStar,
 } from "react-icons/fi";
 import DocumentiUtente from "./DocumentiUtente";
 import PresenzeExportUtente from "./PresenzeExportUtente";
@@ -83,7 +84,8 @@ function UtenteDettaglio({
           cap_residenza: data?.cap_residenza ?? "",
           cellulare: data?.cellulare ?? "",
           contatto_emergenza: data?.contatto_emergenza ?? "",
-          iban: data?.iban ?? "",              // 👈 IBAN qui
+          iban: data?.iban ?? "",
+          team_leader_sedi: data?.team_leader_sedi ?? "",
         });
       } catch {
         if (alive) setMsgError("Errore caricamento utente");
@@ -140,9 +142,29 @@ function UtenteDettaglio({
   };
 
   const handleRemoveSede = (nomeSede) => {
-    const current = getSelectedSedi();
-    const updated = current.filter((s) => s !== nomeSede);
-    setForm((f) => ({ ...f, sede: updated.join(", ") }));
+    setForm((f) => {
+      const updatedSedi = (f.sede || "").split(",").map(s => s.trim()).filter(s => s && s !== nomeSede);
+      // Rimuovi anche dalle sedi TL se presente
+      const updatedTL = (f.team_leader_sedi || "").split(",").map(s => s.trim()).filter(s => s && s !== nomeSede);
+      return { ...f, sede: updatedSedi.join(", "), team_leader_sedi: updatedTL.join(", ") };
+    });
+  };
+
+  const getSelectedTLSedi = () => {
+    if (!form?.team_leader_sedi) return [];
+    return form.team_leader_sedi.split(",").map(s => s.trim()).filter(s => s.length > 0);
+  };
+
+  const handleAddTLSede = (nomeSede) => {
+    if (!nomeSede) return;
+    const current = getSelectedTLSedi();
+    if (current.includes(nomeSede)) return;
+    setForm((f) => ({ ...f, team_leader_sedi: [...current, nomeSede].join(", ") }));
+  };
+
+  const handleRemoveTLSede = (nomeSede) => {
+    const updated = getSelectedTLSedi().filter(s => s !== nomeSede);
+    setForm((f) => ({ ...f, team_leader_sedi: updated.join(", ") }));
   };
 
 
@@ -150,6 +172,12 @@ function UtenteDettaglio({
 
   const handleSubmit = async () => {
     setMsgError(""); setMsgOk("");
+
+    if (form.team_leader_sedi?.trim() && !form.sede?.trim()) {
+      setMsgError("Il dipendente deve avere almeno una sede per essere Team Leader");
+      return;
+    }
+
     try {
       setSaving(true);
       const societa_id_norm = /^\d+$/.test(String(form.societa_id)) ? Number(form.societa_id) : form.societa_id;
@@ -173,7 +201,8 @@ function UtenteDettaglio({
         cap_residenza: form.cap_residenza,
         cellulare: form.cellulare,
         contatto_emergenza: form.contatto_emergenza,
-        iban: form.iban,                     // 👈 IBAN nel payload
+        iban: form.iban,
+        team_leader_sedi: form.team_leader_sedi || "",
       };
 
       const res = await fetch(`${fetchUrlBase}/${id}`, {
@@ -569,6 +598,63 @@ function UtenteDettaglio({
               <label htmlFor="chk-attivo">Dipendente attivo</label>
             </div>
             <div className={styles.note}>Se disattivato, l’utente non potrà accedere all’app.</div>
+          </div>
+
+          {/* Team Leader sedi */}
+          <div className={styles.group}>
+            <label className={styles.label}>
+              <FiStar size={13} style={{ marginRight: 4, verticalAlign: "middle", color: getSelectedTLSedi().length ? "#f59e0b" : "inherit" }} />
+              Team Leader di
+            </label>
+
+            {getSelectedSedi().length === 0 ? (
+              <div className={styles.note}>
+                Assegna prima almeno una sede per poter impostare il ruolo di Team Leader.
+              </div>
+            ) : (
+              <>
+                <div className={styles.inputIcon}>
+                  <FiStar className={styles.icon} style={{ color: "#f59e0b" }} />
+                  <select
+                    className="select"
+                    value=""
+                    onChange={(e) => {
+                      if (e.target.value) handleAddTLSede(e.target.value);
+                      e.target.value = "";
+                    }}
+                  >
+                    <option value="">Aggiungi sede Team Leader…</option>
+                    {getSelectedSedi()
+                      .filter(s => !getSelectedTLSedi().includes(s))
+                      .map(s => (
+                        <option key={s} value={s}>{s}</option>
+                      ))}
+                  </select>
+                </div>
+
+                <div className={styles.sediSelectedWrap}>
+                  {getSelectedTLSedi().length === 0 ? (
+                    <span className={styles.note}>Nessuna sede come Team Leader</span>
+                  ) : (
+                    <div className={styles.sediChips}>
+                      {getSelectedTLSedi().map(s => (
+                        <span key={s} className={styles.sedeChip} style={{ background: "rgba(245,158,11,0.12)", borderColor: "rgba(245,158,11,0.4)", color: "#92400e" }}>
+                          <FiStar size={10} style={{ marginRight: 3 }} />
+                          {s}
+                          <button
+                            type="button"
+                            className={styles.sedeChipRemove}
+                            onClick={() => handleRemoveTLSede(s)}
+                          >
+                            ×
+                          </button>
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </>
+            )}
           </div>
         </div>
 

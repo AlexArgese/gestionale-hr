@@ -8,6 +8,7 @@ import {
   FiGrid,
   FiUser,
   FiSearch,
+  FiStar,
 } from "react-icons/fi";
 import { API_BASE } from "../api";
 
@@ -31,6 +32,9 @@ function SedeDettaglio({
   const [utenti, setUtenti] = useState([]);
   const [filterUtente, setFilterUtente] = useState("");
   const [selectedUtenti, setSelectedUtenti] = useState([]);
+  const [teamLeaderIds, setTeamLeaderIds] = useState(new Set());
+  // nome originale dal DB — usato per l'init; non cambia se l'utente edita il campo nome
+  const [originalNomeSede, setOriginalNomeSede] = useState(null);
 
   const labelSocieta = (s) =>
     s?.ragione_sociale ||
@@ -54,8 +58,10 @@ function SedeDettaglio({
         const data = await res.json();
 
         if (!alive) return;
+        const nomeDB = data?.nome ?? "";
+        setOriginalNomeSede(nomeDB);
         setForm({
-          nome: data?.nome ?? "",
+          nome: nomeDB,
           societa_id: data?.societa_id ?? data?.societa?.id ?? "",
         });
       } catch (e) {
@@ -127,22 +133,28 @@ function SedeDettaglio({
      (quando ho sia form.nome che utenti)
   ========================== */
   useEffect(() => {
-    if (!form?.nome || !utenti.length) return;
+    // Dipende da originalNomeSede (immutabile dopo il fetch) e non da form.nome
+    // così l'utente può editare il campo nome senza perdere le selezioni TL
+    if (!originalNomeSede || !utenti.length) return;
 
-    const nomeSede = form.nome;
     const hasThisSede = (u) => {
       const raw = (u?.sede || "").trim();
       if (!raw) return false;
-      const parts = raw
-        .split(",")
-        .map((s) => s.trim())
-        .filter((s) => s.length > 0);
-      return parts.includes(nomeSede);
+      return raw.split(",").map(s => s.trim()).filter(s => s.length > 0).includes(originalNomeSede);
     };
 
     const preselected = utenti.filter(hasThisSede).map((u) => u.id);
     setSelectedUtenti(preselected);
-  }, [form?.nome, utenti]);
+
+    const isLeaderOfThisSede = (u) => {
+      const tl = (u.team_leader_sedi || "").split(",").map(s => s.trim()).filter(Boolean);
+      return tl.includes(originalNomeSede);
+    };
+    const tls = new Set(
+      utenti.filter((u) => hasThisSede(u) && isLeaderOfThisSede(u)).map((u) => u.id)
+    );
+    setTeamLeaderIds(tls);
+  }, [originalNomeSede, utenti]);
 
   /* =========================
      Helpers
@@ -153,9 +165,31 @@ function SedeDettaglio({
   };
 
   const toggleUtente = (uid) => {
-    setSelectedUtenti((prev) =>
-      prev.includes(uid) ? prev.filter((x) => x !== uid) : [...prev, uid]
-    );
+    setSelectedUtenti((prev) => {
+      if (prev.includes(uid)) {
+        // Se si deseleziona il dipendente, rimuovi anche il suo ruolo TL
+        setTeamLeaderIds((tls) => {
+          if (!tls.has(uid)) return tls;
+          const next = new Set(tls);
+          next.delete(uid);
+          return next;
+        });
+        return prev.filter((x) => x !== uid);
+      }
+      return [...prev, uid];
+    });
+  };
+
+  const toggleTeamLeader = (uid) => {
+    setTeamLeaderIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(uid)) {
+        next.delete(uid);
+      } else {
+        next.add(uid);
+      }
+      return next;
+    });
   };
 
   const filteredUtenti = utenti.filter((u) => {
@@ -235,6 +269,41 @@ function SedeDettaglio({
             ? body2?.error || body2?.message || `HTTP ${res2.status}`
             : `HTTP ${res2.status}`;
           throw new Error(msg2);
+        }
+      }
+
+      // 3) Aggiorno team_leader_sedi per gli utenti di questa sede che sono cambiati
+      const sedeName = form.nome;           // nome corrente (potrebbe essere cambiato)
+      const oldSedeName = originalNomeSede; // nome originale dal DB
+
+      for (const uid of selectedUtenti) {
+        const u = utenti.find((x) => x.id === uid);
+        if (!u) continue;
+
+        const rawTLSedi = (u.team_leader_sedi || "").split(",").map(s => s.trim()).filter(Boolean);
+        // Se la sede è stata rinominata, aggiorna il riferimento nel campo TL
+        const baseTLSedi = rawTLSedi.map(s =>
+          s === oldSedeName && oldSedeName !== sedeName ? sedeName : s
+        );
+
+        const wasLeaderHere = baseTLSedi.includes(sedeName);
+        const isLeaderHere = teamLeaderIds.has(uid);
+        if (wasLeaderHere === isLeaderHere) continue;
+
+        const newTLSedi = isLeaderHere
+          ? [...baseTLSedi.filter(s => s !== sedeName), sedeName].join(", ")
+          : baseTLSedi.filter(s => s !== sedeName).join(", ");
+
+        const r = await fetch(`${utentiUrl}/${uid}/team-leader`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json", Accept: "application/json" },
+          body: JSON.stringify({ team_leader_sedi: newTLSedi }),
+        });
+        if (!r.ok) {
+          const body = await r.json().catch(() => null);
+          throw new Error(
+            body?.error || `Errore aggiornamento Team Leader per dipendente #${uid}`
+          );
         }
       }
 
@@ -348,56 +417,131 @@ function SedeDettaglio({
             />
           </div>
 
+          {/* intestazione colonne */}
           <div
             style={{
-              maxHeight: 260,
+              display: "flex",
+              alignItems: "center",
+              padding: "4px 10px 6px",
+              fontSize: 11,
+              fontWeight: 600,
+              color: "var(--color-text-muted, #888)",
+              textTransform: "uppercase",
+              letterSpacing: "0.05em",
+            }}
+          >
+            <span style={{ flex: 1 }}>Dipendente</span>
+            <span style={{ display: "flex", alignItems: "center", gap: 3 }}>
+              <FiStar size={10} /> Team Leader
+            </span>
+          </div>
+
+          <div
+            style={{
+              maxHeight: 300,
               overflowY: "auto",
               border: "1px solid var(--border)",
               borderRadius: 12,
-              padding: 8,
+              padding: "4px 8px",
               background: "#FFFFFF",
             }}
           >
             {filteredUtenti.length === 0 && (
-              <div className={styles.note}>Nessun dipendente trovato.</div>
+              <div className={styles.note} style={{ padding: "8px 4px" }}>
+                Nessun dipendente trovato.
+              </div>
             )}
 
             {filteredUtenti.map((u) => {
               const uid = u.id;
-              const nomeCompleto = `${u.cognome || ""} ${
-                u.nome || ""
-              }`.trim();
+              const nomeCompleto = `${u.cognome || ""} ${u.nome || ""}`.trim();
               const checked = selectedUtenti.includes(uid);
+              const isTL = teamLeaderIds.has(uid);
 
               return (
-                <label
+                <div
                   key={uid}
                   style={{
                     display: "flex",
                     alignItems: "center",
                     gap: 8,
-                    padding: "4px 2px",
-                    cursor: "pointer",
+                    padding: "5px 2px",
                     fontSize: 14,
+                    borderBottom: "1px solid var(--border, #f5f5f5)",
                   }}
                 >
+                  {/* checkbox sede */}
                   <input
+                    id={`u-sede-${uid}`}
                     type="checkbox"
                     checked={checked}
                     onChange={() => toggleUtente(uid)}
+                    style={{ flexShrink: 0 }}
                   />
-                  <FiUser
-                    style={{ opacity: 0.6, flexShrink: 0 }}
-                    size={14}
-                  />
-                  <span>
-                    <strong>{nomeCompleto || "—"}</strong>{" "}
-                    <span className={styles.note}>
-                      ({u.email || "senza email"}) –{" "}
-                      {u.sede || "nessuna sede"}
+                  <label
+                    htmlFor={`u-sede-${uid}`}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 6,
+                      flex: 1,
+                      cursor: "pointer",
+                      minWidth: 0,
+                    }}
+                  >
+                    <FiUser style={{ opacity: 0.6, flexShrink: 0 }} size={13} />
+                    <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      <strong>{nomeCompleto || "—"}</strong>{" "}
+                      <span className={styles.note}>
+                        ({u.email || "senza email"})
+                      </span>
                     </span>
-                  </span>
-                </label>
+                  </label>
+
+                  {/* toggle Team Leader — visibile solo se il dipendente è selezionato */}
+                  {checked ? (
+                    <label
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 4,
+                        flexShrink: 0,
+                        cursor: "pointer",
+                        padding: "2px 8px",
+                        borderRadius: 20,
+                        background: isTL
+                          ? "rgba(245, 158, 11, 0.12)"
+                          : "rgba(0,0,0,0.04)",
+                        border: `1px solid ${isTL ? "rgba(245,158,11,0.5)" : "transparent"}`,
+                        transition: "all 0.15s",
+                      }}
+                      title="Imposta come Team Leader di questa sede"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={isTL}
+                        onChange={() => toggleTeamLeader(uid)}
+                        style={{ width: 12, height: 12 }}
+                      />
+                      <FiStar
+                        size={11}
+                        style={{ color: isTL ? "#f59e0b" : "#bbb", flexShrink: 0 }}
+                      />
+                      <span
+                        style={{
+                          fontSize: 11,
+                          color: isTL ? "#92400e" : "#aaa",
+                          fontWeight: isTL ? 600 : 400,
+                        }}
+                      >
+                        TL
+                      </span>
+                    </label>
+                  ) : (
+                    // placeholder per mantenere l'allineamento
+                    <div style={{ width: 56, flexShrink: 0 }} />
+                  )}
+                </div>
               );
             })}
           </div>

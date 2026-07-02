@@ -9,7 +9,8 @@ router.get('/me', requireAuth, async (req, res) => {
     email: req.user.email,
     id: req.user.id,
     ruolo: req.user.ruolo,
-    isAdmin: req.user.isAdmin
+    isAdmin: req.user.isAdmin,
+    team_leader_sedi: req.user.team_leader_sedi || null,
   });
 });
 

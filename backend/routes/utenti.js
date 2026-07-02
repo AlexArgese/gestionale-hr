@@ -34,7 +34,7 @@ router.get('/cf/all', async (_req, res) => {
 router.get('/', async (_req, res) => {
   try {
     const result = await pool.query(`
-      SELECT 
+      SELECT
         u.id,
         u.nome,
         u.cognome,
@@ -48,6 +48,7 @@ router.get('/', async (_req, res) => {
         u.iban,
         u.archiviato,
         u.archiviato_at,
+        u.team_leader_sedi,
         s.ragione_sociale AS societa_nome
       FROM utenti u
       JOIN societa s ON u.societa_id = s.id
@@ -68,19 +69,25 @@ router.post('/', async (req, res) => {
   try {
     const {
       nome, cognome, email, ruolo, sede,
-      societa_id, stato_attivo,tipo_contratto, data_nascita, luogo_nascita,
+      societa_id, stato_attivo, tipo_contratto, data_nascita, luogo_nascita,
       provincia_nascita, codice_fiscale, indirizzo_residenza,
       citta_residenza, provincia_residenza, cap_residenza,
-      cellulare, contatto_emergenza, iban        // 👈 IBAN dal body
+      cellulare, contatto_emergenza, iban,
+      team_leader_sedi = '',
     } = req.body;
+
+    const tlSediClean = (team_leader_sedi || '').trim();
+    if (tlSediClean && !sede?.trim()) {
+      return res.status(400).json({ error: 'Il dipendente deve avere almeno una sede per essere Team Leader' });
+    }
 
     const insert = await pool.query(
       `INSERT INTO utenti
          (nome,cognome,email,ruolo,sede,societa_id,
           stato_attivo,tipo_contratto,data_nascita,luogo_nascita,provincia_nascita,
           codice_fiscale,indirizzo_residenza,citta_residenza,
-          provincia_residenza,cap_residenza,cellulare,contatto_emergenza,iban)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)
+          provincia_residenza,cap_residenza,cellulare,contatto_emergenza,iban,team_leader_sedi)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20)
        RETURNING id`,
       [
         nome, cognome, email, ruolo, sede,
@@ -88,6 +95,7 @@ router.post('/', async (req, res) => {
         luogo_nascita, provincia_nascita, codice_fiscale,
         indirizzo_residenza, citta_residenza, provincia_residenza,
         cap_residenza, cellulare, contatto_emergenza, iban,
+        tlSediClean || null,
       ]
     );
     const nuovoId = insert.rows[0].id;
@@ -168,7 +176,7 @@ router.delete('/delete-my-account', requireAuth, async (req, res) => {
 router.get('/archiviati', async (_req, res) => {
   try {
     const result = await pool.query(`
-      SELECT 
+      SELECT
         u.id,
         u.nome,
         u.cognome,
@@ -182,6 +190,7 @@ router.get('/archiviati', async (_req, res) => {
         u.iban,
         u.archiviato,
         u.archiviato_at,
+        u.team_leader_sedi,
         s.ragione_sociale AS societa_nome
       FROM utenti u
       JOIN societa s ON u.societa_id = s.id
@@ -319,6 +328,38 @@ router.patch('/bulk/tipo-contratto', async (req, res) => {
   }
 });
 
+router.patch('/:id/team-leader', async (req, res) => {
+  const { id } = req.params;
+  const { team_leader_sedi } = req.body;
+
+  if (typeof team_leader_sedi !== 'string') {
+    return res.status(400).json({ error: 'team_leader_sedi deve essere una stringa' });
+  }
+
+  const tlSediClean = team_leader_sedi.trim();
+
+  try {
+    if (tlSediClean) {
+      const check = await pool.query('SELECT sede FROM utenti WHERE id = $1', [id]);
+      if (check.rows.length === 0) return res.status(404).json({ error: 'Utente non trovato' });
+      if (!check.rows[0].sede?.trim()) {
+        return res.status(400).json({ error: 'Il dipendente deve avere almeno una sede assegnata per essere Team Leader' });
+      }
+    }
+
+    const result = await pool.query(
+      'UPDATE utenti SET team_leader_sedi = $1, updated_at = now() WHERE id = $2 RETURNING id',
+      [tlSediClean || null, id]
+    );
+
+    if (result.rows.length === 0) return res.status(404).json({ error: 'Utente non trovato' });
+    res.json({ message: 'Sedi Team Leader aggiornate' });
+  } catch (err) {
+    console.error('PATCH /utenti/:id/team-leader', err);
+    res.status(500).json({ error: 'Errore aggiornamento Team Leader' });
+  }
+});
+
 router.patch('/:id/archivia', async (req, res) => {
   try {
     const result = await pool.query(`
@@ -411,8 +452,14 @@ router.put('/:id', async (req, res) => {
     nome, cognome, email, ruolo, sede, stato_attivo, tipo_contratto, societa_id,
     data_nascita, luogo_nascita, provincia_nascita, codice_fiscale,
     indirizzo_residenza, citta_residenza, provincia_residenza, cap_residenza,
-    cellulare, contatto_emergenza, iban           // 👈 IBAN dal body
+    cellulare, contatto_emergenza, iban,
+    team_leader_sedi = '',
   } = req.body;
+
+  const tlSediClean = (team_leader_sedi || '').trim();
+  if (tlSediClean && !sede?.trim()) {
+    return res.status(400).json({ error: 'Il dipendente deve avere almeno una sede per essere Team Leader' });
+  }
 
   try {
     await pool.query(`
@@ -422,15 +469,17 @@ router.put('/:id', async (req, res) => {
         data_nascita = $9, luogo_nascita = $10, provincia_nascita = $11, codice_fiscale = $12,
         indirizzo_residenza = $13, citta_residenza = $14, provincia_residenza = $15, cap_residenza = $16,
         cellulare = $17, contatto_emergenza = $18, iban = $19,
+        team_leader_sedi = $20,
         updated_at = now()
-      WHERE id = $20
+      WHERE id = $21
     `, [
       nome, cognome, email, ruolo, sede,
       stato_attivo, tipo_contratto, societa_id,
       data_nascita, luogo_nascita, provincia_nascita, codice_fiscale,
       indirizzo_residenza, citta_residenza, provincia_residenza, cap_residenza,
       cellulare, contatto_emergenza, iban,
-      id
+      tlSediClean || null,
+      id,
     ]);
 
     res.json({ message: "Dipendente aggiornato" });

@@ -21,6 +21,7 @@ import './styles/globals.css';
 import { fetchMe } from './api';
 import WbManagerPage from './pages/WbManagerPage';
 import WhistleblowingPage from './pages/WhistleblowingPage';
+import DashboardTeamLeader from './components/DashboardTeamLeader';
 
 function AppContent() {
   const [user, setUser] = useState(null);
@@ -78,6 +79,7 @@ function AppContent() {
   const ruolo = me?.ruolo || null;
   const isAdmin = ruolo === 'admin' || ruolo === 'admin_lan';
   const isWbManager = ruolo === 'wb_manager';
+  const isTeamLeader = !isAdmin && !isWbManager && !!(me?.team_leader_sedi?.trim());
 
   // redirect iniziale in base al ruolo
   useEffect(() => {
@@ -88,10 +90,11 @@ function AppContent() {
     // se sono in root o su /login dopo il login, porta alla pagina giusta
     if (location.pathname === '/' || location.pathname === '/login') {
       if (isWbManager) navigate('/wb-manager', { replace: true });
+      else if (isTeamLeader) navigate('/tl', { replace: true });
       else if (isAdmin) navigate('/', { replace: true }); // home admin
       else navigate('/qr', { replace: true }); // dipendente
     }
-  }, [loading, user, isAdmin, isWbManager, navigate, location.pathname, isPublicRoute]);
+  }, [loading, user, isAdmin, isWbManager, isTeamLeader, navigate, location.pathname, isPublicRoute]);
 
   // Route pubblica — nessuna autenticazione richiesta
   if (isPublicRoute) {
@@ -142,8 +145,10 @@ function AppContent() {
           <div className="nav-inner">
             <div className="nav-left">
               <div className="nav-logo">
-                {/* porta a /wb-manager se è l’avvocato, altrimenti a /qr */}
-                <a href={isWbManager ? "/wb-manager" : "/qr"} aria-label="ClockEasy Home">
+                <a
+                  href={isWbManager ? "/wb-manager" : isTeamLeader ? "/tl" : "/qr"}
+                  aria-label="ClockEasy Home"
+                >
                   <img src="/Logo_esteso.png" alt="ClockEasy" />
                 </a>
               </div>
@@ -190,7 +195,14 @@ function AppContent() {
             </>
           )}
   
-          {!isAdmin && !isWbManager && (
+          {isTeamLeader && (
+            <>
+              <Route path="/tl" element={<DashboardTeamLeader me={me} />} />
+              <Route path="*" element={<Navigate to="/tl" replace />} />
+            </>
+          )}
+
+          {!isAdmin && !isWbManager && !isTeamLeader && (
             <>
               <Route path="/qr" element={<PaginaQR />} />
               <Route path="*" element={<PaginaQR />} />
