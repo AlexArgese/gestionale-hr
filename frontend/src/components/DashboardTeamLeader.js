@@ -188,7 +188,7 @@ export default function DashboardTeamLeader({ me }) {
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14 }}>
             <thead>
               <tr style={{ borderBottom: '2px solid #E5E7EB' }}>
-                {['Dipendente', 'Entrata', 'Uscita', 'Stato'].map(h => (
+                {['Dipendente', 'Entrata'].map(h => (
                   <th key={h} style={{ textAlign: 'left', padding: '8px 12px', color: '#6B7280', fontWeight: 600, fontSize: 12, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{h}</th>
                 ))}
               </tr>
@@ -206,14 +206,6 @@ export default function DashboardTeamLeader({ me }) {
                       </td>
                     )}
                     <td style={{ padding: '10px 12px', color: '#374151' }}>{fmtTime(t.ora_entrata)}</td>
-                    <td style={{ padding: '10px 12px', color: '#374151' }}>{fmtTime(t.ora_uscita)}</td>
-                    <td style={{ padding: '10px 12px' }}>
-                      {t.ora_uscita ? (
-                        <span style={{ background: '#F3F4F6', color: '#6B7280', padding: '2px 10px', borderRadius: 12, fontSize: 12 }}>Uscito</span>
-                      ) : (
-                        <span style={{ background: '#ECFDF5', color: '#065F46', padding: '2px 10px', borderRadius: 12, fontSize: 12 }}>Presente</span>
-                      )}
-                    </td>
                   </tr>
                 ))
               )}
