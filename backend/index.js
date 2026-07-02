@@ -97,8 +97,10 @@ app.use('/wb', wbAttachRoutes);
 // jobs
 const { startWbDeadlinesJob } = require('./jobs/wb_deadlines');
 const { startWbRetentionJob } = require('./jobs/wb_retention');
+const { startTLReminderJob } = require('./jobs/tl_reminder');
 startWbDeadlinesJob();
 startWbRetentionJob();
+startTLReminderJob();
 
 const PORT = process.env.PORT || 3001;
 const db = require('./db');
