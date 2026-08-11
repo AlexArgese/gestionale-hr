@@ -47,9 +47,12 @@
 }
 .search{ width:100%; padding:10px 12px 10px 38px; }
 
-/* Filtri a destra della toolbar (si riposizionano su mobile) */
+/* Filtri a destra della toolbar */
 .filters{
-  display:flex; gap:10px; flex-wrap:wrap;
+  display:flex; gap:8px; flex-wrap:nowrap; align-items:center;
+}
+.filters select{
+  max-width:175px; min-width:120px;
 }
 
 /* Card tabella */
