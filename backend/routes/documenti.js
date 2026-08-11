@@ -286,18 +286,18 @@ async function startYousignForDocumento({ documentoId, utenteId, nomeFile, urlFi
 
   const absPath = tempPath;
 
-  // 3) flow yousign
+  // 3) flow yousign (YouSign: max 128 chars sul campo name)
   const sr = await yousignClient.createSignatureRequest({
-    name: `Firma documento: ${nomeFile}`,
+    name: `Firma: ${nomeFile}`.substring(0, 128).trim(),
     deliveryMode: "email",
   });
 
   const doc = await yousignClient.uploadDocumentToRequest(sr.id, absPath);
 
   const signer = await yousignClient.addSigner(sr.id, {
-    firstName: user.nome || "Dipendente",
-    lastName: user.cognome || "",
-    email: user.email,
+    firstName: (user.nome || "Dipendente").trim(),
+    lastName: (user.cognome || "").trim(),
+    email: user.email.trim(),
   });
 
   let field = signaturePlacement || null;

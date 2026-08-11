@@ -63,6 +63,7 @@ function UtentiTable({
 
   const [q, setQ] = useState(() => readSavedState()?.q ?? "");
   const [filterSede, setFilterSede] = useState(() => readSavedState()?.filterSede ?? "tutte");
+  const [filterSocieta, setFilterSocieta] = useState(() => readSavedState()?.filterSocieta ?? "tutte");
   const [filterStato, setFilterStato] = useState(() => readSavedState()?.filterStato ?? "tutti");
   const [sortBy, setSortBy] = useState(() => readSavedState()?.sortBy ?? "nome");
   const [sortDir, setSortDir] = useState(() => readSavedState()?.sortDir ?? "asc");
@@ -119,7 +120,13 @@ function UtentiTable({
   const sedi = useMemo(() => {
     const s = new Set();
     utenti.forEach((u) => u?.sede && s.add(u.sede));
-    return ["tutte", ...Array.from(s)];
+    return ["tutte", ...Array.from(s).sort()];
+  }, [utenti]);
+
+  const societa = useMemo(() => {
+    const s = new Set();
+    utenti.forEach((u) => u?.societa_nome && s.add(u.societa_nome));
+    return ["tutte", ...Array.from(s).sort()];
   }, [utenti]);
 
   const filtered = useMemo(() => {
@@ -137,6 +144,7 @@ function UtentiTable({
 
       if (QQ && !hay.includes(QQ)) return false;
       if (filterSede !== "tutte" && u?.sede !== filterSede) return false;
+      if (filterSocieta !== "tutte" && u?.societa_nome !== filterSocieta) return false;
       if (filterStato === "attivi" && !u?.stato_attivo) return false;
       if (filterStato === "disattivi" && !!u?.stato_attivo) return false;
       return true;
@@ -162,7 +170,7 @@ function UtentiTable({
     });
 
     return out;
-  }, [utenti, q, filterSede, filterStato, sortBy, sortDir]);
+  }, [utenti, q, filterSede, filterSocieta, filterStato, sortBy, sortDir]);
 
   useEffect(() => {
     try {
@@ -171,6 +179,7 @@ function UtentiTable({
         JSON.stringify({
           q,
           filterSede,
+          filterSocieta,
           filterStato,
           sortBy,
           sortDir,
@@ -181,7 +190,7 @@ function UtentiTable({
     } catch {
       // ignore storage errors
     }
-  }, [storageKey, q, filterSede, filterStato, sortBy, sortDir, pageSize, page]);
+  }, [storageKey, q, filterSede, filterSocieta, filterStato, sortBy, sortDir, pageSize, page]);
 
   useEffect(() => {
     try {
@@ -635,6 +644,21 @@ function UtentiTable({
             {sedi.map((s) => (
               <option key={s} value={s}>
                 {s === "tutte" ? "Tutte le sedi" : s}
+              </option>
+            ))}
+          </select>
+
+          <select
+            className="select"
+            value={filterSocieta}
+            onChange={(e) => {
+              setFilterSocieta(e.target.value);
+              setPage(1);
+            }}
+          >
+            {societa.map((s) => (
+              <option key={s} value={s}>
+                {s === "tutte" ? "Tutte le società" : s}
               </option>
             ))}
           </select>
