@@ -22,6 +22,9 @@ const { creaChiaveS3, caricaBufferSuS3, scaricaBufferDaS3, urlFirmatoGet, elimin
 const { sendExpoPush } = require("../services/expoPush");
 const { safeSendMail } = require("../lib/notifier");
 
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const YOUSIGN_DELAY_MS = 2500; // ms tra una signature request e l'altra nei batch
+
 /* ==================================================================== */
 /*  Helpers                                                             */
 /* ==================================================================== */
@@ -696,15 +699,23 @@ router.post('/upload-multi', requireAuth, (req, res) => {
       fireAndForgetDocumentNotifications(inserted, tipoNorm);
 
       if (require_signature) {
-        for (const doc of inserted) {
-          startYousignForDocumento({
-            documentoId: doc.id,
-            utenteId: doc.utente_id,
-            nomeFile: finalNomeFile,
-            urlFile: doc.url_file,
-            signaturePlacement,
-          }).catch((e) => markYousignInitError(doc.id, e, "upload-multi"));
-        }
+        (async () => {
+          for (let i = 0; i < inserted.length; i++) {
+            const doc = inserted[i];
+            try {
+              await startYousignForDocumento({
+                documentoId: doc.id,
+                utenteId: doc.utente_id,
+                nomeFile: finalNomeFile,
+                urlFile: doc.url_file,
+                signaturePlacement,
+              });
+            } catch (e) {
+              await markYousignInitError(doc.id, e, "upload-multi");
+            }
+            if (i < inserted.length - 1) await sleep(YOUSIGN_DELAY_MS);
+          }
+        })();
       }
     } catch (e) {
       console.error('upload-multi:', e);
