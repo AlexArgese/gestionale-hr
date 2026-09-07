@@ -114,6 +114,9 @@ async function runMigrations() {
   await db.query(`ALTER TABLE documenti ADD COLUMN IF NOT EXISTS batch_id UUID`)
     .catch(e => console.warn('migrate batch_id:', e.message));
 
+  await db.query(`ALTER TABLE documenti ADD COLUMN IF NOT EXISTS nome_file_base TEXT`)
+    .catch(e => console.warn('migrate nome_file_base:', e.message));
+
   await db.query(`
     ALTER TABLE wb_reports
       ADD COLUMN IF NOT EXISTS policy_accepted BOOLEAN NOT NULL DEFAULT false,

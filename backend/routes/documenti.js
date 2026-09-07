@@ -189,15 +189,15 @@ async function resolveTargetUserId(req) {
   return { targetUserId, autoreId };
 }
 
-async function insertDocumentoRows({ utenteIds, tipo, nome_file, relPath, caricato_da, data_scadenza, require_signature, batch_id }) {
+async function insertDocumentoRows({ utenteIds, tipo, nome_file, nome_file_base, relPath, caricato_da, data_scadenza, require_signature, batch_id }) {
   const rows = [];
   for (const uid of utenteIds) {
     const r = await pool.query(
       `INSERT INTO documenti
-         (utente_id, tipo_documento, nome_file, url_file, caricato_da, data_upload, data_scadenza, require_signature, batch_id)
-       VALUES ($1,$2,$3,$4,$5,NOW(),$6,$7,$8)
+         (utente_id, tipo_documento, nome_file, nome_file_base, url_file, caricato_da, data_upload, data_scadenza, require_signature, batch_id)
+       VALUES ($1,$2,$3,$4,$5,$6,NOW(),$7,$8,$9)
        RETURNING id, utente_id, nome_file, url_file, require_signature`,
-      [uid, tipo, nome_file, relPath, caricato_da, data_scadenza || null, !!require_signature, batch_id || null]
+      [uid, tipo, nome_file, nome_file_base || nome_file, relPath, caricato_da, data_scadenza || null, !!require_signature, batch_id || null]
     );
     rows.push(r.rows[0]);
   }
@@ -206,6 +206,27 @@ async function insertDocumentoRows({ utenteIds, tipo, nome_file, relPath, carica
 
 function parseBool(v) {
   return v === true || v === "true" || v === 1 || v === "1" || v === "on";
+}
+
+/** token "pulito" per usare nome/cognome dentro un nome file */
+function sanitizeNameToken(s) {
+  return String(s || "")
+    .trim()
+    .replace(/\s+/g, "_")
+    .replace(/[^\p{L}\p{N}_-]/gu, "");
+}
+
+/**
+ * Inserisce "_Nome_Cognome" prima dell'estensione.
+ * es: ("CONTRATTO 2024.pdf", "Mario", "Rossi") -> "CONTRATTO 2024_Mario_Rossi.pdf"
+ */
+function appendNomeCognome(fileName, nome, cognome) {
+  const token = [sanitizeNameToken(nome), sanitizeNameToken(cognome)]
+    .filter(Boolean)
+    .join("_");
+  if (!token) return fileName;
+  const m = String(fileName).match(/^(.*?)(\.[A-Za-z0-9]+)$/);
+  return m ? `${m[1]}_${token}${m[2]}` : `${fileName}_${token}`;
 }
 
 function parseSignaturePlacement(body) {
@@ -607,6 +628,7 @@ router.post('/upload-multi', requireAuth, (req, res) => {
 
       const { tipo_documento, utente_ids, data_scadenza } = req.body;
       const require_signature = parseBool(req.body.require_signature || req.body.requireSignature);
+      const appendNames = parseBool(req.body.append_names || req.body.appendNames || req.body.includi_nome_cognome);
       const signaturePlacement = parseSignaturePlacement(req.body);
 
       if (!validateTipo(tipo_documento)) {
@@ -625,10 +647,11 @@ router.post('/upload-multi', requireAuth, (req, res) => {
         return res.status(400).json({ error: 'utente_ids non validi' });
       }
 
-      const check = await pool.query('SELECT id FROM utenti WHERE id = ANY($1::int[])', [uniq]);
+      const check = await pool.query('SELECT id, nome, cognome FROM utenti WHERE id = ANY($1::int[])', [uniq]);
       if (check.rows.length !== uniq.length) {
         return res.status(404).json({ error: 'Alcuni utenti non esistono' });
       }
+      const userById = new Map(check.rows.map((r) => [r.id, r]));
 
       const autoreId = await resolveAutoreId(req);
       const batch_id = randomUUID();
@@ -638,14 +661,22 @@ router.post('/upload-multi', requireAuth, (req, res) => {
         ? safeNomeFile
         : `${safeNomeFile}.pdf`;
 
+      // nome file specifico per destinatario (se richiesto "Includi nome e cognome")
+      const nomeFilePerUtente = (uid) => {
+        if (!appendNames) return finalNomeFile;
+        const u = userById.get(uid);
+        return u ? appendNomeCognome(finalNomeFile, u.nome, u.cognome) : finalNomeFile;
+      };
+
       let inserted = [];
 
       if (require_signature) {
         for (const uid of uniq) {
+          const nomeFileUid = nomeFilePerUtente(uid);
           const chiaveS3 = creaChiaveS3({
             utenteId: uid,
             tipoDocumento: tipoNorm,
-            nomeFile: finalNomeFile,
+            nomeFile: nomeFileUid,
           });
 
           await caricaBufferSuS3({
@@ -657,7 +688,8 @@ router.post('/upload-multi', requireAuth, (req, res) => {
           const rows = await insertDocumentoRows({
             utenteIds: [uid],
             tipo: tipoNorm,
-            nome_file: finalNomeFile,
+            nome_file: nomeFileUid,
+            nome_file_base: finalNomeFile,
             relPath: chiaveS3,
             caricato_da: autoreId,
             data_scadenza,
@@ -667,6 +699,7 @@ router.post('/upload-multi', requireAuth, (req, res) => {
           inserted.push(...rows);
         }
       } else {
+        // un solo file fisico su S3, condiviso da tutti i destinatari
         const chiaveS3 = creaChiaveS3({
           utenteId: 0,
           tipoDocumento: tipoNorm,
@@ -679,16 +712,34 @@ router.post('/upload-multi', requireAuth, (req, res) => {
           contentType: req.file.mimetype,
         });
 
-        inserted = await insertDocumentoRows({
-          utenteIds: uniq,
-          tipo: tipoNorm,
-          nome_file: finalNomeFile,
-          relPath: chiaveS3,
-          caricato_da: autoreId,
-          data_scadenza,
-          require_signature,
-          batch_id,
-        });
+        if (appendNames) {
+          for (const uid of uniq) {
+            const rows = await insertDocumentoRows({
+              utenteIds: [uid],
+              tipo: tipoNorm,
+              nome_file: nomeFilePerUtente(uid),
+              nome_file_base: finalNomeFile,
+              relPath: chiaveS3,
+              caricato_da: autoreId,
+              data_scadenza,
+              require_signature,
+              batch_id,
+            });
+            inserted.push(...rows);
+          }
+        } else {
+          inserted = await insertDocumentoRows({
+            utenteIds: uniq,
+            tipo: tipoNorm,
+            nome_file: finalNomeFile,
+            nome_file_base: finalNomeFile,
+            relPath: chiaveS3,
+            caricato_da: autoreId,
+            data_scadenza,
+            require_signature,
+            batch_id,
+          });
+        }
       }
 
       res.json({
@@ -706,7 +757,7 @@ router.post('/upload-multi', requireAuth, (req, res) => {
               await startYousignForDocumento({
                 documentoId: doc.id,
                 utenteId: doc.utente_id,
-                nomeFile: finalNomeFile,
+                nomeFile: doc.nome_file || finalNomeFile,
                 urlFile: doc.url_file,
                 signaturePlacement,
               });
@@ -1020,7 +1071,7 @@ router.get('/', requireAuth, async (req, res) => {
          MAX(d.batch_id::text)::uuid                AS batch_id,
          MAX(d.url_file)                            AS url_file,
          MAX(d.tipo_documento)                      AS tipo_documento,
-         MAX(d.nome_file)                           AS nome_file,
+         MAX(COALESCE(d.nome_file_base, d.nome_file)) AS nome_file,
          MIN(d.data_upload)                         AS data_upload,
          MAX(d.data_scadenza::text)                 AS data_scadenza,
          BOOL_OR(d.require_signature)               AS require_signature,

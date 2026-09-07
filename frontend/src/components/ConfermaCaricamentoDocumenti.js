@@ -101,6 +101,9 @@ export default function ConfermaCaricamentoDocumenti({
    * ========================= */
   const [requireSignature, setRequireSignature] = useState(false);
 
+  // aggiunge "_Nome_Cognome" del destinatario al nome file (uno per destinatario)
+  const [appendNames, setAppendNames] = useState(false);
+
   // placements: per ogni fileId salvo UNA posizione (per ora 1 per documento)
   // { [fileId]: { x,y,width,height,pageIndex,pageW,pageH } }
   const [signaturePlacements, setSignaturePlacements] = useState({});
@@ -110,6 +113,7 @@ export default function ConfermaCaricamentoDocumenti({
     if (!open) {
       setRequireSignature(false);
       setSignaturePlacements({});
+      setAppendNames(false);
     }
   }, [open]);
 
@@ -334,6 +338,36 @@ export default function ConfermaCaricamentoDocumenti({
                   }}
                 />
                 <span className={styles.value}>{requireSignature ? "Sì" : "No"}</span>
+              </label>
+            </div>
+
+            {/* includi nome e cognome nel nome file */}
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                gap: 10,
+                padding: "10px 12px",
+                border: "1px solid rgba(0,0,0,0.08)",
+                borderRadius: 10,
+                background: "rgba(0,0,0,0.02)",
+              }}
+            >
+              <div style={{ display: "grid", gap: 2 }}>
+                <div style={{ fontWeight: 700 }}>Includi nome e cognome</div>
+                <div style={{ fontSize: 12, opacity: 0.8 }}>
+                  Il nome file diventa «NomeFile_Nome_Cognome.pdf», uno per ogni destinatario.
+                </div>
+              </div>
+
+              <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <input
+                  type="checkbox"
+                  checked={appendNames}
+                  onChange={(e) => setAppendNames(e.target.checked)}
+                />
+                <span className={styles.value}>{appendNames ? "Sì" : "No"}</span>
               </label>
             </div>
 
@@ -692,6 +726,7 @@ export default function ConfermaCaricamentoDocumenti({
               onConfirm({
                 require_signature: requireSignature,
                 signature_placements: signaturePlacements,
+                append_names: appendNames,
               })
             }
             disabled={loading || filesInfo.length === 0}

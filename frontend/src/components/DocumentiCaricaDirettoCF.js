@@ -363,7 +363,7 @@ export default function DocumentiCaricaDirettoCF({ tipi = [] }) {
     return "Nessun target definito";
   }, [assegnaMode, selectedUsers, utentiFull]);
 
-  async function carica({ require_signature, signature_placements } = {}) {
+  async function carica({ require_signature, signature_placements, append_names } = {}) {
     if (!tipoDocumento) {
       setBanner({ type: "info", text: "Seleziona il tipo documento." });
       return;
@@ -440,6 +440,7 @@ export default function DocumentiCaricaDirettoCF({ tipi = [] }) {
         fd.append("tipo_documento", tipoDocumento);
         fd.append("utente_ids", JSON.stringify(targetsForFile));
         fd.append("require_signature", require_signature ? "true" : "false");
+        fd.append("append_names", append_names ? "true" : "false");
         if (placement) fd.append("signature_placement", JSON.stringify(placement));
         if (dataScadenza) fd.append("data_scadenza", dataScadenza);
 
