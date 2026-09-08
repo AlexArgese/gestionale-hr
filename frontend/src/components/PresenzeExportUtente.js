@@ -14,6 +14,7 @@ import { API_BASE } from "../api";
 export default function PresenzeExportUtente({ userId, nome = "" }) {
   const [start, setStart] = useState("");
   const [end, setEnd]     = useState("");
+  const [dettagli, setDettagli] = useState(false);
   const [err, setErr]     = useState("");
 
   const canDownload = !!(start && end && userId);
@@ -28,6 +29,7 @@ export default function PresenzeExportUtente({ userId, nome = "" }) {
       end,
       utente_id: String(userId),
     });
+    if (dettagli) params.append("dettagli", "1");
 
     window.open(`${API_BASE}/presenze/export?${params.toString()}`, "_blank");
   };
@@ -87,6 +89,15 @@ export default function PresenzeExportUtente({ userId, nome = "" }) {
           <FiDownload size={14} /> Scarica Excel
         </button>
       </div>
+
+      <label style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 10, fontSize: 12, fontWeight: 600, color: "var(--txt-muted, #64748B)", cursor: "pointer" }}>
+        <input
+          type="checkbox"
+          checked={dettagli}
+          onChange={e => { setDettagli(e.target.checked); setErr(""); }}
+        />
+        Aggiungi foglio "Dettaglio timbrature" (orari entrata/uscita per giorno)
+      </label>
 
       {err && (
         <div style={{ marginTop: 8, fontSize: 12, color: "#991b1b" }}>{err}</div>

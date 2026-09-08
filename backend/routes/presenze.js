@@ -435,7 +435,73 @@ router.get('/export', async (req, res) => {
       }
     }
 
-    if (dettagli) {
+    if (dettagli && utente_id && utenti.rows.length === 1) {
+      // Foglio unico: riepilogo timbrature per singolo dipendente (una riga per giorno)
+      const u = utenti.rows[0];
+      const fmtT = (d) => new Date(d).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Rome' });
+
+      const byDay = {};
+      presenze.rows.forEach((p) => {
+        if (p.utente_id !== u.id) return;
+        (byDay[p.data_str] ||= []).push(p);
+      });
+
+      const giorniConTurni = giorni.filter((g) => (byDay[g.dateStr] || []).length > 0);
+      const maxTurni = giorniConTurni.reduce((m, g) => Math.max(m, byDay[g.dateStr].length), 0) || 1;
+
+      const det = workbook.addWorksheet('Dettaglio timbrature');
+      const header = ['Data', 'Giorno', 'N° Turni'];
+      for (let i = 1; i <= maxTurni; i++) header.push(`Entrata ${i}`, `Uscita ${i}`);
+      header.push('Durata Totale', 'Simbolo', 'Note');
+      styleHeaderRow(det.addRow(header));
+      det.views = [{ state: 'frozen', xSplit: 1, ySplit: 1 }];
+      det.getColumn(1).width = 12;
+      det.getColumn(2).width = 12;
+      det.getColumn(3).width = 9;
+      for (let i = 4; i <= 3 + maxTurni * 2; i++) det.getColumn(i).width = 11;
+      det.getColumn(4 + maxTurni * 2).width = 16;
+      det.getColumn(5 + maxTurni * 2).width = 9;
+      det.getColumn(6 + maxTurni * 2).width = 32;
+
+      let totMinPeriodo = 0;
+      giorniConTurni.forEach((g) => {
+        const shifts = [...byDay[g.dateStr]].sort(
+          (a, b) => new Date(a.ora_entrata) - new Date(b.ora_entrata)
+        );
+        const dataLabel = `${g.dateStr.slice(8, 10)}-${g.dateStr.slice(5, 7)}-${g.dateStr.slice(0, 4)}`;
+        const giornoSett = new Date(g.dateStr).toLocaleDateString('it-IT', { weekday: 'long', timeZone: 'Europe/Rome' });
+        const row = [dataLabel, giornoSett, shifts.length];
+
+        for (let i = 0; i < maxTurni; i++) {
+          const s = shifts[i];
+          if (!s) { row.push('', ''); continue; }
+          row.push(fmtT(s.ora_entrata), s.ora_uscita ? fmtT(s.ora_uscita) : 'In corso');
+        }
+
+        const allClosed = shifts.every((s) => s.ora_uscita);
+        let durataStr = 'In corso';
+        if (allClosed) {
+          const totMin = shifts.reduce((acc, s) => acc + (new Date(s.ora_uscita) - new Date(s.ora_entrata)) / 60000, 0);
+          totMinPeriodo += totMin;
+          const h = Math.floor(totMin / 60);
+          const m = Math.round(totMin % 60);
+          durataStr = h > 0 ? `${h}h ${m}m` : `${m}m`;
+        }
+
+        const simbolo = presenzeMap.get(`${u.id}-${g.dateStr}`) || '';
+        const nota = shifts.find((s) => s.note?.trim())?.note?.trim() || '';
+        row.push(durataStr, simbolo, nota);
+        det.addRow(row);
+      });
+
+      const hTot = Math.floor(totMinPeriodo / 60);
+      const mTot = Math.round(totMinPeriodo % 60);
+      const totRow = det.addRow(['Totale', `${giorniConTurni.length} gg`, '', ...Array(maxTurni * 2).fill(''), `${hTot}h ${mTot}m`, '', '']);
+      totRow.eachCell((cell) => {
+        cell.font = { bold: true };
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF3F4F6' } };
+      });
+    } else if (dettagli) {
       // Raggruppa i turni per giorno e per utente
       const byDayUtente = {};
       presenze.rows.forEach((p) => {
@@ -744,9 +810,16 @@ router.get('/tl/export', requireAuth, requireTL, async (req, res) => {
 /*                        QR CODE, TIMBRATURA, OGGI                           */
 /* -------------------------------------------------------------------------- */
 
+// Il QR mostrato a schermo ruota ogni 5s (vedi PaginaQR.js): questo impedisce
+// di fotografarlo e condividerlo. Il token resta però valido 15s dopo la
+// generazione, così una scansione legittima ha tempo di completare il giro
+// (rete + verifica auth + query DB) senza scadere. I token non vengono
+// cancellati alla rotazione: restano validi fino alla scadenza o all'uso.
+const TOKEN_TTL_MS = 15 * 1000;
+
 router.get('/qr', async (req, res) => {
   const token = generateToken();
-  const expiresAt = Date.now() + 5 * 1000; // 5sec
+  const expiresAt = Date.now() + TOKEN_TTL_MS;
   validTokens[token] = { expiresAt };
 
   const qrPayload = JSON.stringify({ token });
@@ -763,59 +836,78 @@ router.post('/timbratura', requireAuth, async (req, res) => {
     return res.status(400).json({ error: 'Token scaduto o non valido' });
   }
 
-  delete validTokens[token];
+  delete validTokens[token]; // consumato: un token vale una sola timbratura
 
   const utente_id = req.user.id;
   if (!utente_id) {
     return res.status(401).json({ error: 'Utente non autenticato' });
   }
 
-  const utenteRes = await pool.query(
-    `SELECT tipo_contratto FROM utenti WHERE id = $1 LIMIT 1`,
-    [utente_id]
-  );
-
-  if (utenteRes.rows.length === 0) {
-    return res.status(404).json({ error: 'Utente non trovato' });
-  }
-
-  const tipo_contratto = utenteRes.rows[0].tipo_contratto;
-  const minutiPrevisti = getMinutiContratto(tipo_contratto);
-
-  const now = new Date();
-  const oggi = localDateStr(now);
-
-  const lastShift = await pool.query(
-    `SELECT * FROM presenze WHERE utente_id = $1 ORDER BY ora_entrata DESC LIMIT 1`,
-    [utente_id]
-  );
-
-  const turnoAperto = lastShift.rows.length > 0 && lastShift.rows[0].ora_uscita === null
-    ? lastShift.rows[0]
-    : null;
-
-  if (!turnoAperto) {
-    await pool.query(
-      `INSERT INTO presenze (utente_id, data, ora_entrata) VALUES ($1, $2, $3)`,
-      [utente_id, oggi, now]
+  try {
+    const utenteRes = await pool.query(
+      `SELECT tipo_contratto FROM utenti WHERE id = $1 LIMIT 1`,
+      [utente_id]
     );
-    console.log(`[timbratura] entrata utente=${utente_id} data=${oggi}`);
-  } else {
-    let oraUscitaFinale = now;
 
-    if (minutiPrevisti > 0) {
-      const cappata = await calcolaOraUscitaCappata(utente_id, turnoAperto, minutiPrevisti);
-      if (cappata < now) oraUscitaFinale = cappata;
+    if (utenteRes.rows.length === 0) {
+      return res.status(404).json({ error: 'Utente non trovato' });
     }
 
-    await pool.query(
-      `UPDATE presenze SET ora_uscita = $1, ora_uscita_reale = $2 WHERE id = $3`,
-      [oraUscitaFinale, now, turnoAperto.id]
-    );
-    console.log(`[timbratura] uscita utente=${utente_id} turno_id=${turnoAperto.id}`);
-  }
+    const tipo_contratto = utenteRes.rows[0].tipo_contratto;
+    const minutiPrevisti = getMinutiContratto(tipo_contratto);
 
-  res.json({ message: 'Timbratura registrata!' });
+    const now = new Date();
+    const oggi = localDateStr(now);
+
+    const lastShift = await pool.query(
+      `SELECT * FROM presenze WHERE utente_id = $1 ORDER BY ora_entrata DESC LIMIT 1`,
+      [utente_id]
+    );
+
+    const turnoAperto = lastShift.rows.length > 0 && lastShift.rows[0].ora_uscita === null
+      ? lastShift.rows[0]
+      : null;
+
+    let action;
+
+    if (!turnoAperto) {
+      await pool.query(
+        `INSERT INTO presenze (utente_id, data, ora_entrata) VALUES ($1, $2, $3)`,
+        [utente_id, oggi, now]
+      );
+      action = 'entrata';
+      console.log(`[timbratura] entrata utente=${utente_id} data=${oggi}`);
+    } else {
+      let oraUscitaFinale = now;
+
+      if (minutiPrevisti > 0) {
+        const cappata = await calcolaOraUscitaCappata(utente_id, turnoAperto, minutiPrevisti);
+        if (cappata < now) oraUscitaFinale = cappata;
+      }
+
+      await pool.query(
+        `UPDATE presenze SET ora_uscita = $1, ora_uscita_reale = $2 WHERE id = $3`,
+        [oraUscitaFinale, now, turnoAperto.id]
+      );
+      action = 'uscita';
+      console.log(`[timbratura] uscita utente=${utente_id} turno_id=${turnoAperto.id}`);
+    }
+
+    const ora = now.toLocaleTimeString('it-IT', {
+      hour: '2-digit',
+      minute: '2-digit',
+      timeZone: 'Europe/Rome',
+    });
+
+    return res.json({
+      message: action === 'entrata' ? 'Entrata registrata' : 'Uscita registrata',
+      action,
+      ora,
+    });
+  } catch (e) {
+    console.error(`[timbratura] errore DB utente=${utente_id}`, e);
+    return res.status(500).json({ error: 'Timbratura non registrata, riprova' });
+  }
 });
 
 router.patch('/uscita-anticipata', requireAuth, async (req, res) => {
