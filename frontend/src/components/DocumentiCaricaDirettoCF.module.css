@@ -242,6 +242,17 @@
 
 /* CARD FILE */
 
+.cardsHeader{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+  margin-top:8px;
+  font-size:13px;
+  color:#475569;
+  font-weight:600;
+}
+
 .cards{
   display:grid;
   grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
@@ -253,6 +264,30 @@
   display:flex;
   gap:12px;
   align-items:flex-start;
+  position:relative;
+}
+
+.removeBtn{
+  position:absolute;
+  top:6px;
+  right:6px;
+  width:22px;
+  height:22px;
+  border:none;
+  border-radius:999px;
+  background:rgba(15,23,42,.06);
+  color:#334155;
+  font-size:15px;
+  line-height:1;
+  cursor:pointer;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  z-index:1;
+}
+.removeBtn:hover{
+  background:#ef4444;
+  color:#fff;
 }
 
 .fileCardOk{
@@ -296,6 +331,7 @@
   white-space:nowrap;
   overflow:hidden;
   text-overflow:ellipsis;
+  padding-right:22px;
 }
 
 .fileSub{

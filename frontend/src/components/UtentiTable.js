@@ -117,10 +117,21 @@ function UtentiTable({
     setSelectedIds([]);
   }, [archived]);
 
+  // "Acquapark Egnazia, Ingresso" -> "Acquapark Egnazia"
+  const baseSede = (s) => String(s || "").split(",")[0].trim();
+
   const sedi = useMemo(() => {
-    const s = new Set();
-    utenti.forEach((u) => u?.sede && s.add(u.sede));
-    return ["tutte", ...Array.from(s).sort()];
+    const m = new Map();
+    utenti.forEach((u) => {
+      const b = baseSede(u?.sede);
+      if (b && !m.has(b.toLowerCase())) m.set(b.toLowerCase(), b);
+    });
+    return [
+      "tutte",
+      ...Array.from(m.values()).sort((a, b) =>
+        a.localeCompare(b, "it", { sensitivity: "base" })
+      ),
+    ];
   }, [utenti]);
 
   const societa = useMemo(() => {
@@ -143,7 +154,13 @@ function UtentiTable({
       ].join(" ");
 
       if (QQ && !hay.includes(QQ)) return false;
-      if (filterSede !== "tutte" && u?.sede !== filterSede) return false;
+      if (filterSede !== "tutte") {
+        const sel = filterSede.trim().toLowerCase();
+        const full = String(u?.sede || "").trim().toLowerCase();
+        // match sulla sede base (include tutte le sotto-sedi, es. "…, Ingresso")
+        // oppure sul valore completo (retro-compatibilità con filtri salvati)
+        if (baseSede(u?.sede).toLowerCase() !== sel && full !== sel) return false;
+      }
       if (filterSocieta !== "tutte" && u?.societa_nome !== filterSocieta) return false;
       if (filterStato === "attivi" && !u?.stato_attivo) return false;
       if (filterStato === "disattivi" && !!u?.stato_attivo) return false;

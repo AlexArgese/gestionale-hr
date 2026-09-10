@@ -301,6 +301,39 @@ export default function DocumentiCaricaDirettoCF({ tipi = [] }) {
     if (inputRef.current) inputRef.current.value = "";
   }
 
+  function removeItem(id) {
+    setItems((prev) => {
+      const target = prev.find((x) => x.id === id);
+      if (target?.thumb && String(target.thumb).startsWith("blob:")) {
+        try {
+          URL.revokeObjectURL(target.thumb);
+        } catch (_) {}
+      }
+      return prev.filter((x) => x.id !== id);
+    });
+    setCustomFileNames((prev) => {
+      if (!(id in prev)) return prev;
+      const next = { ...prev };
+      delete next[id];
+      return next;
+    });
+  }
+
+  function clearItems() {
+    setItems((prev) => {
+      prev.forEach((x) => {
+        if (x?.thumb && String(x.thumb).startsWith("blob:")) {
+          try {
+            URL.revokeObjectURL(x.thumb);
+          } catch (_) {}
+        }
+      });
+      return [];
+    });
+    setCustomFileNames({});
+    if (inputRef.current) inputRef.current.value = "";
+  }
+
   async function analizza() {
     if (items.length === 0) {
       setBanner({ type: "info", text: "Aggiungi dei file prima." });
@@ -363,7 +396,15 @@ export default function DocumentiCaricaDirettoCF({ tipi = [] }) {
     return "Nessun target definito";
   }, [assegnaMode, selectedUsers, utentiFull]);
 
-  async function carica({ require_signature, signature_placements, append_names } = {}) {
+  async function carica({
+    require_signature,
+    signature_placements,
+    header_placements,
+    date_placements,
+    append_names,
+    email_subject,
+    email_body,
+  } = {}) {
     if (!tipoDocumento) {
       setBanner({ type: "info", text: "Seleziona il tipo documento." });
       return;
@@ -426,6 +467,9 @@ export default function DocumentiCaricaDirettoCF({ tipi = [] }) {
               }
             : null;
 
+        const headerPlacement = header_placements?.[it.id] || null;
+        const datePlacement = date_placements?.[it.id] || null;
+
         const firstUser = targetsForFile.length === 1
           ? utentiFull.find((x) => String(x.id) === String(targetsForFile[0]))
           : null;
@@ -442,6 +486,10 @@ export default function DocumentiCaricaDirettoCF({ tipi = [] }) {
         fd.append("require_signature", require_signature ? "true" : "false");
         fd.append("append_names", append_names ? "true" : "false");
         if (placement) fd.append("signature_placement", JSON.stringify(placement));
+        if (headerPlacement) fd.append("header_placement", JSON.stringify(headerPlacement));
+        if (datePlacement) fd.append("date_placement", JSON.stringify(datePlacement));
+        if (email_subject) fd.append("email_subject", email_subject);
+        if (email_body) fd.append("email_body", email_body);
         if (dataScadenza) fd.append("data_scadenza", dataScadenza);
 
         const res = await fetch(`${API}/documenti/upload-multi`, {
@@ -676,6 +724,20 @@ export default function DocumentiCaricaDirettoCF({ tipi = [] }) {
       </div>
 
       {/* Lista file */}
+      {items.length > 0 && (
+        <div className={styles.cardsHeader}>
+          <span>
+            {items.length} file selezionat{items.length === 1 ? "o" : "i"}
+          </span>
+          <button
+            type="button"
+            className={`btn ${styles.secondaryBtn}`}
+            onClick={clearItems}
+          >
+            Rimuovi tutti
+          </button>
+        </div>
+      )}
       <div className={styles.cards}>
         {items.map((it) => {
           const u = it.utenteId
@@ -688,6 +750,15 @@ export default function DocumentiCaricaDirettoCF({ tipi = [] }) {
               }`}
               key={it.id}
             >
+              <button
+                type="button"
+                className={styles.removeBtn}
+                onClick={() => removeItem(it.id)}
+                title="Rimuovi dalla selezione"
+                aria-label="Rimuovi dalla selezione"
+              >
+                ×
+              </button>
               <div className={styles.thumb}>
                 {it.thumb ? (
                   <img src={it.thumb} alt={it.name} />
@@ -861,7 +932,7 @@ export default function DocumentiCaricaDirettoCF({ tipi = [] }) {
         onClick={handleOpenPreview}
         disabled={loading || previewPreparing}
       >
-        {loading ? "Carico…" : previewPreparing ? "Preparo anteprime…" : "Carica"}
+        {loading ? "Carico…" : previewPreparing ? "Preparo anteprime…" : "Procedi con l'anteprima"}
       </button>
     </div>
   );

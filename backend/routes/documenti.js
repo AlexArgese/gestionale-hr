@@ -9,7 +9,7 @@ const pool    = require('../db');
 const multer  = require('multer');
 const path    = require('path');
 const fs      = require('fs');
-const { PDFDocument } = require('pdf-lib');
+const { PDFDocument, StandardFonts, rgb, degrees } = require('pdf-lib');
 const requireAuth = require('../middleware/requireAuth');
 
 /* ---------- Multer ---------- */
@@ -42,7 +42,38 @@ async function getUserPushTokens(utenteId) {
     .filter(Boolean);
 }
 
-async function notifyNewDocumentAssigned({ utenteId, documentoId, nomeFile, tipoDocumento }) {
+function escapeHtml(s) {
+  return String(s ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+/** sostituisce i segnaposto {nome} {cognome} {nome_cognome} {documento} {tipo} */
+function applyMailPlaceholders(tpl, vars) {
+  return String(tpl || "").replace(/\{(nome_cognome|nome|cognome|documento|tipo)\}/gi, (_, k) => {
+    const key = k.toLowerCase();
+    const map = {
+      nome: vars.nome || "",
+      cognome: vars.cognome || "",
+      nome_cognome: vars.displayName || "",
+      documento: vars.nomeFile || "",
+      tipo: vars.tipoDocumento || "-",
+    };
+    return map[key] ?? "";
+  });
+}
+
+async function notifyNewDocumentAssigned({
+  utenteId,
+  documentoId,
+  nomeFile,
+  tipoDocumento,
+  emailSubject,
+  emailBody,
+}) {
   try {
     const u = await pool.query(
       `SELECT nome, cognome, email
@@ -73,11 +104,35 @@ async function notifyNewDocumentAssigned({ utenteId, documentoId, nomeFile, tipo
 
     // EMAIL
     if (user.email) {
-      await safeSendMail({
-        to: user.email,
-        subject: "ClockEasy - Nuovo documento disponibile",
-        text:
-`Ciao ${displayName},
+      const vars = { nome: user.nome, cognome: user.cognome, displayName, nomeFile, tipoDocumento };
+      const customSubject = String(emailSubject || "").trim();
+      const customBody = String(emailBody || "").trim();
+
+      let subject;
+      let text;
+      let html;
+
+      if (customSubject || customBody) {
+        // email personalizzata da "carica documento"
+        subject = customSubject
+          ? applyMailPlaceholders(customSubject, vars)
+          : "ClockEasy - Nuovo documento disponibile";
+
+        const bodyText = customBody
+          ? applyMailPlaceholders(customBody, vars)
+          : `Ciao ${displayName},\n\nè stato caricato un nuovo documento su ClockEasy.\nDocumento: ${nomeFile}\nTipo: ${tipoDocumento || "-"}`;
+
+        text = `${bodyText}\n\nMessaggio automatico, non rispondere a questa email.`;
+        html = `
+          <div style="white-space:pre-wrap;font-family:Arial,Helvetica,sans-serif;font-size:14px;color:#0f172a;">${escapeHtml(
+            bodyText
+          )}</div>
+          <p style="color:#666;font-size:12px;margin-top:16px;">Messaggio automatico, non rispondere a questa email.</p>
+        `;
+      } else {
+        // preset
+        subject = "ClockEasy - Nuovo documento disponibile";
+        text = `Ciao ${displayName},
 
 è stato caricato un nuovo documento su ClockEasy.
 
@@ -86,8 +141,8 @@ Tipo: ${tipoDocumento || "-"}
 
 Accedi all'app ClockEasy per visualizzarlo.
 
-Messaggio automatico, non rispondere a questa email.`,
-        html: `
+Messaggio automatico, non rispondere a questa email.`;
+        html = `
           <p>Ciao <strong>${displayName}</strong>,</p>
           <p>è stato caricato un nuovo documento su <strong>ClockEasy</strong>.</p>
           <p>
@@ -96,15 +151,18 @@ Messaggio automatico, non rispondere a questa email.`,
           </p>
           <p>Accedi all'app ClockEasy per visualizzarlo.</p>
           <p style="color:#666;font-size:12px;">Messaggio automatico, non rispondere a questa email.</p>
-        `,
-      });
+        `;
+      }
+
+      await safeSendMail({ to: user.email, subject, text, html });
     }
   } catch (e) {
     console.error("notifyNewDocumentAssigned error:", e);
   }
 }
 
-function fireAndForgetDocumentNotifications(rows, tipoDocumento) {
+function fireAndForgetDocumentNotifications(rows, tipoDocumento, opts = {}) {
+  const { emailSubject, emailBody } = opts;
   Promise.allSettled(
     (rows || []).map((doc) =>
       notifyNewDocumentAssigned({
@@ -112,6 +170,8 @@ function fireAndForgetDocumentNotifications(rows, tipoDocumento) {
         documentoId: doc.id,
         nomeFile: doc.nome_file,
         tipoDocumento,
+        emailSubject,
+        emailBody,
       })
     )
   ).catch((e) => {
@@ -227,6 +287,166 @@ function appendNomeCognome(fileName, nome, cognome) {
   if (!token) return fileName;
   const m = String(fileName).match(/^(.*?)(\.[A-Za-z0-9]+)$/);
   return m ? `${m[1]}_${token}${m[2]}` : `${fileName}_${token}`;
+}
+
+function parseJsonSafe(v) {
+  if (!v) return null;
+  if (typeof v === "object") return v;
+  try {
+    return JSON.parse(v);
+  } catch {
+    return null;
+  }
+}
+
+/** data odierna in formato it: GG/MM/AAAA */
+function fmtDataIt(d = new Date()) {
+  const p = (n) => String(n).padStart(2, "0");
+  return `${p(d.getDate())}/${p(d.getMonth() + 1)}/${d.getFullYear()}`;
+}
+
+const clamp01 = (n) => Math.max(0, Math.min(1, n));
+
+/** rende una stringa scrivibile con Helvetica standard (WinAnsi) */
+function sanitizeWinAnsi(s) {
+  return String(s || "")
+    .replace(/[‘’‛]/g, "'")
+    .replace(/[“”]/g, '"')
+    .replace(/[–—]/g, "-")
+    .replace(/…/g, "...")
+    .replace(/[^\x00-\xFF]/g, "");
+}
+
+/**
+ * Normalizza un placement (px o percentuale) in frazioni 0..1 TOP-LEFT
+ * riferite all'area VISIBILE della pagina (come la mostra pdf.js), + indice pagina.
+ * Ritorna anche wf/hf (frazione larghezza/altezza del riquadro).
+ */
+function frazioneDaPlacement(pl) {
+  if (!pl || typeof pl !== "object") return null;
+
+  const pageIndex = Math.max(
+    0,
+    Math.round(
+      Number.isFinite(Number(pl.pageIndex))
+        ? Number(pl.pageIndex)
+        : Number.isFinite(Number(pl.page))
+        ? Number(pl.page) - 1
+        : 0
+    )
+  );
+
+  let xf;
+  let yf;
+  let wf;
+  let hf;
+
+  const xPct = Number(pl.xPct);
+  const yPct = Number(pl.yPct);
+  if (Number.isFinite(xPct) && Number.isFinite(yPct)) {
+    xf = xPct;
+    yf = yPct;
+    wf = Number(pl.wPct);
+    hf = Number(pl.hPct);
+  } else {
+    const pageW = Number(pl.pageW);
+    const pageH = Number(pl.pageH);
+    if (!(pageW > 0 && pageH > 0)) return null;
+    xf = Number(pl.x) / pageW;
+    yf = Number(pl.y) / pageH;
+    wf = Number(pl.width) / pageW;
+    hf = Number(pl.height) / pageH;
+  }
+
+  if (!Number.isFinite(xf) || !Number.isFinite(yf)) return null;
+
+  return {
+    xf: clamp01(xf),
+    yf: clamp01(yf),
+    wf: Number.isFinite(wf) ? Math.max(0, wf) : 0,
+    hf: Number.isFinite(hf) ? Math.max(0, hf) : 0,
+    pageIndex,
+  };
+}
+
+/**
+ * Scrive testi fissi (intestazione / data) dentro il PDF con pdf-lib, 12px Helvetica.
+ * Mappa la posizione nello STESSO spazio visibile mostrato da pdf.js:
+ * tiene conto di CropBox e rotazione della pagina. La baseline del testo è
+ * centrata verticalmente nel riquadro, allineata al bordo sinistro.
+ * Ritorna un Buffer nuovo; in caso di errore ritorna il buffer originale.
+ */
+async function applicaTestiPdf(buffer, jobs = []) {
+  const validi = (jobs || []).filter((j) => j && j.text && j.placement);
+  if (!validi.length) return buffer;
+
+  try {
+    const pdf = await PDFDocument.load(buffer);
+    const font = await pdf.embedFont(StandardFonts.Helvetica);
+    const pages = pdf.getPages();
+    const SIZE = 12;
+
+    for (const j of validi) {
+      const fr = frazioneDaPlacement(j.placement);
+      if (!fr) continue;
+
+      const page = pages[Math.min(fr.pageIndex, pages.length - 1)];
+      if (!page) continue;
+
+      const cb = page.getCropBox(); // { x, y, width, height }
+      const cw = cb.width;
+      const ch = cb.height;
+      const rot = (((page.getRotation().angle || 0) % 360) + 360) % 360;
+      const rotated = rot === 90 || rot === 270;
+
+      // dimensioni "viste" (come pdf.js): per 90/270 sono scambiate
+      const vw = rotated ? ch : cw;
+      const vh = rotated ? cw : ch;
+
+      const text = sanitizeWinAnsi(j.text);
+      const boxH = fr.hf * vh;
+
+      // ancora nello spazio visibile (origine in alto a sx)
+      const vX = fr.xf * vw;
+      // baseline = centro verticale del riquadro (+ correzione cap-height)
+      const vY = fr.yf * vh + (boxH > 0 ? boxH / 2 : SIZE / 2) + SIZE * 0.32;
+
+      // visibile(top-left) -> cropbox-local top-left nello spazio NON ruotato (cw x ch)
+      let xTl;
+      let yTl;
+      if (rot === 90) {
+        xTl = vY;
+        yTl = ch - vX;
+      } else if (rot === 180) {
+        xTl = cw - vX;
+        yTl = ch - vY;
+      } else if (rot === 270) {
+        xTl = cw - vY;
+        yTl = vX;
+      } else {
+        xTl = vX;
+        yTl = vY;
+      }
+
+      const X = cb.x + xTl;
+      const Y = cb.y + (ch - yTl); // -> origine in basso
+
+      page.drawText(text, {
+        x: X,
+        y: Y,
+        size: SIZE,
+        font,
+        color: rgb(0, 0, 0),
+        rotate: degrees(rot), // testo orizzontale anche su pagine ruotate
+      });
+    }
+
+    const out = await pdf.save();
+    return Buffer.from(out);
+  } catch (e) {
+    console.warn("[documenti] applicaTestiPdf fallito, uso l'originale:", e.message || e);
+    return buffer;
+  }
 }
 
 function parseSignaturePlacement(body) {
@@ -593,7 +813,10 @@ router.post('/upload', requireAuth, (req, res) => {
       });
 
       // push + mail documento
-      fireAndForgetDocumentNotifications(inserted, tipoNorm);
+      fireAndForgetDocumentNotifications(inserted, tipoNorm, {
+        emailSubject: req.body.email_subject,
+        emailBody: req.body.email_body,
+      });
 
       // fire-and-forget Yousign
       if (require_signature) {
@@ -630,6 +853,19 @@ router.post('/upload-multi', requireAuth, (req, res) => {
       const require_signature = parseBool(req.body.require_signature || req.body.requireSignature);
       const appendNames = parseBool(req.body.append_names || req.body.appendNames || req.body.includi_nome_cognome);
       const signaturePlacement = parseSignaturePlacement(req.body);
+
+      const isPdfUpload =
+        req.file.mimetype === 'application/pdf' || /\.pdf$/i.test(req.file.originalname || '');
+      const headerPlacement = isPdfUpload
+        ? parseJsonSafe(req.body.header_placement || req.body.headerPlacement)
+        : null;
+      const datePlacement = isPdfUpload
+        ? parseJsonSafe(req.body.date_placement || req.body.datePlacement)
+        : null;
+      const wantsHeader = !!headerPlacement;
+      const wantsDate = !!datePlacement;
+      const bakeText = wantsHeader || wantsDate;
+      const dataOggi = fmtDataIt();
 
       if (!validateTipo(tipo_documento)) {
         return res.status(400).json({ error: 'Tipo documento non valido' });
@@ -668,11 +904,30 @@ router.post('/upload-multi', requireAuth, (req, res) => {
         return u ? appendNomeCognome(finalNomeFile, u.nome, u.cognome) : finalNomeFile;
       };
 
+      // buffer PDF personalizzato per destinatario (intestazione + data "stampate" nel file)
+      const bufferPerUtente = async (u) => {
+        if (!bakeText) return req.file.buffer;
+        const displayName =
+          [u?.nome, u?.cognome].filter(Boolean).join(' ').trim() || 'dipendente';
+        return applicaTestiPdf(req.file.buffer, [
+          wantsHeader && {
+            text: `Gent. dipendente ${displayName}`,
+            placement: headerPlacement,
+          },
+          wantsDate && { text: dataOggi, placement: datePlacement },
+        ].filter(Boolean));
+      };
+
+      // richiede una copia S3 per destinatario se: firma, oppure testi stampati nel PDF
+      const perUser = require_signature || bakeText;
+
       let inserted = [];
 
-      if (require_signature) {
+      if (perUser) {
         for (const uid of uniq) {
+          const u = userById.get(uid) || {};
           const nomeFileUid = nomeFilePerUtente(uid);
+          const buf = await bufferPerUtente(u);
           const chiaveS3 = creaChiaveS3({
             utenteId: uid,
             tipoDocumento: tipoNorm,
@@ -681,7 +936,7 @@ router.post('/upload-multi', requireAuth, (req, res) => {
 
           await caricaBufferSuS3({
             chiave: chiaveS3,
-            buffer: req.file.buffer,
+            buffer: buf,
             contentType: req.file.mimetype,
           });
 
@@ -747,7 +1002,10 @@ router.post('/upload-multi', requireAuth, (req, res) => {
           ? `Documento assegnato a ${uniq.length} dipendenti e firma avviata.`
           : `Documento assegnato a ${uniq.length} dipendenti.`,
       });
-      fireAndForgetDocumentNotifications(inserted, tipoNorm);
+      fireAndForgetDocumentNotifications(inserted, tipoNorm, {
+        emailSubject: req.body.email_subject,
+        emailBody: req.body.email_body,
+      });
 
       if (require_signature) {
         (async () => {
@@ -877,7 +1135,10 @@ router.post('/split', requireAuth, (req, res) => {
       }
 
       res.json({ message: `Creati ${parts.length} documenti e assegnati a ${ids.length} dipendenti.` });
-      fireAndForgetDocumentNotifications(createdDocs, tipoNorm);
+      fireAndForgetDocumentNotifications(createdDocs, tipoNorm, {
+        emailSubject: req.body.email_subject,
+        emailBody: req.body.email_body,
+      });
 
       if (require_signature) {
         console.warn("[Yousign] split con firma: da definire strategia (di solito firma solo alcune parti).");
@@ -969,7 +1230,10 @@ router.post('/merge', requireAuth, (req, res) => {
       });
 
       res.json({ message: `Documento unito e assegnato a ${ids.length} dipendenti.` });
-      fireAndForgetDocumentNotifications(inserted, tipoNorm);
+      fireAndForgetDocumentNotifications(inserted, tipoNorm, {
+        emailSubject: req.body.email_subject,
+        emailBody: req.body.email_body,
+      });
 
       if (require_signature) {
         console.warn("[Yousign] merge con firma: ok, ma definire se parte firma automatica.");

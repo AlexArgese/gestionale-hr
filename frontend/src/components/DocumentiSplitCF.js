@@ -405,7 +405,12 @@ export default function DocumentiSplitCF({ tipi = [] }) {
   }
   
 
-  const handleConfermaUpload = async ({ require_signature, signature_placements } = {}) => {
+  const handleConfermaUpload = async ({
+    require_signature,
+    signature_placements,
+    email_subject,
+    email_body,
+  } = {}) => {
     try {
       if (!tipoDocumento) {
         setBanner({
@@ -488,6 +493,8 @@ export default function DocumentiSplitCF({ tipi = [] }) {
         if (placement) {
           fd.append("signature_placement", JSON.stringify(placement));
         }
+        if (email_subject) fd.append("email_subject", email_subject);
+        if (email_body) fd.append("email_body", email_body);
         if (dataScadenza) fd.append("data_scadenza", dataScadenza);
 
         const res = await fetch(`${API}/documenti/upload`, {
@@ -996,6 +1003,8 @@ export default function DocumentiSplitCF({ tipi = [] }) {
         loading={loading}
         customFileNames={customFileNames}
         setCustomFileNames={setCustomFileNames}
+        allowStamps={false}
+        allowAppendNames={false}
       />
 
       {/* Selettore dipendenti */}
