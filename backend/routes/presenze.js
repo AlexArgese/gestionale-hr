@@ -831,7 +831,7 @@ router.get('/tl/export', requireAuth, requireTL, async (req, res) => {
 // cancellati alla rotazione: restano validi fino alla scadenza o all'uso.
 const TOKEN_TTL_MS = 15 * 1000;
 
-const QR_VIEWER_EMAIL = 'qrcode@zoosafari.it';
+const QR_VIEWER_EMAIL = 'qrcode@clockeasy.it';
 
 router.get('/qr', requireAuth, async (req, res) => {
   const ruolo = req.user.ruolo;
