@@ -82,7 +82,7 @@ function AppContent() {
   const isTeamLeader = !isAdmin && !isWbManager && !!(me?.team_leader_sedi?.trim());
   // Il QR (usato per la timbratura) deve essere visibile solo dal totem/admin,
   // mai da un dipendente che accede con la propria email da internet.
-  const isQrViewer = isAdmin || (me?.email || '').toLowerCase() === 'qrcode@zoosafari.it';
+  const isQrViewer = isAdmin || (me?.email || '').toLowerCase() === 'qrcode@clockeasy.it';
 
   // redirect iniziale in base al ruolo
   useEffect(() => {
