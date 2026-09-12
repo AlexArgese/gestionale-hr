@@ -32,8 +32,9 @@ setInterval(async () => {
     for (const row of openShifts.rows) {
       const minutiPrevisti = getMinutiContratto(row.tipo_contratto);
       if (minutiPrevisti === 0) continue;
-      const oraUscita = await calcolaOraUscitaCappata(row.utente_id, row, minutiPrevisti);
-      if (!oraUscita) continue;
+      const cappata = await calcolaOraUscitaCappata(row.utente_id, row, minutiPrevisti);
+      if (!cappata) continue;
+      const oraUscita = randomizzaUscitaCappata(cappata, new Date(row.ora_entrata));
       await pool.query(
         `UPDATE presenze SET ora_uscita = $1, note = 'Uscita dimenticata. Chiusa automaticamente dopo 24h' WHERE id = $2`,
         [oraUscita, row.id]
@@ -70,6 +71,19 @@ async function calcolaOraUscitaCappata(utente_id, turno, minutiPrevisti) {
   if (minutiRimasti <= 0) return new Date(turno.ora_entrata); // contratto già esaurito
 
   return addMinutes(new Date(turno.ora_entrata), minutiRimasti);
+}
+
+const JITTER_USCITA_MS = 10 * 60 * 1000; // 10 minuti
+
+// Applica un jitter random (± 10 minuti) all'uscita cappata, così da non
+// lasciare un'uscita che cade esattamente a entrata + ore di contratto.
+// Non scende mai sotto ora_entrata; se è nota l'ora reale di uscita non la supera mai.
+function randomizzaUscitaCappata(cappata, entrata, limiteSuperiore) {
+  const lower = Math.max(cappata.getTime() - JITTER_USCITA_MS, entrata.getTime() + 1000);
+  const upperRaw = cappata.getTime() + JITTER_USCITA_MS;
+  const upper = limiteSuperiore ? Math.min(upperRaw, limiteSuperiore.getTime() - 1000) : upperRaw;
+  if (upper <= lower) return cappata;
+  return new Date(Math.round(lower + Math.random() * (upper - lower)));
 }
 
 // 🔹 Data locale "YYYY-MM-DD" (evita UTC)
@@ -882,7 +896,9 @@ router.post('/timbratura', requireAuth, async (req, res) => {
 
       if (minutiPrevisti > 0) {
         const cappata = await calcolaOraUscitaCappata(utente_id, turnoAperto, minutiPrevisti);
-        if (cappata < now) oraUscitaFinale = cappata;
+        if (cappata < now) {
+          oraUscitaFinale = randomizzaUscitaCappata(cappata, new Date(turnoAperto.ora_entrata), now);
+        }
       }
 
       await pool.query(
