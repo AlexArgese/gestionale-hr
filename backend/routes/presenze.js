@@ -831,7 +831,16 @@ router.get('/tl/export', requireAuth, requireTL, async (req, res) => {
 // cancellati alla rotazione: restano validi fino alla scadenza o all'uso.
 const TOKEN_TTL_MS = 15 * 1000;
 
-router.get('/qr', async (req, res) => {
+const QR_VIEWER_EMAIL = 'qrcode@zoosafari.it';
+
+router.get('/qr', requireAuth, async (req, res) => {
+  const ruolo = req.user.ruolo;
+  const email = (req.user.email || '').toLowerCase();
+  const autorizzato = ruolo === 'admin' || ruolo === 'admin_lan' || email === QR_VIEWER_EMAIL;
+  if (!autorizzato) {
+    return res.status(403).json({ error: 'Non autorizzato a visualizzare il QR code' });
+  }
+
   const token = generateToken();
   const expiresAt = Date.now() + TOKEN_TTL_MS;
   validTokens[token] = { expiresAt };

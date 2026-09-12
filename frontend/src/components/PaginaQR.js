@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import './PaginaQR.css';
-import { API_BASE } from "../api";
+import { API_BASE, getIdToken } from "../api";
 
 const API = API_BASE;
 
@@ -11,7 +11,11 @@ function PaginaQR() {
 
   const fetchQR = async () => {
     try {
-      const res = await fetch(`${API}/presenze/qr`);
+      const token = await getIdToken();
+      const res = await fetch(`${API}/presenze/qr`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      if (res.status === 403) throw new Error('Non autorizzato');
       if (!res.ok) throw new Error('Errore fetch QR');
       const data = await res.json();
       setQrImage(data.image);

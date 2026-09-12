@@ -80,6 +80,9 @@ function AppContent() {
   const isAdmin = ruolo === 'admin' || ruolo === 'admin_lan';
   const isWbManager = ruolo === 'wb_manager';
   const isTeamLeader = !isAdmin && !isWbManager && !!(me?.team_leader_sedi?.trim());
+  // Il QR (usato per la timbratura) deve essere visibile solo dal totem/admin,
+  // mai da un dipendente che accede con la propria email da internet.
+  const isQrViewer = isAdmin || (me?.email || '').toLowerCase() === 'qrcode@zoosafari.it';
 
   // redirect iniziale in base al ruolo
   useEffect(() => {
@@ -92,9 +95,10 @@ function AppContent() {
       if (isWbManager) navigate('/wb-manager', { replace: true });
       else if (isTeamLeader) navigate('/tl', { replace: true });
       else if (isAdmin) navigate('/', { replace: true }); // home admin
-      else navigate('/qr', { replace: true }); // dipendente
+      else if (isQrViewer) navigate('/qr', { replace: true }); // account totem QR
+      else navigate('/nessun-accesso', { replace: true }); // dipendente
     }
-  }, [loading, user, isAdmin, isWbManager, isTeamLeader, navigate, location.pathname, isPublicRoute]);
+  }, [loading, user, isAdmin, isWbManager, isTeamLeader, isQrViewer, navigate, location.pathname, isPublicRoute]);
 
   // Route pubblica — nessuna autenticazione richiesta
   if (isPublicRoute) {
@@ -146,7 +150,7 @@ function AppContent() {
             <div className="nav-left">
               <div className="nav-logo">
                 <a
-                  href={isWbManager ? "/wb-manager" : isTeamLeader ? "/tl" : "/qr"}
+                  href={isWbManager ? "/wb-manager" : isTeamLeader ? "/tl" : isQrViewer ? "/qr" : "/nessun-accesso"}
                   aria-label="ClockEasy Home"
                 >
                   <img src="/Logo_esteso.png" alt="ClockEasy" />
@@ -204,14 +208,32 @@ function AppContent() {
 
           {!isAdmin && !isWbManager && !isTeamLeader && (
             <>
-              <Route path="/qr" element={<PaginaQR />} />
-              <Route path="*" element={<PaginaQR />} />
+              {isQrViewer ? (
+                <>
+                  <Route path="/qr" element={<PaginaQR />} />
+                  <Route path="*" element={<PaginaQR />} />
+                </>
+              ) : (
+                <>
+                  <Route path="/qr" element={<Navigate to="/nessun-accesso" replace />} />
+                  <Route path="*" element={<NessunAccesso />} />
+                </>
+              )}
             </>
           )}
         </Routes>
       </div>
     </div>
-  );  
+  );
+}
+
+function NessunAccesso() {
+  return (
+    <div style={{ padding: 40, textAlign: 'center' }}>
+      <h2>Accesso non disponibile</h2>
+      <p>Questa sezione non è consultabile dal tuo account.</p>
+    </div>
+  );
 }
 
 export default function App() {
