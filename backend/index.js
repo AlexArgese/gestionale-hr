@@ -117,6 +117,11 @@ async function runMigrations() {
   await db.query(`ALTER TABLE documenti ADD COLUMN IF NOT EXISTS nome_file_base TEXT`)
     .catch(e => console.warn('migrate nome_file_base:', e.message));
 
+  await db.query(`ALTER TABLE utenti ADD COLUMN IF NOT EXISTS privacy_policy_version TEXT`)
+    .catch(e => console.warn('migrate privacy_policy_version:', e.message));
+  await db.query(`ALTER TABLE utenti ADD COLUMN IF NOT EXISTS privacy_policy_accepted_at TIMESTAMPTZ`)
+    .catch(e => console.warn('migrate privacy_policy_accepted_at:', e.message));
+
   await db.query(`
     ALTER TABLE wb_reports
       ADD COLUMN IF NOT EXISTS policy_accepted BOOLEAN NOT NULL DEFAULT false,

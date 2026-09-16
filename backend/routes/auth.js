@@ -31,6 +31,39 @@ router.post('/validate-user', requireAuth, async (req, res) => {
   }
 });
 
+/**
+ * POST /auth/privacy-consent
+ * Registra, lato server, che l'utente autenticato ha preso visione e
+ * accettato l'informativa privacy (versione indicata) dell'app ClockEasy.
+ * Chiamata dal client subito dopo login/registrazione (o al riconoscimento
+ * di una sessione già attiva), così da avere una prova opponibile e non
+ * solo un flag locale sul dispositivo.
+ * BODY: { version: string }
+ */
+router.post('/privacy-consent', requireAuth, async (req, res) => {
+  const email = req.user.email;
+  const version = String(req.body?.version || '').trim();
+
+  if (!email) return res.status(401).json({ error: 'Utente non autenticato' });
+  if (!version) return res.status(400).json({ error: 'Versione informativa mancante' });
+
+  try {
+    const result = await pool.query(
+      `UPDATE utenti
+          SET privacy_policy_version = $2,
+              privacy_policy_accepted_at = NOW()
+        WHERE email = $1
+          AND (privacy_policy_version IS DISTINCT FROM $2)
+        RETURNING id`,
+      [email, version]
+    );
+    res.json({ ok: true, recorded: result.rowCount > 0 });
+  } catch (err) {
+    console.error('Errore /auth/privacy-consent', err);
+    res.status(500).json({ error: 'Errore server durante la registrazione del consenso' });
+  }
+});
+
 router.post('/check-email', async (req, res) => {
   const { email } = req.body;
   if (!email) return res.status(400).json({ error: 'Email mancante' });
