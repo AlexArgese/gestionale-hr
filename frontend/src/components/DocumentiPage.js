@@ -46,25 +46,42 @@ export default function DocumentiPage() {
   const [loadingCron, setLoadingCron] = useState(false);
   const [errorCron, setErrorCron] = useState("");
   const [selectedDoc, setSelectedDoc] = useState(null); // batch selezionato per drawer
+  const [pageSize, setPageSize] = useState(25);
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalItems, setTotalItems] = useState(0);
 
-  const fetchCronologia = useCallback(async () => {
+  const fetchCronologia = useCallback(async (targetPage = page, targetPageSize = pageSize) => {
     setLoadingCron(true);
     setErrorCron("");
     try {
-      const res = await fetch(`${API}/documenti?limit=100`, {
+      const res = await fetch(`${API}/documenti?limit=${targetPageSize}&page=${targetPage}`, {
         headers: { Authorization: localStorage.getItem("token") || "" },
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
-      setCronologia(Array.isArray(data) ? data : (data?.items || []));
+      if (Array.isArray(data)) {
+        setCronologia(data);
+        setTotalPages(1);
+        setTotalItems(data.length);
+      } else {
+        setCronologia(data?.items || []);
+        setTotalPages(data?.totalPages || 1);
+        setTotalItems(data?.total || 0);
+      }
     } catch {
       setErrorCron("Impossibile caricare la cronologia.");
     } finally {
       setLoadingCron(false);
     }
-  }, []);
+  }, [page, pageSize]);
 
-  useEffect(() => { fetchCronologia(); }, [fetchCronologia]);
+  useEffect(() => { fetchCronologia(page, pageSize); }, [page, pageSize]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handlePageSizeChange = (newSize) => {
+    setPageSize(newSize);
+    setPage(1);
+  };
 
   // Elimina un singolo destinatario dal batch
   const eliminaSingolo = async (docId, urlFile) => {
@@ -147,7 +164,7 @@ export default function DocumentiPage() {
             <h3 className={styles.panelTitle}>Cronologia caricamenti</h3>
             <button
               className={styles.refreshBtn}
-              onClick={fetchCronologia}
+              onClick={() => fetchCronologia(page, pageSize)}
               disabled={loadingCron}
               title="Aggiorna"
             >
@@ -174,6 +191,42 @@ export default function DocumentiPage() {
               />
             ))}
           </div>
+
+          {!loadingCron && !errorCron && totalItems > 0 && (
+            <div className={styles.cronPagination}>
+              <label className={styles.pageSizeSelect}>
+                Per pagina
+                <select
+                  value={pageSize}
+                  onChange={e => handlePageSizeChange(Number(e.target.value))}
+                >
+                  <option value={25}>25</option>
+                  <option value={50}>50</option>
+                  <option value={100}>100</option>
+                </select>
+              </label>
+
+              <div className={styles.pageNav}>
+                <button
+                  className={styles.pageBtn}
+                  onClick={() => setPage(p => Math.max(p - 1, 1))}
+                  disabled={page <= 1}
+                >
+                  ‹ Precedente
+                </button>
+                <span className={styles.pageInfo}>
+                  Pagina {page} di {totalPages} · {totalItems} totali
+                </span>
+                <button
+                  className={styles.pageBtn}
+                  onClick={() => setPage(p => Math.min(p + 1, totalPages))}
+                  disabled={page >= totalPages}
+                >
+                  Successiva ›
+                </button>
+              </div>
+            </div>
+          )}
         </main>
       </div>
 

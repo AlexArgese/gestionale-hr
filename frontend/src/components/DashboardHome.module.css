@@ -213,6 +213,60 @@
   font-weight: 600;
 }
 
+/* ===== Paginazione avvisi ===== */
+.avvisiPagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+  flex-wrap: wrap;
+}
+
+.pageSizeSelect {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12.5px;
+  color: var(--txt-muted);
+}
+.pageSizeSelect select {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 5px 8px;
+  font-size: 12.5px;
+  color: var(--txt-strong);
+  background: #fff;
+  cursor: pointer;
+}
+
+.pageNav {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.pageBtn {
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 5px 10px;
+  cursor: pointer;
+  color: var(--txt-strong);
+  font-size: 12.5px;
+  transition: background .12s;
+}
+.pageBtn:hover:not(:disabled) { background: #F1F5F9; }
+.pageBtn:disabled { opacity: .4; cursor: default; }
+
+.pageInfo {
+  font-size: 12.5px;
+  color: var(--txt-muted);
+  white-space: nowrap;
+}
+
 /* ===== Widget presenze oggi ===== */
 .oggi {
   display: flex;

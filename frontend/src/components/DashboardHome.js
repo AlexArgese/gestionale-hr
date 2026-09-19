@@ -23,6 +23,8 @@ function DashboardHome() {
   const [selectedAvvisi, setSelectedAvvisi] = useState(new Set());
   const [sending, setSending] = useState(false);
   const [sendResult, setSendResult] = useState(null);
+  const [avvisiPageSize, setAvvisiPageSize] = useState(25);
+  const [avvisiPage, setAvvisiPage] = useState(1);
 
   // Presenze oggi
   const [societaOptions, setSocietaOptions] = useState([]);
@@ -86,6 +88,18 @@ function DashboardHome() {
   const toggleAll = () => {
     if (selectedAvvisi.size === avvisi.length) setSelectedAvvisi(new Set());
     else setSelectedAvvisi(new Set(avvisi.map(a => a.id)));
+  };
+
+  const avvisiTotalPages = Math.max(Math.ceil(avvisi.length / avvisiPageSize), 1);
+  const avvisiPageClamped = Math.min(avvisiPage, avvisiTotalPages);
+  const avvisiPaginati = avvisi.slice(
+    (avvisiPageClamped - 1) * avvisiPageSize,
+    avvisiPageClamped * avvisiPageSize
+  );
+
+  const handleAvvisiPageSizeChange = (newSize) => {
+    setAvvisiPageSize(newSize);
+    setAvvisiPage(1);
   };
 
   const sendReminders = async () => {
@@ -254,32 +268,68 @@ function DashboardHome() {
         {avvisi.length === 0 ? (
           <p className={styles.muted}>Nessun documento in attesa di firma</p>
         ) : (
-          <ul className={styles.list}>
-            {avvisi.map((a, i) => (
-              <li key={i} className={styles.listItem}>
-                <input
-                  type="checkbox"
-                  className={styles.avvisoCheck}
-                  checked={selectedAvvisi.has(a.id)}
-                  onChange={() => toggleAvviso(a.id)}
-                />
-                <div>
-                  <b
-                    className={styles.linkStrong}
-                    onClick={() => navigate(`/utenti/${a.utente_id}`)}
-                  >
-                    {a.nome} {a.cognome}
-                  </b>
-                  {' — '}
-                  <span>{a.nome_file}</span>
-                  {' — '}
-                  <span>{a.tipo_documento}</span>
-                  {' '}
-                  <span className={styles.badgeWarning}>In attesa di firma</span>
-                </div>
-              </li>
-            ))}
-          </ul>
+          <>
+            <ul className={styles.list}>
+              {avvisiPaginati.map((a, i) => (
+                <li key={i} className={styles.listItem}>
+                  <input
+                    type="checkbox"
+                    className={styles.avvisoCheck}
+                    checked={selectedAvvisi.has(a.id)}
+                    onChange={() => toggleAvviso(a.id)}
+                  />
+                  <div>
+                    <b
+                      className={styles.linkStrong}
+                      onClick={() => navigate(`/utenti/${a.utente_id}`)}
+                    >
+                      {a.nome} {a.cognome}
+                    </b>
+                    {' — '}
+                    <span>{a.nome_file}</span>
+                    {' — '}
+                    <span>{a.tipo_documento}</span>
+                    {' '}
+                    <span className={styles.badgeWarning}>In attesa di firma</span>
+                  </div>
+                </li>
+              ))}
+            </ul>
+
+            <div className={styles.avvisiPagination}>
+              <label className={styles.pageSizeSelect}>
+                Per pagina
+                <select
+                  value={avvisiPageSize}
+                  onChange={e => handleAvvisiPageSizeChange(Number(e.target.value))}
+                >
+                  <option value={25}>25</option>
+                  <option value={50}>50</option>
+                  <option value={100}>100</option>
+                </select>
+              </label>
+
+              <div className={styles.pageNav}>
+                <button
+                  className={styles.pageBtn}
+                  onClick={() => setAvvisiPage(p => Math.max(p - 1, 1))}
+                  disabled={avvisiPageClamped <= 1}
+                >
+                  ‹ Precedente
+                </button>
+                <span className={styles.pageInfo}>
+                  Pagina {avvisiPageClamped} di {avvisiTotalPages} · {avvisi.length} totali
+                </span>
+                <button
+                  className={styles.pageBtn}
+                  onClick={() => setAvvisiPage(p => Math.min(p + 1, avvisiTotalPages))}
+                  disabled={avvisiPageClamped >= avvisiTotalPages}
+                >
+                  Successiva ›
+                </button>
+              </div>
+            </div>
+          </>
         )}
       </div>
     </div>

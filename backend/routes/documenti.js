@@ -24,6 +24,8 @@ const { safeSendMail } = require("../lib/notifier");
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const YOUSIGN_DELAY_MS = 2500; // ms tra una signature request e l'altra nei batch
+const YOUSIGN_MAX_ATTEMPTS = 5; // tentativi in caso di 429 (rate limit) da Yousign
+const YOUSIGN_WAIT_ON_429_MS = 65000; // attesa tra un tentativo e l'altro dopo un 429
 
 /* ==================================================================== */
 /*  Helpers                                                             */
@@ -530,24 +532,28 @@ async function startYousignForDocumento({ documentoId, utenteId, nomeFile, urlFi
 
   const absPath = tempPath;
 
-  // 3) flow yousign (YouSign: max 128 chars sul campo name)
-  const sr = await yousignClient.createSignatureRequest({
-    name: `Firma: ${nomeFile}`.substring(0, 128).trim(),
-    deliveryMode: "email",
-  });
+  // 3) flow yousign (YouSign: max 128 chars sul campo name), con retry su 429 (rate limit)
+  let sr, doc, signer, activated;
 
-  const doc = await yousignClient.uploadDocumentToRequest(sr.id, absPath);
-
-  const signer = await yousignClient.addSigner(sr.id, {
-    firstName: (user.nome || "Dipendente").trim(),
-    lastName: (user.cognome || "").trim(),
-    email: user.email.trim(),
-  });
-
-  let field = signaturePlacement || null;
-
-  if (field) {
+  for (let attempt = 1; attempt <= YOUSIGN_MAX_ATTEMPTS; attempt++) {
     try {
+      sr = await yousignClient.createSignatureRequest({
+        name: `Firma: ${nomeFile}`.substring(0, 128).trim(),
+        deliveryMode: "email",
+      });
+
+      doc = await yousignClient.uploadDocumentToRequest(sr.id, absPath);
+
+      signer = await yousignClient.addSigner(sr.id, {
+        firstName: (user.nome || "Dipendente").trim(),
+        lastName: (user.cognome || "").trim(),
+        email: user.email.trim(),
+      });
+
+      let field = signaturePlacement || null;
+
+      if (field) {
+        try {
       const pageNum = Number.isFinite(field.page)
         ? Math.max(1, Math.round(field.page))
         : Number.isFinite(field.pageIndex)
@@ -612,14 +618,27 @@ async function startYousignForDocumento({ documentoId, utenteId, nomeFile, urlFi
           field.height = Math.max(37, field.height);
         }
       }
+        } catch (e) {
+          console.warn("[Yousign] signature placement mapping failed:", e.message || e);
+        }
+      }
+
+      await yousignClient.addSignatureField(sr.id, signer.id, doc.id, field);
+
+      activated = await yousignClient.activateSignatureRequest(sr.id);
+
+      break;
     } catch (e) {
-      console.warn("[Yousign] signature placement mapping failed:", e.message || e);
+      if (e.response?.status === 429 && attempt < YOUSIGN_MAX_ATTEMPTS) {
+        console.warn(
+          `[Yousign] 429 rate limit su documento ${documentoId}, tentativo ${attempt}/${YOUSIGN_MAX_ATTEMPTS}, attendo ${YOUSIGN_WAIT_ON_429_MS / 1000}s...`
+        );
+        await sleep(YOUSIGN_WAIT_ON_429_MS);
+        continue;
+      }
+      throw e;
     }
   }
-
-  await yousignClient.addSignatureField(sr.id, signer.id, doc.id, field);
-
-  const activated = await yousignClient.activateSignatureRequest(sr.id);
 
   const signatureLink = activated?.signers?.[0]?.signature_link || null;
   const expiresAtStr = activated?.signers?.[0]?.signature_link_expiration_date || null;
@@ -1327,7 +1346,18 @@ router.get('/da-firmare', requireAuth, async (req, res) => {
 /* ==================================================================== */
 router.get('/', requireAuth, async (req, res) => {
   try {
-    const limit = Math.min(parseInt(req.query.limit) || 100, 500);
+    const limit = Math.min(parseInt(req.query.limit) || 25, 500);
+    const page = Math.max(parseInt(req.query.page) || 1, 1);
+    const offset = (page - 1) * limit;
+
+    const { rows: countRows } = await pool.query(
+      `SELECT COUNT(*)::int AS total FROM (
+         SELECT 1 FROM documenti d
+         GROUP BY COALESCE(d.batch_id::text, d.url_file)
+       ) t`
+    );
+    const total = countRows[0]?.total || 0;
+
     const { rows } = await pool.query(
       `SELECT
          MIN(d.id)                                  AS id,
@@ -1359,10 +1389,10 @@ router.get('/', requireAuth, async (req, res) => {
        LEFT JOIN societa s ON s.id = u.societa_id
        GROUP BY COALESCE(d.batch_id::text, d.url_file)
        ORDER BY MIN(d.data_upload) DESC
-       LIMIT $1`,
-      [limit]
+       LIMIT $1 OFFSET $2`,
+      [limit, offset]
     );
-    res.json(rows);
+    res.json({ items: rows, total, page, limit, totalPages: Math.max(Math.ceil(total / limit), 1) });
   } catch (err) {
     console.error('GET /documenti', err);
     res.status(500).json({ error: 'Errore interno server' });

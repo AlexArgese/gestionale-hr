@@ -170,6 +170,60 @@
 .cronItem:hover        { background: #F0F4FF; border-color: #C7D2FE; }
 .cronItemSelected      { background: #EEF2FF; border-color: #6A57D3; }
 
+/* ===== Paginazione cronologia ===== */
+.cronPagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid #F1F5F9;
+  flex-wrap: wrap;
+}
+
+.pageSizeSelect {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12.5px;
+  color: var(--txt-muted, #64748B);
+}
+.pageSizeSelect select {
+  border: 1px solid var(--border, #E5E7EB);
+  border-radius: 8px;
+  padding: 5px 8px;
+  font-size: 12.5px;
+  color: var(--txt-strong, #0F172A);
+  background: #fff;
+  cursor: pointer;
+}
+
+.pageNav {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.pageBtn {
+  background: transparent;
+  border: 1px solid var(--border, #E5E7EB);
+  border-radius: 8px;
+  padding: 5px 10px;
+  cursor: pointer;
+  color: var(--txt-strong, #0F172A);
+  font-size: 12.5px;
+  transition: background .12s;
+}
+.pageBtn:hover:not(:disabled) { background: #F1F5F9; }
+.pageBtn:disabled { opacity: .4; cursor: default; }
+
+.pageInfo {
+  font-size: 12.5px;
+  color: var(--txt-muted, #64748B);
+  white-space: nowrap;
+}
+
 .cronExtBadge {
   flex-shrink: 0;
   width: 40px;
