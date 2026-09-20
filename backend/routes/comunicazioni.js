@@ -95,33 +95,34 @@ async function getPushTokensForUserIds(utenteIds) {
   return [...new Set(q.rows.map((r) => r.expo_push_token).filter(Boolean))];
 }
 
-async function notifyNewCommunicationRecipients({ utenteIds, comunicazioneId, titolo }) {
+async function notifyNewCommunicationRecipients({ utenteIds, comunicazioneId, titolo, updated = false }) {
   const tokens = await getPushTokensForUserIds(utenteIds);
   if (!tokens.length) return;
 
   await sendExpoPush(tokens, {
-    title: 'Nuova comunicazione',
-    body: (titolo || 'Hai ricevuto una nuova comunicazione').trim(),
+    title: updated ? 'Comunicazione aggiornata' : 'Nuova comunicazione',
+    body: (titolo || (updated ? 'Una comunicazione è stata aggiornata' : 'Hai ricevuto una nuova comunicazione')).trim(),
     data: {
-      type: 'NEW_COMMUNICATION',
+      type: updated ? 'UPDATED_COMMUNICATION' : 'NEW_COMMUNICATION',
       comunicazioneId,
     },
   });
 }
 
-function fireAndForgetCommunicationNotifications({ utenteIds, comunicazioneId, titolo }) {
-  notifyNewCommunicationRecipients({ utenteIds, comunicazioneId, titolo }).catch((err) => {
+function fireAndForgetCommunicationNotifications({ utenteIds, comunicazioneId, titolo, updated = false }) {
+  notifyNewCommunicationRecipients({ utenteIds, comunicazioneId, titolo, updated }).catch((err) => {
     console.error('fireAndForgetCommunicationNotifications error:', err);
   });
 }
 
 
 
-async function sendCommunicationEmail({ emails, titolo, contenuto }) {
+async function sendCommunicationEmail({ emails, titolo, contenuto, updated = false }) {
   if (!emails.length) return;
 
-  const subject = `[ClockEasy] ${titolo || 'Nuova comunicazione'}`;
-  const text = `${titolo || 'Nuova comunicazione'}\n\n${contenuto || ''}\n\n— ClockEasy`;
+  const subject = `[ClockEasy] ${updated ? 'Aggiornamento: ' : ''}${titolo || 'Nuova comunicazione'}`;
+  const introLine = updated ? 'Questa comunicazione è stata aggiornata:\n\n' : '';
+  const text = `${introLine}${titolo || 'Nuova comunicazione'}\n\n${contenuto || ''}\n\n— ClockEasy`;
 
   for (const email of emails) {
     const result = await safeSendMail({ to: email, subject, text });
@@ -842,6 +843,75 @@ router.get('/attachments/:attachmentId/download', async (req, res) => {
   }
 });
 
+
+/* =========================================================
+   MODIFICA TESTO (titolo/contenuto) DI UNA COMUNICAZIONE GIA' INVIATA
+   Non invia email né ripete le notifiche push: aggiorna solo
+   il testo che gli utenti vedono in app.
+   PUT /comunicazioni/:id
+   ========================================================= */
+router.put('/:id', requireAuth, async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id) || id <= 0) {
+      return res.status(400).json({ error: 'ID non valido' });
+    }
+
+    const titolo = (req.body?.titolo ?? '').trim();
+    const contenuto = (req.body?.contenuto ?? '').trim();
+    if (!titolo || !contenuto) {
+      return res.status(400).json({ error: 'Titolo e contenuto sono obbligatori' });
+    }
+
+    const notify = ['both', 'push', 'none'].includes(req.body?.notify) ? req.body.notify : 'none';
+
+    const upd = await pool.query(
+      `UPDATE comunicazioni
+       SET titolo = $1, contenuto = $2
+       WHERE id = $3
+       RETURNING *`,
+      [titolo, contenuto, id]
+    );
+
+    if (!upd.rows.length) return res.status(404).json({ error: 'Comunicazione non trovata' });
+    const comm = upd.rows[0];
+
+    if (notify !== 'none') {
+      const recipients = await resolveRecipients({
+        destinatariIds: Array.isArray(comm.destinatari) ? comm.destinatari : null,
+        societaId: comm.societa_id || null,
+        sedeId: null,
+        client: pool,
+      });
+
+      if (recipients.ids.length) {
+        fireAndForgetCommunicationNotifications({
+          utenteIds: recipients.ids,
+          comunicazioneId: comm.id,
+          titolo,
+          updated: true,
+        });
+      }
+
+      if (notify === 'both') {
+        if (!recipients.emails.length) {
+          console.warn('notify=both ma nessuna email destinatario trovata (comunicazione id=%s)', comm.id);
+        } else {
+          try {
+            await sendCommunicationEmail({ emails: recipients.emails, titolo, contenuto, updated: true });
+          } catch (mailErr) {
+            console.error('Email aggiornamento comunicazione id=%s fallita:', comm.id, mailErr.message);
+          }
+        }
+      }
+    }
+
+    res.json(comm);
+  } catch (err) {
+    console.error('PUT /comunicazioni/:id', err);
+    res.status(500).json({ error: 'Errore modifica comunicazione' });
+  }
+});
 
 // DELETE comunicazione
 router.delete('/:id', async (req, res) => {

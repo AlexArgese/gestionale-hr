@@ -9,6 +9,9 @@ import {
   FiEye,
   FiEyeOff,
   FiHeart,
+  FiEdit2,
+  FiSave,
+  FiX,
 } from "react-icons/fi";
 import styles from "./DettaglioComunicazione.module.css";
 import { API_BASE } from "../api";
@@ -40,6 +43,12 @@ export default function DettaglioComunicazione({ canDelete = true }) {
   const [loading, setLoading] = useState(true);
 
   const [tab, setTab] = useState("info"); // info | destinatari | letti | non_letti | likes | comments
+
+  const [editing, setEditing] = useState(false);
+  const [editTitolo, setEditTitolo] = useState("");
+  const [editContenuto, setEditContenuto] = useState("");
+  const [editNotify, setEditNotify] = useState("none"); // "both" | "push" | "none"
+  const [saving, setSaving] = useState(false);
 
   const loadAdminDetail = useCallback(async () => {
     if (!idValido) return;
@@ -77,6 +86,40 @@ export default function DettaglioComunicazione({ canDelete = true }) {
       navigate("/comunicazioni");
     } catch (e) {
       alert(e?.message || "Errore eliminazione");
+    }
+  };
+
+  const startEditing = () => {
+    setEditTitolo(data?.comunicazione?.titolo || "");
+    setEditContenuto(data?.comunicazione?.contenuto || "");
+    setEditNotify("none");
+    setEditing(true);
+  };
+
+  const cancelEditing = () => setEditing(false);
+
+  const handleSaveEdit = async () => {
+    const titolo = editTitolo.trim();
+    const contenuto = editContenuto.trim();
+    if (!titolo || !contenuto) {
+      alert("Titolo e contenuto sono obbligatori");
+      return;
+    }
+    setSaving(true);
+    try {
+      const res = await fetchOrThrow(`${API}/comunicazioni/${id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ titolo, contenuto, notify: editNotify }),
+      });
+      const updated = await res.json();
+      setData((prev) => ({ ...prev, comunicazione: { ...prev.comunicazione, ...updated } }));
+      setEditing(false);
+    } catch (e) {
+      alert(e?.message || "Errore modifica comunicazione");
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -168,7 +211,67 @@ export default function DettaglioComunicazione({ canDelete = true }) {
             </span>
           </div>
 
-          <div className={styles.content}>{comm.contenuto || ""}</div>
+          {editing ? (
+            <div className={styles.editForm}>
+              <div className={styles.group}>
+                <label className={styles.label} htmlFor="editTitolo">Titolo</label>
+                <input
+                  id="editTitolo"
+                  type="text"
+                  className={styles.input}
+                  value={editTitolo}
+                  onChange={(e) => setEditTitolo(e.target.value)}
+                />
+              </div>
+              <div className={styles.group}>
+                <label className={styles.label} htmlFor="editContenuto">Contenuto</label>
+                <textarea
+                  id="editContenuto"
+                  className={styles.textarea}
+                  rows={6}
+                  value={editContenuto}
+                  onChange={(e) => setEditContenuto(e.target.value)}
+                />
+              </div>
+              <div className={styles.group}>
+                <label className={styles.label}>Dopo il salvataggio</label>
+                <div className={styles.notifyOptions}>
+                  <label className={styles.notifyOption}>
+                    <input
+                      type="radio"
+                      name="editNotify"
+                      value="both"
+                      checked={editNotify === "both"}
+                      onChange={() => setEditNotify("both")}
+                    />
+                    Invia una nuova email e una notifica push
+                  </label>
+                  <label className={styles.notifyOption}>
+                    <input
+                      type="radio"
+                      name="editNotify"
+                      value="push"
+                      checked={editNotify === "push"}
+                      onChange={() => setEditNotify("push")}
+                    />
+                    Invia solo la notifica push
+                  </label>
+                  <label className={styles.notifyOption}>
+                    <input
+                      type="radio"
+                      name="editNotify"
+                      value="none"
+                      checked={editNotify === "none"}
+                      onChange={() => setEditNotify("none")}
+                    />
+                    Nessuna delle due (modifica solo il testo in app)
+                  </label>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className={styles.content}>{comm.contenuto || ""}</div>
+          )}
 
           {/* Allegato */}
           {hasAttachment && (
@@ -199,7 +302,36 @@ export default function DettaglioComunicazione({ canDelete = true }) {
                 <FiDownload /> Scarica allegato
               </a>
             )}
-            {canDelete && (
+            {editing ? (
+              <>
+                <button
+                  type="button"
+                  className={styles.btnOutline}
+                  onClick={cancelEditing}
+                  disabled={saving}
+                >
+                  <FiX /> Annulla
+                </button>
+                <button
+                  type="button"
+                  className={styles.btnPrimary}
+                  onClick={handleSaveEdit}
+                  disabled={saving}
+                >
+                  <FiSave /> {saving ? "Salvataggio..." : "Salva modifiche"}
+                </button>
+              </>
+            ) : (
+              <button
+                type="button"
+                className={styles.btnOutline}
+                onClick={startEditing}
+                title="Modifica testo comunicazione"
+              >
+                <FiEdit2 /> Modifica
+              </button>
+            )}
+            {canDelete && !editing && (
               <button
                 type="button"
                 className={styles.btnDanger}
