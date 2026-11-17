@@ -786,7 +786,17 @@ function Modules({ reduced }) {
 
 // Metti a false per nascondere tutti i prezzi dal sito (pacchetti e FAQ restano, con "prezzo su richiesta").
 const SHOW_PRICES = true;
-const MAX_EMP_LISTINO = 250; // oltre questa soglia: preventivo su misura
+
+// Fasce di dipendenti dello slider. L'ultima (upTo: null) = preventivo su misura.
+const EMP_RANGES = [
+  { label: '1–10', upTo: 10 },
+  { label: '11–50', upTo: 50 },
+  { label: '51–100', upTo: 100 },
+  { label: '101–150', upTo: 150 },
+  { label: '151–200', upTo: 200 },
+  { label: '201–250', upTo: 250 },
+  { label: '250+', upTo: null },
+];
 
 const PKG_FEATURES = [
   { key: 'presenze', label: 'Presenze e timbratura con QR dinamico' },
@@ -796,33 +806,30 @@ const PKG_FEATURES = [
   { key: 'comunicazioni', label: 'Comunicazioni con conferma di lettura' },
   { key: 'teamleader', label: 'Dashboard per i team leader' },
   { key: 'clockai', label: 'ClockAI, assistente HR' },
-  { key: 'whistleblowing', label: 'Canale whistleblowing' },
 ];
 
+// prices: canone mensile (IVA esclusa) per ciascuna fascia di EMP_RANGES, nello stesso ordine.
 const PACKAGES = [
   {
-    id: 'essenziale',
-    name: 'Essenziale',
+    id: 'base',
+    name: 'Base',
     tagline: 'Presenze e documenti, senza carta.',
-    perEmp: 2,
-    min: 29,
+    prices: [29, 79, 149, 219, 289, 359],
     features: ['presenze', 'export', 'dipendenti', 'documenti'],
   },
   {
-    id: 'pro',
-    name: 'Pro',
+    id: 'standard',
+    name: 'Standard',
     tagline: 'Tutta la comunicazione con il personale.',
-    perEmp: 3.5,
-    min: 49,
+    prices: [49, 129, 249, 369, 479, 589],
     popular: true,
     features: ['presenze', 'export', 'dipendenti', 'documenti', 'comunicazioni', 'teamleader'],
   },
   {
-    id: 'completo',
-    name: 'Completo',
-    tagline: 'Con intelligenza artificiale e whistleblowing.',
-    perEmp: 5,
-    min: 99,
+    id: 'pro',
+    name: 'Pro',
+    tagline: "Con ClockAI, l'assistente HR intelligente.",
+    prices: [99, 189, 359, 529, 699, 859],
     features: PKG_FEATURES.map((f) => f.key),
   },
 ];
@@ -831,8 +838,10 @@ const eur = (n, d = 0) =>
   n.toLocaleString('it-IT', { minimumFractionDigits: d, maximumFractionDigits: d });
 
 function Packages({ onChoose }) {
-  const [emp, setEmp] = useState(30);
-  const custom = emp > MAX_EMP_LISTINO;
+  const [ri, setRi] = useState(1);
+  const range = EMP_RANGES[ri];
+  const custom = range.upTo === null;
+  const last = EMP_RANGES.length - 1;
 
   return (
     <section className={`${s.section} ${s.sectionAlt}`} id="pacchetti">
@@ -842,7 +851,7 @@ function Packages({ onChoose }) {
           <h2 className={s.h2}>Scegli il pacchetto giusto per la tua azienda</h2>
           <p className={s.sub}>
             {SHOW_PRICES
-              ? 'Paghi solo per i dipendenti che hai. Sposta il cursore e vedi subito quanto costa ogni pacchetto.'
+              ? 'Un canone mensile fisso in base a quanti siete. Sposta il cursore e vedi subito quanto costa ogni pacchetto.'
               : 'Tre pacchetti pensati per crescere con te. Dicci quanti siete e ti prepariamo un preventivo.'}
           </p>
         </div>
@@ -851,26 +860,41 @@ function Packages({ onChoose }) {
           <div className={s.pkSlider} data-reveal>
             <label className={s.range}>
               <span className={s.rangeHead}>
-                Quanti dipendenti avete? <b>{custom ? `${MAX_EMP_LISTINO}+` : emp}</b>
+                Quanti dipendenti avete? <b>{custom ? 'Più di 250' : range.label}</b>
               </span>
               <input
                 type="range"
-                min="1"
-                max={MAX_EMP_LISTINO + 10}
+                min="0"
+                max={last}
                 step="1"
-                value={emp}
-                onChange={(e) => setEmp(Number(e.target.value))}
-                style={{ '--p': `${((emp - 1) / (MAX_EMP_LISTINO + 9)) * 100}%` }}
-                aria-label="Numero di dipendenti"
+                value={ri}
+                onChange={(e) => setRi(Number(e.target.value))}
+                style={{ '--p': `${(ri / last) * 100}%` }}
+                aria-label="Fascia di dipendenti"
+                aria-valuetext={custom ? 'Più di 250 dipendenti' : `${range.label} dipendenti`}
               />
             </label>
+            <div className={s.pkTicks}>
+              {EMP_RANGES.map((r, i) => (
+                <button
+                  key={r.label}
+                  type="button"
+                  className={i === ri ? s.pkTickOn : ''}
+                  style={{ left: `calc(13px + (100% - 26px) * ${i / last})` }}
+                  onClick={() => setRi(i)}
+                  tabIndex={-1}
+                >
+                  <span className={s.pkTickLong}>{r.label}</span>
+                  <span className={s.pkTickShort}>{r.upTo ?? '250+'}</span>
+                </button>
+              ))}
+            </div>
           </div>
         )}
 
         <div className={s.pkGrid} data-reveal>
           {PACKAGES.map((p) => {
-            const total = Math.max(p.min, emp * p.perEmp);
-            const atMin = emp * p.perEmp < p.min;
+            const price = custom ? null : p.prices[ri];
             return (
               <article key={p.id} className={`${s.pkCard} ${p.popular ? s.pkPopular : ''}`}>
                 {p.popular && <span className={s.pkBadge}>Il più scelto</span>}
@@ -879,18 +903,21 @@ function Packages({ onChoose }) {
 
                 {SHOW_PRICES ? (
                   <div className={s.pkPrice}>
-                    <div className={s.pkPerEmp}>
-                      <span className={s.pkEuro}>€</span>
-                      <span className={s.pkAmount}>{eur(p.perEmp, p.perEmp % 1 ? 2 : 0)}</span>
-                      <span className={s.pkUnit}>per dipendente<br />al mese</span>
-                    </div>
+                    {custom ? (
+                      <span className={s.pkOnRequest}>Su misura</span>
+                    ) : (
+                      <div className={s.pkPerEmp}>
+                        <span className={s.pkEuro}>€</span>
+                        <span className={s.pkAmount}><AnimatedNumber value={price} /></span>
+                        <span className={s.pkUnit}>al mese<br />IVA esclusa</span>
+                      </div>
+                    )}
                     <div className={s.pkTotal}>
                       {custom ? (
-                        <>Oltre {MAX_EMP_LISTINO} dipendenti: <b>preventivo su misura</b></>
+                        <>Oltre 250 dipendenti: <b>preventivo dedicato</b></>
                       ) : (
                         <>
-                          Per {emp} {emp === 1 ? 'dipendente' : 'dipendenti'}: <b>€ <AnimatedNumber value={total} decimals={total % 1 ? 2 : 0} /> /mese</b>
-                          {atMin && <small> (minimo mensile)</small>}
+                          Fino a <b>{range.upTo}</b> dipendenti · da <b>€ {eur(price / range.upTo, 2)}</b> a dipendente
                         </>
                       )}
                     </div>
@@ -913,12 +940,15 @@ function Packages({ onChoose }) {
                   <li className={s.pkAddon}>
                     <Icon name="plus" size={16} /> Firma elettronica a consumo
                   </li>
+                  <li className={s.pkAddon}>
+                    <Icon name="plus" size={16} /> Whistleblowing, se ti serve
+                  </li>
                 </ul>
 
                 <a
                   href="#contatti"
                   className={`${s.btn} ${p.popular ? s.btnPrimary : s.btnOutline} ${s.btnBlock}`}
-                  onClick={() => onChoose?.(p.name)}
+                  onClick={() => onChoose?.({ pacchetto: p.name, dipendenti: range.label })}
                 >
                   {SHOW_PRICES ? 'Richiedi un preventivo' : 'Richiedi il prezzo'}
                 </a>
@@ -927,31 +957,31 @@ function Packages({ onChoose }) {
           })}
         </div>
 
+        <div className={s.pkAddonsHead} data-reveal>
+          <h3>Da aggiungere a qualsiasi pacchetto</h3>
+        </div>
         <div className={s.pkAddons} data-reveal>
           <div className={s.pkAddonCard}>
             <span className={s.pkAddonIcon}><Icon name="sign" /></span>
             <div>
               <h4>Firma elettronica</h4>
-              <p>Contratti, lettere e informative firmati dal telefono. Si attiva su qualsiasi pacchetto e paghi solo le firme che usi.</p>
+              <p>Contratti, lettere e informative firmati dal telefono. Paghi solo le firme che usi.</p>
             </div>
             <span className={s.pkAddonPrice}>{SHOW_PRICES ? <>da <b>€ 2,50</b> a firma</> : 'Su richiesta'}</span>
           </div>
           <div className={s.pkAddonCard}>
             <span className={s.pkAddonIcon}><Icon name="shield" /></span>
             <div>
-              <h4>Solo whistleblowing</h4>
-              <p>Ti serve solo il canale di segnalazione, obbligatorio per le aziende private con almeno 50 dipendenti (D.Lgs. 24/2023)? Lo attivi anche da solo.</p>
+              <h4>Whistleblowing</h4>
+              <p>Il canale di segnalazione anonimo, obbligatorio per le aziende private con almeno 50 dipendenti (D.Lgs. 24/2023).</p>
             </div>
             <span className={s.pkAddonPrice}>{SHOW_PRICES ? <><b>€ 390</b> all'anno</> : 'Su richiesta'}</span>
-            <a href="#contatti" className={s.pkAddonLink} onClick={() => onChoose?.('Solo whistleblowing')}>
-              Richiedi <Icon name="arrow" size={16} />
-            </a>
           </div>
         </div>
 
         <p className={s.pkNote}>
           {SHOW_PRICES
-            ? `Prezzi IVA esclusa, con fatturazione annuale. Oltre ${MAX_EMP_LISTINO} dipendenti o per esigenze particolari prepariamo un preventivo su misura.`
+            ? 'Prezzi IVA esclusa, con fatturazione annuale. Oltre 250 dipendenti o per esigenze particolari prepariamo un preventivo su misura.'
             : 'Il prezzo dipende dal numero di dipendenti e dal pacchetto scelto.'}
         </p>
       </div>
@@ -1158,7 +1188,7 @@ const FAQ = [
   {
     q: 'Quanto costa ClockEasy?',
     a: SHOW_PRICES
-      ? "Dipende dal pacchetto: da 2 € a 5 € per dipendente al mese, IVA esclusa e con fatturazione annuale, con un piccolo minimo mensile. La firma elettronica si paga a consumo. Oltre 250 dipendenti prepariamo un preventivo su misura."
+      ? "Dipende dal pacchetto e da quanti dipendenti avete: si parte da 29 € al mese (pacchetto Base fino a 10 dipendenti), IVA esclusa e con fatturazione annuale. Firma elettronica e whistleblowing si aggiungono a qualsiasi pacchetto. Oltre 250 dipendenti prepariamo un preventivo su misura."
       : "Dipende dal numero di dipendenti e dal pacchetto scelto. Scrivici: ti mandiamo un preventivo preciso, senza impegno.",
   },
   {
@@ -1171,7 +1201,7 @@ const FAQ = [
   },
   {
     q: 'Posso attivare solo alcuni moduli?',
-    a: "Sì. Puoi partire dal pacchetto Essenziale e passare a Pro o Completo quando vuoi, senza perdere nulla. La firma elettronica si aggiunge a qualsiasi pacchetto e il whistleblowing si può attivare anche da solo.",
+    a: "Sì. Puoi partire dal pacchetto Base e passare a Standard o Pro quando vuoi, senza perdere nulla. Firma elettronica e whistleblowing si aggiungono a qualsiasi pacchetto.",
   },
   {
     q: 'Quanto ci vuole per partire?',
@@ -1224,13 +1254,13 @@ function Faq() {
 /* CONTATTI                                                            */
 /* ------------------------------------------------------------------ */
 
-const PKG_OPTIONS = ['Essenziale', 'Pro', 'Completo', 'Solo whistleblowing', 'Non lo so ancora'];
+const PKG_OPTIONS = ['Base', 'Standard', 'Pro', 'Non lo so ancora'];
 
-function Contact({ pacchetto }) {
-  const [form, setForm] = useState({ nome: '', azienda: '', email: '', telefono: '', dipendenti: '', pacchetto: '', messaggio: '' });
+function Contact({ scelta }) {
+  const [form, setForm] = useState({ nome: '', azienda: '', email: '', telefono: '', dipendenti: '', pacchetto: '', whistleblowing: false, messaggio: '' });
   useEffect(() => {
-    if (pacchetto) setForm((f) => ({ ...f, pacchetto }));
-  }, [pacchetto]);
+    if (scelta) setForm((f) => ({ ...f, ...scelta }));
+  }, [scelta]);
   const [sent, setSent] = useState(false);
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
 
@@ -1244,6 +1274,7 @@ function Contact({ pacchetto }) {
       form.telefono ? `Telefono: ${form.telefono}` : null,
       form.dipendenti ? `Numero dipendenti: ${form.dipendenti}` : null,
       form.pacchetto ? `Pacchetto di interesse: ${form.pacchetto}` : null,
+      form.whistleblowing ? 'Interessato anche al whistleblowing' : null,
       '',
       form.messaggio,
     ]
@@ -1295,25 +1326,33 @@ function Contact({ pacchetto }) {
               <input type="tel" value={form.telefono} onChange={set('telefono')} autoComplete="tel" />
             </label>
           </div>
-          <label>
-            Quanti dipendenti avete?
-            <select value={form.dipendenti} onChange={set('dipendenti')}>
-              <option value="">Seleziona…</option>
-              <option>1–10</option>
-              <option>11–50</option>
-              <option>51–250</option>
-              <option>251–500</option>
-              <option>Più di 500</option>
-            </select>
-          </label>
-          <label>
-            Pacchetto di interesse
-            <select value={form.pacchetto} onChange={set('pacchetto')}>
-              <option value="">Seleziona…</option>
-              {PKG_OPTIONS.map((o) => (
-                <option key={o}>{o}</option>
-              ))}
-            </select>
+          <div className={s.formRow}>
+            <label>
+              Quanti dipendenti avete?
+              <select value={form.dipendenti} onChange={set('dipendenti')}>
+                <option value="">Seleziona…</option>
+                {EMP_RANGES.map((r) => (
+                  <option key={r.label}>{r.label}</option>
+                ))}
+              </select>
+            </label>
+            <label>
+              Pacchetto di interesse
+              <select value={form.pacchetto} onChange={set('pacchetto')}>
+                <option value="">Seleziona…</option>
+                {PKG_OPTIONS.map((o) => (
+                  <option key={o}>{o}</option>
+                ))}
+              </select>
+            </label>
+          </div>
+          <label className={s.formCheck}>
+            <input
+              type="checkbox"
+              checked={form.whistleblowing}
+              onChange={(e) => setForm((f) => ({ ...f, whistleblowing: e.target.checked }))}
+            />
+            Aggiungi anche il whistleblowing
           </label>
           <label>
             Di cosa avete bisogno?
@@ -1382,7 +1421,7 @@ function Footer() {
 export default function Landing() {
   const rootRef = useRef(null);
   const reduced = usePrefersReducedMotion();
-  const [pacchetto, setPacchetto] = useState('');
+  const [scelta, setScelta] = useState(null);
   useReveal(rootRef);
 
   useEffect(() => {
@@ -1403,9 +1442,9 @@ export default function Landing() {
         <Modules reduced={reduced} />
         <ClockAIDemo reduced={reduced} />
         <Strengths />
-        <Packages onChoose={setPacchetto} />
+        <Packages onChoose={setScelta} />
         <Faq />
-        <Contact pacchetto={pacchetto} />
+        <Contact scelta={scelta} />
       </main>
       <Footer />
     </div>

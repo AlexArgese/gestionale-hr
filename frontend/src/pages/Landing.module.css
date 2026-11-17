@@ -1380,6 +1380,49 @@
   border-radius: 18px;
   box-shadow: var(--shadow-s);
 }
+.pkTicks {
+  position: relative;
+  height: 30px;
+  margin-top: 10px;
+}
+.pkTicks button {
+  position: absolute;
+  top: 0;
+  transform: translateX(-50%);
+  padding: 4px 6px;
+  border: 0;
+  border-radius: 8px;
+  background: none;
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--muted);
+  white-space: nowrap;
+  cursor: pointer;
+  transition: color 0.15s, background 0.15s;
+}
+.pkTicks button:hover {
+  color: var(--txt-strong);
+}
+.pkTicks button.pkTickOn {
+  color: var(--violet);
+  font-weight: 700;
+  background: rgba(91, 79, 214, 0.08);
+}
+.pkTickShort {
+  display: none;
+}
+@media (max-width: 560px) {
+  .pkSlider {
+    padding: 18px 18px;
+  }
+  .pkTickLong {
+    display: none;
+  }
+  .pkTickShort {
+    display: inline;
+  }
+}
 .pkGrid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
@@ -1517,11 +1560,18 @@
 .pkList li.pkAddon svg {
   color: var(--orange);
 }
+.pkAddonsHead {
+  margin-top: 44px;
+  text-align: center;
+}
+.pkAddonsHead h3 {
+  font-size: 20px;
+}
 .pkAddons {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 22px;
-  margin-top: 22px;
+  margin-top: 18px;
 }
 .pkAddonCard {
   display: grid;
@@ -1560,18 +1610,6 @@
   font-family: var(--display);
   font-size: 20px;
   color: #f0b766;
-}
-.pkAddonLink {
-  grid-column: 2;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  font-weight: 600;
-  color: #fff !important;
-  width: fit-content;
-}
-.pkAddonLink:hover {
-  color: #f0b766 !important;
 }
 .pkNote {
   margin-top: 26px !important;
@@ -1985,6 +2023,21 @@
 .form textarea:focus {
   border-color: var(--violet);
   box-shadow: 0 0 0 4px rgba(91, 79, 214, 0.12);
+}
+.form label.formCheck {
+  flex-direction: row;
+  align-items: center;
+  gap: 10px;
+  font-weight: 500;
+  cursor: pointer;
+}
+.form .formCheck input {
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  accent-color: var(--violet);
+  box-shadow: none;
+  cursor: pointer;
 }
 .formNote {
   font-size: 13px;
