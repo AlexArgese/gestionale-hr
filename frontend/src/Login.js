@@ -20,9 +20,12 @@ export default function Login({ onLogin }) {
 
   return (
     <div className="login-container">
+      <a href="/" className="login-back">← Torna al sito</a>
       <form onSubmit={login} className="login-box">
         {/* Logo */}
-        <img src="/logo.png" alt="Logo" className="login-logo" />
+        <a href="/" aria-label="Vai al sito ClockEasy">
+          <img src="/logo.png" alt="Logo" className="login-logo" />
+        </a>
 
         <h2>Login HR</h2>
 

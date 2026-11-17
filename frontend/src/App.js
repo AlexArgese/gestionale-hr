@@ -22,6 +22,7 @@ import { fetchMe } from './api';
 import WbManagerPage from './pages/WbManagerPage';
 import WhistleblowingPage from './pages/WhistleblowingPage';
 import DashboardTeamLeader from './components/DashboardTeamLeader';
+import Landing from './pages/Landing';
 
 function AppContent() {
   const [user, setUser] = useState(null);
@@ -45,7 +46,8 @@ function AppContent() {
       if (!u) {
         setMe(null);
         setLoading(false);
-        navigate('/login', { replace: true });
+        // la home "/" è il sito vetrina pubblico: non forzare il redirect al login
+        if (window.location.pathname !== '/') navigate('/login', { replace: true });
         return;
       }
       try {
@@ -106,6 +108,11 @@ function AppContent() {
   }
 
   if (!user) {
+    // Home pubblica = sito vetrina (in attesa del controllo auth mostriamo una pagina vuota,
+    // così un admin già loggato non vede lampeggiare la vetrina prima della dashboard)
+    if (location.pathname === '/') {
+      return loading ? <div style={{ minHeight: '100vh', background: '#fff' }} /> : <Landing />;
+    }
     // IMPORTANTISSIMO: il tuo Login.js chiama onLogin(); passiamo una no-op per evitare errori
     return <Login onLogin={() => {}} />;
   }
