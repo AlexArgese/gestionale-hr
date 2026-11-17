@@ -1,301 +1,96 @@
-/* ======= ClockEasy — Dashboard HR (CSS Module) ======= */
-:root{
-  --brand-1:#D0933C;            /* primary */
-  --brand-2:#6A57D3;            /* accent  */
-  --grad:linear-gradient(90deg, var(--brand-1), var(--brand-2));
+/* ===== Dashboard HR ===== */
+.capitalize::first-letter { text-transform: uppercase; }
 
-  --txt-strong:#0F172A;
-  --txt:#334155;
-  --txt-muted:#64748B;
-
-  --bg-page:#F6F8FA;
-  --bg-card:#FFFFFF;
-
-  --border:#E5E7EB;
-  --radius:16px;
-  --radius-sm:12px;
-  --shadow-soft:0 8px 28px rgba(15,23,42,.06);
-  --shadow-sm:0 2px 8px rgba(15,23,42,.06);
-
-  --s1:6px; --s2:10px; --s3:14px; --s4:18px; --s5:24px;
+/* Numeri chiave */
+.statGrid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--sp-4);
 }
+.stat {
+  display: flex; flex-direction: column; gap: var(--sp-2);
+  padding: var(--sp-5);
+}
+.statGrid > :global(.card) + :global(.card) { margin-top: 0; }
+.statLabel { font-size: var(--fs-sm); font-weight: 500; color: var(--txt-muted); }
+.statValue {
+  font-size: 30px; line-height: 1.1; font-weight: 600;
+  color: var(--txt-strong); letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+}
+.statSub { font-size: var(--fs-xs); color: var(--txt-muted); text-transform: capitalize; }
 
-/* ===== Container ===== */
-.dashboardContainer{
-  min-height:100vh;
-  background:var(--bg-page);
-  padding: var(--s5);
+/* Colonne */
+.columns {
+  display: grid;
+  grid-template-columns: minmax(0, 1.75fr) minmax(300px, 1fr);
+  gap: var(--sp-6);
+  align-items: start;
 }
+.sideCol { display: flex; flex-direction: column; gap: var(--sp-6); min-width: 0; }
+.sideCol > :global(.card) + :global(.card) { margin-top: 0; }
 
-/* Header */
-.dashboardHeader{ margin-bottom: var(--s4); }
-.dashboardTitle{
-  margin: 0;
-  color: var(--txt-strong);
-  font-size: 28px;
-  font-weight: 900;
-  letter-spacing:.2px;
-}
-/* underline full width */
-.dashboardUnderline{
-  height:3px;
-  border-radius:2px;
-  background:var(--grad);
-  margin:10px 0 var(--s4);
-  width:100%;
-}
-.muted{ color:var(--txt-muted); font-size:13px; }
+/* Card con tabella a filo */
+.cardFlush { overflow: hidden; min-width: 0; }
+.alertWrap { padding: var(--sp-4) var(--sp-5) 0; }
+.tableScroll { overflow-x: auto; }
+.tableScroll :global(.data-table) th:first-child,
+.tableScroll :global(.data-table) td:first-child { padding-left: var(--sp-5); }
 
-/* ===== Cards metriche ===== */
-.cardsMetriche{
-  display:flex; flex-wrap:wrap; gap: var(--s4);
-  margin-top: var(--s4); margin-bottom: calc(var(--s5) - 6px);
-}
-.card{
-  flex:1 1 240px;
-  background:var(--bg-card);
-  border-radius:var(--radius);
-  border:1px solid var(--border);
-  box-shadow:var(--shadow-soft);
-  padding: 14px 16px;
-  color:var(--txt);
-  font-size:15px; font-weight:700;
-  transition: transform .12s ease, box-shadow .12s ease;
-  display:flex; align-items:center; gap:10px;
-}
-.card:hover{ transform: translateY(-2px); box-shadow: 0 10px 28px rgba(15,23,42,.08); }
-.metricValue{ color:var(--txt-strong); font-weight:900; }
+.checkCol { width: 44px; padding-right: 0 !important; }
+.check { width: 16px; height: 16px; accent-color: var(--accent); cursor: pointer; vertical-align: middle; }
 
-/* ===== Sezioni (grafici, avvisi, download) ===== */
-.section{
-  background:var(--bg-card);
-  border:1px solid var(--border);
-  border-radius:var(--radius);
-  box-shadow:var(--shadow-soft);
-  padding: 14px 16px;
-  margin-top: var(--s4);
+.personLink {
+  background: none; border: 0; padding: 0; cursor: pointer;
+  font: inherit; font-weight: 500; color: var(--txt-strong); text-align: left;
 }
-.section:first-of-type{ margin-top: 0; }
+.personLink:hover { color: var(--accent-text); text-decoration: underline; text-underline-offset: 3px; }
 
-.sectionTitle{
-  display:flex; align-items:center; gap:8px;
-  margin: 2px 0 10px 0;
-  color: var(--txt-strong);
-  font-size:18px; font-weight:900;
+.fileCell {
+  max-width: 280px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  color: var(--txt-muted) !important;
 }
 
-/* ===== Lista avvisi ===== */
-.list{ list-style:none; padding:0; margin:0; }
-.listItem{
-  display:flex; gap:8px; align-items:center;
-  background:#fff; color:var(--txt);
-  border:1px solid var(--border);
-  border-radius:12px; padding:10px 12px;
-  box-shadow:var(--shadow-sm);
-}
-.listItem + .listItem{ margin-top:8px; }
-.linkStrong{
-  color:var(--brand-2); cursor:pointer; font-weight:900;
-}
-.linkStrong:hover{ text-decoration:underline; }
-
-/* ===== Download massivo ===== */
-.downloadSection{
-  display:flex; align-items:center; gap:10px; margin-top:8px; flex-wrap:wrap;
-}
-.select{
-  font-size:15px; color:var(--txt);
-  background:#fff;
-  border:1px solid var(--border);
-  border-radius:var(--radius-sm);
-  padding:10px 12px; outline:none;
-  transition:border-color .15s ease, box-shadow .15s ease;
-}
-.select:focus{ border-color: var(--brand-2); box-shadow: 0 0 0 3px rgba(106,87,211,.15); }
-
-/* Bottoni coerenti con le altre pagine */
-.buttonPrimary{
-  display:inline-flex; align-items:center; gap:8px;
-  border-radius:14px; font-weight:800; font-size:14px;
-  padding:10px 14px; cursor:pointer; user-select:none;
-  background: var(--brand-1); color:#fff; border:none;
-  box-shadow:var(--shadow-sm);
-  transition: transform .12s ease, filter .12s ease;
-}
-.buttonPrimary:hover{ filter:brightness(1.04); transform: translateY(-1px); }
-
-.buttonOutline{
-  display:inline-flex; align-items:center; gap:8px;
-  border-radius:14px; font-weight:800; font-size:14px;
-  padding:10px 14px; cursor:pointer; user-select:none;
-  background: #fff; color: var(--txt); border:1px solid var(--border);
-  transition: background .12s ease;
-}
-.buttonOutline:hover{ background:#F9FAFB; }
-
-/* ===== Layout grafici ===== */
-.grafici{ display:flex; flex-direction:row; gap: 1em; }
-.grafico{
-  background:var(--bg-card);
-  border:1px solid var(--border);
-  border-radius:var(--radius);
-  box-shadow:var(--shadow-soft);
-  padding: 14px 16px;
-  width: 50%;
-}
-.button{ composes: buttonPrimary; }
-/* ===== Responsive ===== */
-@media (max-width: 820px){
-  .dashboardTitle{ font-size:24px; }
-}
-
-.badgeWarning {
-  display: inline-block;
-  margin-left: 8px;
-  padding: 4px 10px;
-  border-radius: 999px;
-  background: #fff3cd;
-  color: #856404;
-  font-size: 12px;
-  font-weight: 600;
-}
-
-.sectionHeader {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
+/* Paginazione */
+.pagination {
+  display: flex; align-items: center; justify-content: space-between; gap: var(--sp-3);
   flex-wrap: wrap;
-  gap: 10px;
-  margin-bottom: 10px;
+  padding: var(--sp-3) var(--sp-5);
+  border-top: 1px solid var(--divider);
 }
-.sectionHeader .sectionTitle { margin-bottom: 0; }
+.pageSize { display: flex; align-items: center; gap: var(--sp-2); font-size: var(--fs-sm); color: var(--txt-muted); }
+.pageSize select { width: auto; height: 32px; padding: 0 8px; font-size: var(--fs-sm); }
+.pageNav { display: flex; align-items: center; gap: var(--sp-2); }
+.pageInfo { font-size: var(--fs-sm); color: var(--txt-muted); margin-right: var(--sp-2); white-space: nowrap; }
 
-.remindToolbar {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
+/* Presenze di oggi */
+.oggi { display: flex; flex-direction: column; gap: var(--sp-4); }
 
-.checkAll {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 13px;
-  color: var(--txt-muted);
-  cursor: pointer;
-  user-select: none;
+/* Grafici */
+.charts {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--sp-6);
 }
+.charts > :global(.card) + :global(.card) { margin-top: 0; }
+.chartBody { padding: var(--sp-5); }
 
-.avvisoCheck {
-  width: 16px;
-  height: 16px;
-  cursor: pointer;
-  accent-color: var(--brand-2);
-  flex-shrink: 0;
-}
+.legend { list-style: none; margin: var(--sp-3) 0 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.legend li { display: flex; align-items: center; gap: var(--sp-2); font-size: var(--fs-sm); }
+.legendDot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.legendName { flex: 1; color: var(--txt); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.legendValue { color: var(--txt-strong); font-weight: 500; font-variant-numeric: tabular-nums; }
 
-.alertSuccess {
-  margin-bottom: 10px;
-  padding: 8px 12px;
-  border-radius: 10px;
-  background: #d1fae5;
-  color: #065f46;
-  font-size: 13px;
-  font-weight: 600;
+/* Responsive */
+@media (max-width: 1200px) {
+  .charts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
-.alertError {
-  margin-bottom: 10px;
-  padding: 8px 12px;
-  border-radius: 10px;
-  background: #fee2e2;
-  color: #991b1b;
-  font-size: 13px;
-  font-weight: 600;
+@media (max-width: 1024px) {
+  .columns { grid-template-columns: 1fr; }
+  .statGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
-
-/* ===== Paginazione avvisi ===== */
-.avvisiPagination {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  margin-top: 12px;
-  padding-top: 12px;
-  border-top: 1px solid var(--border);
-  flex-wrap: wrap;
-}
-
-.pageSizeSelect {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 12.5px;
-  color: var(--txt-muted);
-}
-.pageSizeSelect select {
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 5px 8px;
-  font-size: 12.5px;
-  color: var(--txt-strong);
-  background: #fff;
-  cursor: pointer;
-}
-
-.pageNav {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.pageBtn {
-  background: transparent;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 5px 10px;
-  cursor: pointer;
-  color: var(--txt-strong);
-  font-size: 12.5px;
-  transition: background .12s;
-}
-.pageBtn:hover:not(:disabled) { background: #F1F5F9; }
-.pageBtn:disabled { opacity: .4; cursor: default; }
-
-.pageInfo {
-  font-size: 12.5px;
-  color: var(--txt-muted);
-  white-space: nowrap;
-}
-
-/* ===== Widget presenze oggi ===== */
-.oggi {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-end;
-  gap: 14px;
-}
-.oggiGroup {
-  display: flex;
-  flex-direction: column;
-  gap: 5px;
-  min-width: 200px;
-  flex: 1 1 200px;
-}
-.oggiLabel {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  font-size: 13px;
-  font-weight: 700;
-  color: var(--txt-muted);
-}
-.inline {
-  display: flex;
-  align-items: center;
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--txt);
-  cursor: pointer;
-  user-select: none;
-  padding-bottom: 8px;
+@media (max-width: 640px) {
+  .charts { grid-template-columns: 1fr; }
+  .statValue { font-size: 24px; }
 }

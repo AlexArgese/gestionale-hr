@@ -1,6 +1,8 @@
 import React, { useEffect, useMemo, useState, useRef, useCallback } from "react";
 import { auth } from '../firebase';
 import styles from './WbManager.module.css';
+import { useConfirm } from '../components/ui/ConfirmDialog';
+import { useToast } from '../components/ui/Toast';
 
 import {
   IoShieldCheckmarkOutline,
@@ -35,6 +37,8 @@ const STATO_LABEL = {
 };
 
 export default function WbManagerPanel({ apiBase }) {
+  const confirm = useConfirm();
+  const toast = useToast();
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState('');
   const [reports, setReports] = useState([]);
@@ -232,7 +236,12 @@ export default function WbManagerPanel({ apiBase }) {
 
   const onDeleteAttachment = async (attId) => {
     if (!selectedId) return;
-    const ok = window.confirm('Sei sicuro di voler eliminare definitivamente questo allegato?');
+    const ok = await confirm({
+      title: 'Eliminare l\'allegato?',
+      message: 'Sei sicuro di voler eliminare definitivamente questo allegato?',
+      danger: true,
+      confirmLabel: 'Elimina',
+    });
     if (!ok) return;
 
     setErr('');
@@ -294,7 +303,7 @@ export default function WbManagerPanel({ apiBase }) {
       const res = await apiFetch(`/wb/manager/attachments/${attId}/rescan`, { method: 'POST' });
       await loadAttachments(selectedId);
 
-      alert(`Rescan completato.\nStato antivirus: ${res.av_status || 'sconosciuto'}`);
+      toast.success(`Rescan completato. Stato antivirus: ${res.av_status || 'sconosciuto'}`);
     } catch (e2) {
       setErr('Errore rescan: ' + e2.message);
     } finally {

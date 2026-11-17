@@ -1,25 +1,17 @@
 import React, { useEffect, useState, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import {
-  FiArrowLeft,
-  FiDownload,
-  FiMessageSquare,
-  FiTrash2,
-  FiUsers,
-  FiEye,
-  FiEyeOff,
-  FiHeart,
-  FiEdit2,
-  FiSave,
-  FiX,
-} from "react-icons/fi";
+import { FiArrowLeft, FiDownload, FiTrash2, FiEdit2, FiSave, FiX } from "react-icons/fi";
 import styles from "./DettaglioComunicazione.module.css";
-import { API_BASE } from "../api";
+import { API_BASE, getIdToken, downloadWithAuth } from "../api";
+import { useToast } from "./ui/Toast";
+import { useConfirm } from "./ui/ConfirmDialog";
 
 const API = API_BASE;
 
-async function fetchOrThrow(input, init) {
-  const res = await fetch(input, init);
+async function fetchOrThrow(input, init = {}) {
+  const token = await getIdToken();
+  const headers = { ...(init.headers || {}), ...(token ? { Authorization: `Bearer ${token}` } : {}) };
+  const res = await fetch(input, { ...init, headers });
   if (!res.ok) {
     const urlTxt = typeof input === "string" ? input : input?.toString?.() || "";
     let msg = `HTTP ${res.status} @ ${urlTxt}`;
@@ -35,6 +27,8 @@ async function fetchOrThrow(input, init) {
 export default function DettaglioComunicazione({ canDelete = true }) {
   const { id: rawId } = useParams();
   const navigate = useNavigate();
+  const toast = useToast();
+  const confirm = useConfirm();
 
   const id = Number(rawId);
   const idValido = Number.isInteger(id) && id > 0;
@@ -58,34 +52,70 @@ export default function DettaglioComunicazione({ canDelete = true }) {
       const j = await res.json();
       setData(j);
     } catch (e) {
-      alert(e.message || "Errore caricamento comunicazione");
+      toast.error(e.message || "Errore caricamento comunicazione");
       navigate("/comunicazioni");
     } finally {
       setLoading(false);
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id, idValido, navigate]);
 
   useEffect(() => {
     if (!idValido) {
-      alert("Comunicazione non trovata (ID non valido).");
+      toast.error("Comunicazione non trovata (ID non valido).");
       navigate("/comunicazioni");
       return;
     }
     loadAdminDetail();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rawId, idValido, navigate, loadAdminDetail]);
 
+  // l'anteprima (img/iframe) non può portare l'header Authorization via src,
+  // quindi scarichiamo il file col token e lo mostriamo da un blob: URL
+  const [previewBlobUrl, setPreviewBlobUrl] = useState(null);
+  const comunicazioneData = data?.comunicazione;
+  const hasAttachmentForPreview =
+    !!(Array.isArray(data?.attachments) && data.attachments.length) || !!comunicazioneData?.allegato_url;
+
+  useEffect(() => {
+    if (!hasAttachmentForPreview) { setPreviewBlobUrl(null); return; }
+    let revoked = false;
+    let objectUrl = null;
+    (async () => {
+      try {
+        const res = await fetchOrThrow(`${API}/comunicazioni/${id}/view`);
+        const blob = await res.blob();
+        if (revoked) return;
+        objectUrl = URL.createObjectURL(blob);
+        setPreviewBlobUrl(objectUrl);
+      } catch {
+        setPreviewBlobUrl(null);
+      }
+    })();
+    return () => {
+      revoked = true;
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id, hasAttachmentForPreview]);
+
   const handleDelete = async () => {
-    const ok = window.confirm("Eliminare questa comunicazione?");
+    const ok = await confirm({
+      title: "Eliminare la comunicazione?",
+      message: "L'azione è irreversibile: la comunicazione e le relative letture/firme verranno eliminate.",
+      danger: true,
+      confirmLabel: "Elimina",
+    });
     if (!ok) return;
     try {
       await fetchOrThrow(`${API}/comunicazioni/${id}`, {
         method: "DELETE",
         credentials: "include",
       });
-      alert("Comunicazione eliminata");
+      toast.success("Comunicazione eliminata");
       navigate("/comunicazioni");
     } catch (e) {
-      alert(e?.message || "Errore eliminazione");
+      toast.error(e?.message || "Errore eliminazione");
     }
   };
 
@@ -102,7 +132,7 @@ export default function DettaglioComunicazione({ canDelete = true }) {
     const titolo = editTitolo.trim();
     const contenuto = editContenuto.trim();
     if (!titolo || !contenuto) {
-      alert("Titolo e contenuto sono obbligatori");
+      toast.error("Titolo e contenuto sono obbligatori");
       return;
     }
     setSaving(true);
@@ -116,8 +146,9 @@ export default function DettaglioComunicazione({ canDelete = true }) {
       const updated = await res.json();
       setData((prev) => ({ ...prev, comunicazione: { ...prev.comunicazione, ...updated } }));
       setEditing(false);
+      toast.success("Modifiche salvate");
     } catch (e) {
-      alert(e?.message || "Errore modifica comunicazione");
+      toast.error(e?.message || "Errore modifica comunicazione");
     } finally {
       setSaving(false);
     }
@@ -126,26 +157,25 @@ export default function DettaglioComunicazione({ canDelete = true }) {
   if (!idValido) return null;
   if (loading || !data) {
     return (
-      <div className={styles.container}>
-        <div className={styles.header}>
-          <h2 className={styles.title}>Comunicazione</h2>
-          <button
-            type="button"
-            className={`btn btn-outline ${styles.backBtn}`}
-            onClick={() => navigate("/comunicazioni")}
-          >
-            <FiArrowLeft /> Indietro
-          </button>
-        </div>
-        <div className={styles.underline} />
-        <p>Caricamento…</p>
+      <div className="page">
+        <header className="page-header">
+          <div className="page-header-text">
+            <button type="button" className="page-eyebrow" onClick={() => navigate("/comunicazioni")}>
+              <FiArrowLeft size={14} /> Comunicazioni
+            </button>
+            <h1 className="page-title">Comunicazione</h1>
+          </div>
+        </header>
+        <div className="empty-state">Caricamento…</div>
       </div>
     );
   }
 
   const comm = data.comunicazione;
   const pubDate = comm.data_pubblicazione
-    ? new Date(comm.data_pubblicazione).toLocaleString()
+    ? new Date(comm.data_pubblicazione).toLocaleString("it-IT", {
+        day: "numeric", month: "long", year: "numeric", hour: "2-digit", minute: "2-digit",
+      })
     : "";
   // 🔥 prima prova nuovi allegati (tabella comunicazione_attachments)
   const firstAttachment =
@@ -155,262 +185,225 @@ export default function DettaglioComunicazione({ canDelete = true }) {
 
   // fallback legacy
   const hasAttachment = !!firstAttachment || !!comm.allegato_url;
-  const previewUrl = hasAttachment ? `${API}/comunicazioni/${id}/view` : null;
-  const downloadUrl = hasAttachment ? `${API}/comunicazioni/${id}/download` : null;
 
   const fileName = (firstAttachment?.file_url || comm.allegato_url || "").toLowerCase();
   const isPdf = fileName.endsWith(".pdf") || (firstAttachment?.mime_type === "application/pdf");
 
+  const fmtDataOra = (v) => (v ? new Date(v).toLocaleString("it-IT", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" }) : "—");
+  const totDest = data.destinatari.length;
+  const percLetti = totDest ? Math.round((data.letti.length / totDest) * 100) : 0;
+
+  const TABS = [
+    ["info", "Messaggio", null],
+    ["letti", "Letti", data.letti.length],
+    ["non_letti", "Non letti", data.non_letti.length],
+    ["likes", "Mi piace", data.likes.length],
+    ["comments", "Commenti", data.comments.length],
+    ["destinatari", "Destinatari", totDest],
+  ];
+
+  const PersoneTable = ({ rows, conData }) => (
+    rows.length === 0 ? (
+      <div className="empty-state">Nessuno in questo elenco.</div>
+    ) : (
+      <div className={styles.tableScroll}>
+        <table className="data-table">
+          <thead>
+            <tr>
+              <th>Dipendente</th>
+              <th>Email</th>
+              {conData && <th>Letto il</th>}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((u, i) => (
+              <tr key={`${u.id ?? u.utente_id}-${i}`}>
+                <td className="cell-strong">{u.nome} {u.cognome}</td>
+                <td className={styles.muted}>{u.email}</td>
+                {conData && <td className="tabular">{fmtDataOra(u.data_lettura)}</td>}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    )
+  );
+
   return (
-    <div className={styles.container}>
-      {/* Header: titolo a sx + back a dx */}
-      <div className={styles.header}>
-        <h2 className={styles.title}>{comm.titolo || "Comunicazione"}</h2>
-        <button
-          type="button"
-          className={`btn btn-outline ${styles.backBtn}`}
-          onClick={() => navigate("/comunicazioni")}
-        >
-          <FiArrowLeft /> Indietro
-        </button>
-      </div>
-      <div className={styles.underline} />
-
-      {/* Tabs */}
-      <div className={styles.tabs}>
-        <button className={tab === "info" ? styles.tabActive : styles.tab} onClick={() => setTab("info")}>
-          Info
-        </button>
-        <button className={tab === "destinatari" ? styles.tabActive : styles.tab} onClick={() => setTab("destinatari")}>
-          <FiUsers /> Destinatari ({data.destinatari.length})
-        </button>
-        <button className={tab === "letti" ? styles.tabActive : styles.tab} onClick={() => setTab("letti")}>
-          <FiEye /> Letti ({data.letti.length})
-        </button>
-        <button className={tab === "non_letti" ? styles.tabActive : styles.tab} onClick={() => setTab("non_letti")}>
-          <FiEyeOff /> Non letti ({data.non_letti.length})
-        </button>
-        <button className={tab === "likes" ? styles.tabActive : styles.tab} onClick={() => setTab("likes")}>
-          <FiHeart /> Like ({data.likes.length})
-        </button>
-        <button className={tab === "comments" ? styles.tabActive : styles.tab} onClick={() => setTab("comments")}>
-          <FiMessageSquare /> Commenti ({data.comments.length})
-        </button>
-      </div>
-
-      {/* Contenuti tab */}
-      {tab === "info" && (
-        <div className={styles.card}>
-          <div className={styles.metaRow}>
-            <span className={styles.metaBadge}>{pubDate}</span>
-            <span className={styles.metaBadge}>
-              <FiMessageSquare /> {data.comments.length}
-            </span>
-            <span className={styles.metaBadge}>
-              <FiHeart /> {data.likes.length}
-            </span>
+    <div className="page">
+      <header className="page-header">
+        <div className="page-header-text">
+          <button type="button" className="page-eyebrow" onClick={() => navigate("/comunicazioni")}>
+            <FiArrowLeft size={14} /> Comunicazioni
+          </button>
+          <h1 className="page-title">{comm.titolo || "Comunicazione"}</h1>
+          {pubDate && <p className="page-subtitle">Pubblicata il {pubDate}</p>}
+        </div>
+        {!editing && (
+          <div className="page-actions">
+            {hasAttachment && (
+              <button
+                type="button"
+                className="btn btn-outline"
+                onClick={() => downloadWithAuth(`${API}/comunicazioni/${id}/download`, "allegato").catch((err) => toast.error(err.message))}
+              >
+                <FiDownload size={15} /> Allegato
+              </button>
+            )}
+            <button type="button" className="btn btn-outline" onClick={startEditing}>
+              <FiEdit2 size={15} /> Modifica
+            </button>
+            {canDelete && (
+              <button type="button" className="btn btn-danger-outline" onClick={handleDelete}>
+                <FiTrash2 size={15} /> Elimina
+              </button>
+            )}
           </div>
+        )}
+      </header>
 
+      {/* Numeri */}
+      <div className={styles.stats}>
+        <div className={`card ${styles.stat}`}>
+          <span className={styles.statLabel}>Destinatari</span>
+          <span className={styles.statValue}>{totDest}</span>
+        </div>
+        <div className={`card ${styles.stat}`}>
+          <span className={styles.statLabel}>Letta da</span>
+          <span className={styles.statValue}>{data.letti.length}<span className={styles.statSub}>{percLetti}%</span></span>
+        </div>
+        <div className={`card ${styles.stat}`}>
+          <span className={styles.statLabel}>Mi piace</span>
+          <span className={styles.statValue}>{data.likes.length}</span>
+        </div>
+        <div className={`card ${styles.stat}`}>
+          <span className={styles.statLabel}>Commenti</span>
+          <span className={styles.statValue}>{data.comments.length}</span>
+        </div>
+      </div>
+
+      <div className="tabs" role="tablist">
+        {TABS.map(([k, label, n]) => (
+          <button
+            key={k}
+            type="button"
+            role="tab"
+            aria-selected={tab === k}
+            className="tab"
+            onClick={() => setTab(k)}
+          >
+            {label}{n !== null && <span className={styles.tabCount}>{n}</span>}
+          </button>
+        ))}
+      </div>
+
+      {tab === "info" && (
+        <section className="card">
           {editing ? (
-            <div className={styles.editForm}>
-              <div className={styles.group}>
-                <label className={styles.label} htmlFor="editTitolo">Titolo</label>
-                <input
-                  id="editTitolo"
-                  type="text"
-                  className={styles.input}
-                  value={editTitolo}
-                  onChange={(e) => setEditTitolo(e.target.value)}
-                />
-              </div>
-              <div className={styles.group}>
-                <label className={styles.label} htmlFor="editContenuto">Contenuto</label>
-                <textarea
-                  id="editContenuto"
-                  className={styles.textarea}
-                  rows={6}
-                  value={editContenuto}
-                  onChange={(e) => setEditContenuto(e.target.value)}
-                />
-              </div>
-              <div className={styles.group}>
-                <label className={styles.label}>Dopo il salvataggio</label>
-                <div className={styles.notifyOptions}>
-                  <label className={styles.notifyOption}>
-                    <input
-                      type="radio"
-                      name="editNotify"
-                      value="both"
-                      checked={editNotify === "both"}
-                      onChange={() => setEditNotify("both")}
-                    />
-                    Invia una nuova email e una notifica push
-                  </label>
-                  <label className={styles.notifyOption}>
-                    <input
-                      type="radio"
-                      name="editNotify"
-                      value="push"
-                      checked={editNotify === "push"}
-                      onChange={() => setEditNotify("push")}
-                    />
-                    Invia solo la notifica push
-                  </label>
-                  <label className={styles.notifyOption}>
-                    <input
-                      type="radio"
-                      name="editNotify"
-                      value="none"
-                      checked={editNotify === "none"}
-                      onChange={() => setEditNotify("none")}
-                    />
-                    Nessuna delle due (modifica solo il testo in app)
-                  </label>
+            <>
+              <div className={`card-body ${styles.editForm}`}>
+                <label className="field" htmlFor="editTitolo">
+                  <span className="field-label">Titolo</span>
+                  <input
+                    id="editTitolo"
+                    type="text"
+                    className="input"
+                    value={editTitolo}
+                    onChange={(e) => setEditTitolo(e.target.value)}
+                  />
+                </label>
+                <label className="field" htmlFor="editContenuto">
+                  <span className="field-label">Testo</span>
+                  <textarea
+                    id="editContenuto"
+                    className="textarea"
+                    rows={8}
+                    value={editContenuto}
+                    onChange={(e) => setEditContenuto(e.target.value)}
+                  />
+                </label>
+                <div className="field">
+                  <span className="field-label">Dopo il salvataggio</span>
+                  <div className={styles.notifyOptions}>
+                    {[
+                      ["both", "Invia una nuova email e una notifica"],
+                      ["push", "Invia solo la notifica nell’app"],
+                      ["none", "Non avvisare: aggiorna solo il testo"],
+                    ].map(([v, label]) => (
+                      <label key={v} className={styles.notifyOption}>
+                        <input
+                          type="radio"
+                          name="editNotify"
+                          value={v}
+                          checked={editNotify === v}
+                          onChange={() => setEditNotify(v)}
+                        />
+                        {label}
+                      </label>
+                    ))}
+                  </div>
                 </div>
               </div>
-            </div>
-          ) : (
-            <div className={styles.content}>{comm.contenuto || ""}</div>
-          )}
-
-          {/* Allegato */}
-          {hasAttachment && (
-            <div className={styles.attachWrap}>
-              <p className={styles.attachTitle}>Allegato</p>
-              <div className={styles.attachBox}>
-                {isPdf ? (
-                  <iframe
-                    title="allegato"
-                    src={previewUrl}
-                    style={{ width: "100%", height: 520, border: "none", display: "block" }}
-                  />
-                ) : (
-                  <img
-                    alt="allegato"
-                    src={previewUrl}
-                    style={{ width: "100%", display: "block", objectFit: "contain" }}
-                  />
-                )}
+              <div className="card-foot">
+                <button type="button" className="btn btn-outline" onClick={cancelEditing} disabled={saving}>
+                  <FiX size={15} /> Annulla
+                </button>
+                <button type="button" className="btn btn-primary" onClick={handleSaveEdit} disabled={saving}>
+                  <FiSave size={15} /> {saving ? "Salvataggio…" : "Salva modifiche"}
+                </button>
               </div>
+            </>
+          ) : (
+            <div className="card-body">
+              <div className={styles.content}>{comm.contenuto || ""}</div>
+
+              {hasAttachment && (
+                <div className={styles.attachWrap}>
+                  <p className={styles.attachTitle}>Allegato</p>
+                  <div className={styles.attachBox}>
+                    {!previewBlobUrl ? (
+                      <div className="empty-state">Caricamento anteprima…</div>
+                    ) : isPdf ? (
+                      <iframe title="allegato" src={previewBlobUrl} className={styles.pdfFrame} />
+                    ) : (
+                      <img alt="allegato" src={previewBlobUrl} className={styles.imgPreview} />
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
           )}
-
-          {/* Azioni admin */}
-          <div className={styles.actions}>
-            {hasAttachment && (
-              <a className={styles.btnPrimary} href={downloadUrl}>
-                <FiDownload /> Scarica allegato
-              </a>
-            )}
-            {editing ? (
-              <>
-                <button
-                  type="button"
-                  className={styles.btnOutline}
-                  onClick={cancelEditing}
-                  disabled={saving}
-                >
-                  <FiX /> Annulla
-                </button>
-                <button
-                  type="button"
-                  className={styles.btnPrimary}
-                  onClick={handleSaveEdit}
-                  disabled={saving}
-                >
-                  <FiSave /> {saving ? "Salvataggio..." : "Salva modifiche"}
-                </button>
-              </>
-            ) : (
-              <button
-                type="button"
-                className={styles.btnOutline}
-                onClick={startEditing}
-                title="Modifica testo comunicazione"
-              >
-                <FiEdit2 /> Modifica
-              </button>
-            )}
-            {canDelete && !editing && (
-              <button
-                type="button"
-                className={styles.btnDanger}
-                onClick={handleDelete}
-                title="Elimina comunicazione"
-              >
-                <FiTrash2 /> Elimina
-              </button>
-            )}
-          </div>
-        </div>
+        </section>
       )}
 
-      {tab === "destinatari" && (
-        <div className={styles.card}>
-          <h3>Destinatari</h3>
-          <ul className={styles.destList}>
-            {data.destinatari.map((u) => (
-              <li key={u.id} className={styles.destItem}>
-                {u.nome} {u.cognome} — {u.email}
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-
-      {tab === "letti" && (
-        <div className={styles.card}>
-          <h3>Letti</h3>
-          <ul className={styles.destList}>
-            {data.letti.map((u) => (
-              <li key={u.utente_id} className={styles.destItem}>
-                {u.nome} {u.cognome} — {u.email} • {new Date(u.data_lettura).toLocaleString()}
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-
-      {tab === "non_letti" && (
-        <div className={styles.card}>
-          <h3>Non letti</h3>
-          <ul className={styles.destList}>
-            {data.non_letti.map((u) => (
-              <li key={u.id} className={styles.destItem}>
-                {u.nome} {u.cognome} — {u.email}
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-
-      {tab === "likes" && (
-        <div className={styles.card}>
-          <h3>Like</h3>
-          <ul className={styles.destList}>
-            {data.likes.map((u, i) => (
-              <li key={`${u.utente_id}-${i}`} className={styles.destItem}>
-                {u.nome} {u.cognome} — {u.email}
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
+      {tab === "destinatari" && <section className="card"><PersoneTable rows={data.destinatari} /></section>}
+      {tab === "letti" && <section className="card"><PersoneTable rows={data.letti} conData /></section>}
+      {tab === "non_letti" && <section className="card"><PersoneTable rows={data.non_letti} /></section>}
+      {tab === "likes" && <section className="card"><PersoneTable rows={data.likes} /></section>}
 
       {tab === "comments" && (
-        <div className={styles.card}>
-          <h3>Commenti</h3>
-          <ul className={styles.commentsList}>
-            {data.comments.map((c) => (
-              <li key={c.id} className={styles.commentItem}>
-                <div className={styles.commentMeta}>
-                  {c.nome} {c.cognome} • {new Date(c.created_at).toLocaleString()}
-                </div>
-                <div className={styles.commentBody}>{c.contenuto}</div>
-              </li>
-            ))}
-          </ul>
-        </div>
+        <section className="card">
+          {data.comments.length === 0 ? (
+            <div className="empty-state">Nessun commento.</div>
+          ) : (
+            <ul className={styles.commentsList}>
+              {data.comments.map((c) => (
+                <li key={c.id} className={styles.commentItem}>
+                  <div className={styles.commentAvatar} aria-hidden="true">
+                    {(c.nome?.[0] || "").toUpperCase()}{(c.cognome?.[0] || "").toUpperCase()}
+                  </div>
+                  <div className={styles.commentMain}>
+                    <div className={styles.commentMeta}>
+                      <span className={styles.commentAuthor}>{c.nome} {c.cognome}</span>
+                      <span>{fmtDataOra(c.created_at)}</span>
+                    </div>
+                    <div className={styles.commentBody}>{c.contenuto}</div>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
       )}
     </div>
   );

@@ -1,6 +1,7 @@
 // frontend/src/App.js
 import React, { useEffect, useState } from 'react';
-import { BrowserRouter as Router, Routes, Route, Link, useNavigate, Navigate, useLocation } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, useNavigate, Navigate, useLocation } from 'react-router-dom';
+import { FiLogOut } from 'react-icons/fi';
 import { getAuth, onAuthStateChanged, signOut } from 'firebase/auth';
 import UtentiPage from './components/UtentiPage';
 import UtenteDettaglio from './components/UtenteDettaglio';
@@ -14,9 +15,12 @@ import PaginaQR from './components/PaginaQR';
 import Login from './Login';
 import DocumentiPage from './components/DocumentiPage';
 import DocumentiOperazionePage from './components/DocumentiOperazionePage';
+import ClockAIWidget from './assistenteHr/ClockAIWidget';
 import SedeNuova from './components/SedeNuova';
 import SedeDettaglio from './components/SedeDettaglio';
-import './styles/globals.css';
+import { ToastProvider } from './components/ui/Toast';
+import { ConfirmProvider } from './components/ui/ConfirmDialog';
+import AppShell from './components/layout/AppShell';
 
 import { fetchMe } from './api';
 import WbManagerPage from './pages/WbManagerPage';
@@ -50,6 +54,9 @@ function AppContent() {
         if (window.location.pathname !== '/') navigate('/login', { replace: true });
         return;
       }
+      // finché il ruolo non arriva dal backend non si decide il redirect,
+      // altrimenti subito dopo il login si finisce su /nessun-accesso
+      setLoading(true);
       try {
         const token = await u.getIdToken();
         const info = await fetchMe(token);
@@ -79,7 +86,7 @@ function AppContent() {
 
   // ruolo
   const ruolo = me?.ruolo || null;
-  const isAdmin = ruolo === 'admin' || ruolo === 'admin_lan';
+  const isAdmin = ruolo === 'admin';
   const isWbManager = ruolo === 'wb_manager';
   const isTeamLeader = !isAdmin && !isWbManager && !!(me?.team_leader_sedi?.trim());
   // Il QR (usato per la timbratura) deve essere visibile solo dal totem/admin,
@@ -118,59 +125,12 @@ function AppContent() {
   }
 
   if (loading && !ruolo) {
-    return <div style={{ padding: 24 }}>Caricamento…</div>;
+    return <div className="empty-state" style={{ minHeight: '100vh' }}>Caricamento…</div>;
   }
 
-  return (
-    <div className="app-container">
-      {/* NAVBAR (solo admin) — FUORI da <Routes> */}
-      {isAdmin && (
-        <nav className="navbar">
-          <div className="nav-inner">
-            <div className="nav-left">
-              {/* Logo da public/Logo_esteso.png */}
-              <div className="nav-logo">
-                <img src="/Logo_esteso.png" alt="ClockEasy" />
-              </div>
-  
-              {/* Link testuali con underline sul tab attivo */}
-              <div className="navbar-links">
-                <Link to="/"                    className={location.pathname==='/' ? 'active' : ''}>Home</Link>
-                <Link to="/utenti"              className={location.pathname.startsWith('/utenti') ? 'active' : ''}>Dipendenti</Link>
-                <Link to="/comunicazioni"       className={location.pathname.startsWith('/comunicazioni') ? 'active' : ''}>Comunicazioni</Link>
-                <Link to="/presenze"            className={location.pathname==='/presenze' ? 'active' : ''}>Presenze</Link>
-                {/*<Link to="/qr"                  className={location.pathname==='/qr' ? 'active' : ''}>QR Code</Link>*/}
-                <Link to="/documenti"           className={location.pathname.startsWith('/documenti') ? 'active' : ''}>Documenti</Link>
-                {/*<Link to="/documenti/gestione"  className={location.pathname==='/documenti/gestione' ? 'active' : ''}>Archivio</Link>*/}
-              </div>
-            </div>
-  
-            <button className="btn-logout" onClick={handleLogout}>Logout</button>
-          </div>
-        </nav>
-      )}
-  
-      {/* NAVBAR compatta per non-admin (solo logout) — sempre FUORI da <Routes> */}
-      {!isAdmin && (
-        <div className="navbar">
-          <div className="nav-inner">
-            <div className="nav-left">
-              <div className="nav-logo">
-                <a
-                  href={isWbManager ? "/wb-manager" : isTeamLeader ? "/tl" : isQrViewer ? "/qr" : "/nessun-accesso"}
-                  aria-label="ClockEasy Home"
-                >
-                  <img src="/Logo_esteso.png" alt="ClockEasy" />
-                </a>
-              </div>
-            </div>
-            <button className="btn-logout" onClick={handleLogout}>Logout</button>
-          </div>
-        </div>
-      )}
-  
-      {/* ROUTING — SOLO <Route> come figli di <Routes> */}
-      <div className="main-content">
+  const ruoloLabel = isWbManager ? 'Gestore segnalazioni' : isTeamLeader ? 'Team leader' : '';
+
+  const routes = (
         <Routes>
           {isAdmin && (
             <>
@@ -187,7 +147,6 @@ function AppContent() {
               <Route path="/qr" element={<PaginaQR />} />
               <Route path="/documenti" element={<DocumentiPage />} />
               <Route path="/documenti/:mode" element={<DocumentiOperazionePage />} />
-              {/*<Route path="/documenti/gestione" element={<DocumentiGestione />} />*/}
               <Route path="/wb-manager" element={<Navigate to="/" replace />} />
               <Route path="*" element={<DashboardHome />} />
             </>
@@ -229,16 +188,51 @@ function AppContent() {
             </>
           )}
         </Routes>
-      </div>
+  );
+
+  if (isAdmin) {
+    return (
+      <>
+        <AppShell me={me} onLogout={handleLogout}>{routes}</AppShell>
+        {/* ClockAI — widget flottante globale, solo per admin, su tutte le pagine */}
+        <ClockAIWidget />
+      </>
+    );
+  }
+
+  return (
+    <div className="app-container">
+      <header className="navbar">
+        <div className="nav-inner">
+          <a
+            className="nav-logo"
+            href={isWbManager ? '/wb-manager' : isTeamLeader ? '/tl' : isQrViewer ? '/qr' : '/nessun-accesso'}
+            aria-label="ClockEasy Home"
+          >
+            <img src="/Logo_esteso.png" alt="ClockEasy" />
+          </a>
+          <div className="nav-right">
+            {me?.email && (
+              <span className="nav-user">
+                {me.email}{ruoloLabel ? ` · ${ruoloLabel}` : ''}
+              </span>
+            )}
+            <button className="btn-logout" onClick={handleLogout}>
+              <FiLogOut size={14} /> Esci
+            </button>
+          </div>
+        </div>
+      </header>
+      <main className="main-content">{routes}</main>
     </div>
   );
 }
 
 function NessunAccesso() {
   return (
-    <div style={{ padding: 40, textAlign: 'center' }}>
-      <h2>Accesso non disponibile</h2>
-      <p>Questa sezione non è consultabile dal tuo account.</p>
+    <div className="card empty-state" style={{ maxWidth: 520, margin: '64px auto 0' }}>
+      <span className="empty-state-title">Accesso non disponibile</span>
+      <span>Questa sezione non è consultabile dal tuo account.</span>
     </div>
   );
 }
@@ -246,7 +240,11 @@ function NessunAccesso() {
 export default function App() {
   return (
     <Router>
-      <AppContent />
+      <ToastProvider>
+        <ConfirmProvider>
+          <AppContent />
+        </ConfirmProvider>
+      </ToastProvider>
     </Router>
   );
 }

@@ -1,7 +1,21 @@
 import React, { useEffect, useMemo, useState, useCallback } from "react";
-import { FiFile, FiChevronDown, FiTrash2, FiPaperclip, FiChevronRight, FiEdit2, FiCheck, FiX } from "react-icons/fi";
+import { FiFile, FiFolder, FiTrash2, FiChevronRight, FiEdit2, FiCheck, FiX } from "react-icons/fi";
 import styles from "./DocumentiUtente.module.css";
-import { API_BASE } from "../api";
+import { API_BASE, getIdToken } from "../api";
+import { useConfirm } from "./ui/ConfirmDialog";
+
+async function authHeaders(extra = {}) {
+  const token = await getIdToken();
+  return { ...extra, ...(token ? { Authorization: `Bearer ${token}` } : {}) };
+}
+
+async function openDocumentoFile(baseUrl, docId) {
+  const headers = await authHeaders();
+  const res = await fetch(`${baseUrl}/documenti/${docId}/presigned`, { headers });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const { url } = await res.json();
+  window.open(url, "_blank", "noopener,noreferrer");
+}
 
 const API = API_BASE;
 
@@ -38,6 +52,7 @@ const mapDoc = (d) => ({
 });
 
 export default function DocumentiUtente({ userId, baseUrl = API }) {
+  const confirm = useConfirm();
   const [docs, setDocs]       = useState([]);
   const [loading, setLoading] = useState(true);
   const [err, setErr]         = useState("");
@@ -60,16 +75,13 @@ export default function DocumentiUtente({ userId, baseUrl = API }) {
   const fetchDocs = useCallback(async () => {
     try {
       setLoading(true); setErr("");
-      const r = await fetch(listUrl, { headers: { Accept: "application/json" }, credentials: "include" });
+      const r = await fetch(listUrl, { headers: await authHeaders({ Accept: "application/json" }) });
       if (!r.ok) throw new Error(`HTTP ${r.status}`);
       const data = await r.json();
-      setDocs((Array.isArray(data) ? data : data?.items || []).map(d => ({
-        ...mapDoc(d),
-        viewHref: d.id ? `${baseUrl}/documenti/${d.id}/view` : undefined,
-      })));
+      setDocs((Array.isArray(data) ? data : data?.items || []).map(d => mapDoc(d)));
     } catch (e) { setErr(e.message); }
     finally { setLoading(false); }
-  }, [listUrl, baseUrl]);
+  }, [listUrl]);
 
 
   useEffect(() => { fetchDocs(); }, [fetchDocs]);
@@ -107,10 +119,16 @@ export default function DocumentiUtente({ userId, baseUrl = API }) {
   const isYearOpen = (cat, year) => !!openYears[`${cat}|${year}`];
 
   const deleteDoc = async (doc) => {
-    if (!window.confirm(`Eliminare "${doc.name}"?`)) return;
+    const ok = await confirm({
+      title: "Eliminare il documento?",
+      message: `"${doc.name}" verrà eliminato definitivamente. L'azione non si può annullare.`,
+      danger: true,
+      confirmLabel: "Elimina",
+    });
+    if (!ok) return;
     try {
       setErr("");
-      const r = await fetch(deleteUrl(doc.id), { method: "DELETE", credentials: "include" });
+      const r = await fetch(deleteUrl(doc.id), { method: "DELETE", headers: await authHeaders() });
       if (!r.ok) throw new Error(`HTTP ${r.status}`);
       setDocs(p => p.filter(d => d.id !== doc.id));
     } catch (e) { setErr(e.message); }
@@ -137,8 +155,7 @@ export default function DocumentiUtente({ userId, baseUrl = API }) {
     try {
       const r = await fetch(patchUrl(doc.id), {
         method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
+        headers: await authHeaders({ "Content-Type": "application/json" }),
         body: JSON.stringify({ nome_file: newName }),
       });
       if (!r.ok) throw new Error(`HTTP ${r.status}`);
@@ -167,8 +184,7 @@ export default function DocumentiUtente({ userId, baseUrl = API }) {
     try {
       const r = await fetch(patchUrl(dragging), {
         method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
+        headers: await authHeaders({ "Content-Type": "application/json" }),
         body: JSON.stringify({ tipo_documento: newCat }),
       });
       if (!r.ok) throw new Error(`HTTP ${r.status}`);
@@ -179,133 +195,137 @@ export default function DocumentiUtente({ userId, baseUrl = API }) {
     setDragging(null);
   };
 
+  const categorie = Object.entries(grouped).sort(([a], [b]) => a.localeCompare(b));
+
   return (
-    <div className={styles.container}>
-      {/* Titolo */}
-      <div className={styles.head}>
-        <FiFile className={styles.icon} />
-        <h3 className={styles.title}>Documenti</h3>
+    <section className="card">
+      <div className="card-head">
+        <div>
+          <h2 className="card-title">Documenti</h2>
+          <p className="card-desc">Trascina un documento su un’altra categoria per spostarlo.</p>
+        </div>
       </div>
-      <div className={styles.underline} />
 
-      {err && <div className="small" style={{ color: "#8A1F1F", marginBottom: 8 }}>{err}</div>}
-      {loading && <div className="small">Caricamento documenti…</div>}
+      {err && <div className={styles.alertWrap}><div className="alert alert-danger">{err}</div></div>}
+      {loading && <div className="empty-state">Caricamento documenti…</div>}
 
-      {/* Lista categorie */}
-      {!loading && Object.keys(grouped).length === 0 && (
-        <div className="small" style={{ color: "var(--txt-muted)" }}>Nessun documento caricato.</div>
+      {!loading && categorie.length === 0 && (
+        <div className="empty-state">
+          <span className="empty-state-title">Nessun documento</span>
+          <span>I documenti caricati per questo dipendente compariranno qui.</span>
+        </div>
       )}
 
-      {!loading && Object.entries(grouped).sort(([a], [b]) => a.localeCompare(b)).map(([cat, years]) => {
-        const total    = Object.values(years).reduce((n, arr) => n + arr.length, 0);
-        const isOpen   = isCatOpen(cat);
-        const isDragOver = dragOverCat === cat;
+      {!loading && categorie.length > 0 && (
+        <div className={styles.categories}>
+          {categorie.map(([cat, years]) => {
+            const total = Object.values(years).reduce((n, arr) => n + arr.length, 0);
+            const isOpen = isCatOpen(cat);
+            const isDragOver = dragOverCat === cat;
 
-        return (
-          <details
-            key={cat}
-            className={styles.details}
-            open={isOpen || undefined}
-            style={isDragOver ? { outline: "2px dashed #D0933C", outlineOffset: 2 } : undefined}
-            onDragOver={e => onCatDragOver(e, cat)}
-            onDragLeave={onCatDragLeave}
-            onDrop={e => onCatDrop(e, cat)}
-          >
-            <summary className={styles.summary} onClick={e => { e.preventDefault(); toggleCat(cat); }}>
-              <span>{cat} ({total})</span>
-              <span className={styles.chev}><FiChevronDown /></span>
-            </summary>
+            return (
+              <div
+                key={cat}
+                className={`${styles.category} ${isDragOver ? styles.categoryDrop : ""}`}
+                onDragOver={e => onCatDragOver(e, cat)}
+                onDragLeave={onCatDragLeave}
+                onDrop={e => onCatDrop(e, cat)}
+              >
+                <button
+                  type="button"
+                  className={styles.categoryHead}
+                  onClick={() => toggleCat(cat)}
+                  aria-expanded={isOpen}
+                >
+                  <FiChevronRight className={`${styles.chev} ${isOpen ? styles.chevOpen : ""}`} size={16} />
+                  <FiFolder className={styles.folder} size={16} />
+                  <span className={styles.categoryName}>{cat}</span>
+                  <span className={styles.count}>{total}</span>
+                </button>
 
-            {isOpen && Object.entries(years).map(([year, items]) => {
-              const yOpen = isYearOpen(cat, year);
-              return (
-                <div key={year} style={{ borderBottom: "1px solid var(--border, #E5E7EB)" }}>
-                  {/* Header anno */}
-                  <div
-                    onClick={() => toggleYear(cat, year)}
-                    style={{
-                      display: "flex", alignItems: "center", gap: 6,
-                      padding: "6px 14px", cursor: "pointer", userSelect: "none",
-                      background: "var(--bg-subtle, #F8FAFC)",
-                      fontSize: 12, fontWeight: 600, color: "var(--txt-muted, #64748B)",
-                      letterSpacing: "0.3px",
-                    }}
-                  >
-                    {yOpen ? <FiChevronDown size={11} /> : <FiChevronRight size={11} />}
-                    {year}
-                    <span style={{ fontWeight: 400, marginLeft: 2 }}>({items.length})</span>
-                  </div>
+                {isOpen && Object.entries(years).map(([year, items]) => {
+                  const yOpen = isYearOpen(cat, year);
+                  return (
+                    <div key={year} className={styles.year}>
+                      <button
+                        type="button"
+                        className={styles.yearHead}
+                        onClick={() => toggleYear(cat, year)}
+                        aria-expanded={yOpen}
+                      >
+                        <FiChevronRight className={`${styles.chev} ${yOpen ? styles.chevOpen : ""}`} size={14} />
+                        {year}
+                        <span className={styles.yearCount}>{items.length}</span>
+                      </button>
 
-                  {yOpen && (
-                    <ul className={styles.list}>
-                      {items
-                        .sort((a, b) => (b.date || "").localeCompare(a.date || ""))
-                        .map(doc => (
-                          <li
-                            key={doc.id}
-                            className={styles.item}
-                            draggable={renamingId !== doc.id}
-                            onDragStart={e => { if (renamingId === doc.id) { e.preventDefault(); return; } onDragStart(e, doc.id); }}
-                            onDragEnd={onDragEnd}
-                            style={dragging === doc.id ? { opacity: 0.4 } : undefined}
-                          >
-                            {renamingId === doc.id ? (
-                              /* ── modalità rinomina ── */
-                              <>
-                                <input
-                                  autoFocus
-                                  className={styles.renameInput}
-                                  value={renameVal}
-                                  onChange={e => setRenameVal(e.target.value)}
-                                  onKeyDown={e => {
-                                    if (e.key === "Enter")  commitRename(doc);
-                                    if (e.key === "Escape") cancelRename();
-                                  }}
-                                />
-                                <button className={styles.iconBtn} onClick={() => commitRename(doc)} title="Conferma">
-                                  <FiCheck />
-                                </button>
-                                <button className={styles.iconBtn} onClick={cancelRename} title="Annulla">
-                                  <FiX />
-                                </button>
-                              </>
-                            ) : (
-                              /* ── modalità visualizzazione ── */
-                              <>
-                                <a
-                                  className={styles.link}
-                                  href={doc.viewHref || "#"}
-                                  target="_blank"
-                                  rel="noreferrer"
-                                  title={doc.name}
-                                >
-                                  <FiPaperclip style={{ verticalAlign: "-2px", marginRight: 4 }} />
-                                  {doc.name}
-                                </a>
-                                <span className={styles.meta}>
-                                  {fmtData(doc.date)}
-                                  {doc.scadenza && (
-                                    <span style={{ color: "#D97706", marginLeft: 6 }}>⚠ {fmtData(doc.scadenza)}</span>
-                                  )}
-                                </span>
-                                <button className={styles.iconBtn} onClick={() => startRename(doc)} title="Rinomina">
-                                  <FiEdit2 />
-                                </button>
-                                <button className={styles.delBtn} onClick={() => deleteDoc(doc)} title="Elimina">
-                                  <FiTrash2 />
-                                </button>
-                              </>
-                            )}
-                          </li>
-                        ))}
-                    </ul>
-                  )}
-                </div>
-              );
-            })}
-          </details>
-        );
-      })}
-    </div>
+                      {yOpen && (
+                        <ul className={styles.list}>
+                          {items
+                            .sort((a, b) => (b.date || "").localeCompare(a.date || ""))
+                            .map(doc => (
+                              <li
+                                key={doc.id}
+                                className={`${styles.item} ${dragging === doc.id ? styles.itemDragging : ""}`}
+                                draggable={renamingId !== doc.id}
+                                onDragStart={e => { if (renamingId === doc.id) { e.preventDefault(); return; } onDragStart(e, doc.id); }}
+                                onDragEnd={onDragEnd}
+                              >
+                                {renamingId === doc.id ? (
+                                  <>
+                                    <input
+                                      autoFocus
+                                      className={`input ${styles.renameInput}`}
+                                      value={renameVal}
+                                      onChange={e => setRenameVal(e.target.value)}
+                                      onKeyDown={e => {
+                                        if (e.key === "Enter")  commitRename(doc);
+                                        if (e.key === "Escape") cancelRename();
+                                      }}
+                                    />
+                                    <button className="btn btn-ghost btn-sm btn-icon" onClick={() => commitRename(doc)} title="Conferma" aria-label="Conferma">
+                                      <FiCheck size={15} />
+                                    </button>
+                                    <button className="btn btn-ghost btn-sm btn-icon" onClick={cancelRename} title="Annulla" aria-label="Annulla">
+                                      <FiX size={15} />
+                                    </button>
+                                  </>
+                                ) : (
+                                  <>
+                                    <FiFile className={styles.fileIcon} size={15} />
+                                    <button
+                                      type="button"
+                                      className={styles.link}
+                                      onClick={() => openDocumentoFile(baseUrl, doc.id).catch(e => setErr(e.message))}
+                                      title={doc.name}
+                                    >
+                                      {doc.name}
+                                    </button>
+                                    {doc.scadenza && (
+                                      <span className="badge badge-warning">Scade il {fmtData(doc.scadenza)}</span>
+                                    )}
+                                    <span className={styles.meta}>{fmtData(doc.date)}</span>
+                                    <div className={styles.itemActions}>
+                                      <button className="btn btn-ghost btn-sm btn-icon" onClick={() => startRename(doc)} title="Rinomina" aria-label="Rinomina">
+                                        <FiEdit2 size={14} />
+                                      </button>
+                                      <button className={`btn btn-ghost btn-sm btn-icon ${styles.delBtn}`} onClick={() => deleteDoc(doc)} title="Elimina" aria-label="Elimina">
+                                        <FiTrash2 size={14} />
+                                      </button>
+                                    </div>
+                                  </>
+                                )}
+                              </li>
+                            ))}
+                        </ul>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </section>
   );
 }

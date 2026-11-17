@@ -1,222 +1,53 @@
-/* ===== ClockEasy — NuovaComunicazione (CSS Module) ===== */
-:root{
-  --brand-1:#D0933C; --brand-2:#6A57D3;
-  --grad:linear-gradient(90deg, var(--brand-1), var(--brand-2));
-  --txt-strong:#0F172A; --txt:#334155; --txt-muted:#64748B;
-  --bg-page:#F6F8FA; --bg-card:#FFFFFF;
-  --border:#E5E7EB; --radius:16px; --radius-sm:12px;
-  --shadow-soft:0 8px 28px rgba(15,23,42,.06); --shadow-sm:0 2px 8px rgba(15,23,42,.06);
-  --s1:6px; --s2:10px; --s3:14px; --s4:18px; --s5:24px;
-}
+.form { display: flex; flex-direction: column; gap: var(--sp-5); max-width: 860px; }
+.form > :global(.card) + :global(.card) { margin-top: 0; }
+.stack { display: flex; flex-direction: column; gap: var(--sp-5); }
+.body { min-height: 180px; }
+.optional { font-weight: 400; color: var(--txt-muted); }
 
-/* Page */
-.container{
-  padding: var(--s5);
-  background: var(--bg-page);
-  min-height: 100vh;
-  color: var(--txt);
-  box-sizing: border-box;
+/* Allegati */
+.fileHidden { display: none; }
+.fileControl { display: flex; align-items: center; gap: var(--sp-3); flex-wrap: wrap; }
+.filePlaceholder { font-size: var(--fs-sm); color: var(--txt-faint); }
+.fileList { display: flex; flex-wrap: wrap; gap: 6px; }
+.fileChip, .filterChip {
+  display: inline-flex; align-items: center; gap: 4px;
+  height: 26px; padding: 0 4px 0 10px;
+  border-radius: 999px;
+  background: var(--gray-100); border: 1px solid var(--border);
+  font-size: var(--fs-sm); font-weight: 500; color: var(--txt-strong);
+  max-width: 100%;
 }
+.removeChip, .filterChipRemove {
+  display: grid; place-items: center;
+  width: 18px; height: 18px; padding: 0;
+  border: 0; border-radius: 50%;
+  background: transparent; color: inherit; opacity: .6; cursor: pointer;
+}
+.removeChip:hover, .filterChipRemove:hover { opacity: 1; background: rgba(16, 24, 40, .08); }
 
-/* Header */
-.header{
-  display:flex; align-items:center; justify-content:space-between; gap:12px;
-  margin-bottom:0;
+/* Scelta destinatari */
+.choices { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--sp-3); }
+.choice, .checkRow {
+  display: flex; align-items: flex-start; gap: 10px;
+  cursor: pointer;
 }
-.title{
-  font-size:28px; font-weight:900; color:var(--txt-strong); margin:0;
+.choice {
+  padding: var(--sp-4);
+  border: 1px solid var(--border); border-radius: var(--radius);
+  transition: border-color .12s ease, background .12s ease;
 }
+.choice:hover { border-color: var(--border-strong); }
+.choiceOn, .choiceOn:hover { border-color: var(--accent); background: var(--accent-soft); box-shadow: 0 0 0 1px var(--accent) inset; }
+.choice input, .checkRow input { width: 16px; height: 16px; margin-top: 2px; accent-color: var(--accent); flex-shrink: 0; }
+.choiceTitle { display: block; font-size: var(--fs-md); font-weight: 500; color: var(--txt-strong); }
+.choiceDesc { display: block; font-size: var(--fs-sm); color: var(--txt-muted); margin-top: 2px; }
 
-/* Back button: outline blu, testo intero */
-.backBtn{
-  display:inline-flex; align-items:center; gap:8px;
-  padding:10px 14px; border-radius:12px; font-weight:800; font-size:14px;
-  background:#fff; color:var(--brand-2); border:1px solid var(--brand-2);
-  white-space:nowrap; cursor:pointer;
-  transition: background .12s ease, transform .12s ease;
-}
-.backBtn:hover{ background: rgba(106,87,211,.08); transform: translateY(-1px); }
+.manualRow { display: flex; align-items: center; gap: var(--sp-3); flex-wrap: wrap; }
+.filterGrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--sp-5); }
+.chipsWrap { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
 
-.underline{
-  height:3px; border-radius:2px; background:var(--grad);
-  margin:10px 0 var(--s4); width:100%;
-}
+.actions { display: flex; justify-content: flex-end; gap: var(--sp-2); }
 
-/* Card */
-.card{
-  background: var(--bg-card);
-  border:1px solid var(--border);
-  border-radius: var(--radius);
-  box-shadow: var(--shadow-soft);
-  padding:16px;
-  box-sizing:border-box;
-  overflow:hidden;
-  max-width: 1200px;
-  margin: 0 auto;
+@media (max-width: 760px) {
+  .choices, .filterGrid { grid-template-columns: 1fr; }
 }
-
-/* Grid */
-.grid{
-  display:flex;
-  flex-direction: column;
-  gap:14px;
-  margin-top: 1em;
-}
-@media (max-width: 900px){ .grid{ grid-template-columns: 1fr; } }
-
-/* Form */
-.group{ display:flex; flex-direction:column; gap:6px; min-width:0; justify-content: center;}
-.groupAllegati{ display:flex; flex-direction:row; gap:6px; min-width:0; justify-content: center;}
-.label{ font-size:12px; font-weight:800; color:var(--txt-muted); word-break: break-word; margin-top: 1em;}
-
-.input, .select, .textarea, .file{
-  width:100%;
-  padding:10px 12px;
-  font-size:15px; color:var(--txt); background:#fff;
-  border:1px solid var(--border); border-radius: var(--radius-sm);
-  outline:none; box-sizing:border-box;
-  transition:border-color .15s ease, box-shadow .15s ease;
-  height: 3.5em;
-}
-
-
-.input:focus, .select:focus, .textarea:focus, .file:focus{
-  border-color: var(--brand-2);
-  box-shadow: 0 0 0 3px rgba(106,87,211,.15);
-}
-.textarea{ min-height:120px; resize:vertical; line-height:1.5; }
-
-/* File input — stile coerente + bottone outline blu */
-/* Input file nascosto */
-.fileHidden{
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  overflow: hidden;
-  clip: rect(0 0 0 0);
-  clip-path: inset(50%);
-  white-space: nowrap;
-  border: 0;
-  padding: 0;
-  margin: -1px;
-}
-
-/* Wrapper bottone + box */
-.fileControl{
-  display:flex;
-  align-items:stretch;
-  gap:10px;
-}
-
-/* Bottone "Scegli file" – outline blu */
-.fileBtn{
-  display:inline-flex; align-items:center; gap:8px;
-  padding:10px 14px;
-  border-radius:12px;
-  font-weight:800; font-size:14px;
-  background:#fff; color:var(--brand-2);
-  border:1px solid var(--brand-2);
-  cursor:pointer;
-  transition: background .12s ease, transform .12s ease;
-  white-space:nowrap;
-}
-.fileBtn:hover{ background:rgba(106,87,211,.08); transform: translateY(-1px); }
-
-/* Box che mostra i nomi file (al posto del "Nessun file selezionato") */
-.fileBox{
-  flex:1 1 auto;
-  min-height: 44px;
-  max-height: 140px;
-  padding:8px 10px;
-  border:1px solid var(--border);
-  border-radius:12px;
-  background:#fff;
-  overflow:auto;
-  box-sizing:border-box;
-  transition:border-color .15s ease, box-shadow .15s ease;
-}
-.fileBox:focus-within{ 
-  border-color: var(--brand-2);
-  box-shadow: 0 0 0 3px rgba(106,87,211,.15);
-}
-
-/* Placeholder quando non ci sono file */
-.filePlaceholder{
-  color: var(--txt-muted);
-  font-size:14px;
-}
-
-/* Lista file (chips) dentro al box */
-.fileList{
-  display:flex; flex-wrap:wrap; gap:8px;
-}
-.fileChip{
-  display:inline-flex; align-items:center; gap:8px;
-  background:#F1F5F9; color:#334155;
-  border:1px solid #E2E8F0; border-radius:999px;
-  padding:6px 10px; font-size:13px; font-weight:800;
-}
-.removeChip{
-  appearance:none; border:none; background:transparent; cursor:pointer;
-  font-weight:900; line-height:1; padding:0 2px; color:#64748B;
-}
-.removeChip:hover{ color:#1F2937; }
-
-
-/* Lista file selezionati (chips) */
-
-.fileChip{
-  display:inline-flex; align-items:center; gap:8px;
-  background:#F1F5F9; color:#334155;
-  border:1px solid #E2E8F0; border-radius:999px;
-  padding:6px 10px; font-size:13px; font-weight:800;
-}
-.removeChip{
-  appearance:none; border:none; background:transparent; cursor:pointer;
-  font-weight:900; line-height:1; padding:0 2px; color:#64748B;
-}
-.removeChip:hover{ color:#1F2937; }
-
-/* Checkbox + note */
-.inline{ display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
-.note{ font-size:12px; color:var(--txt-muted); }
-
-/* Filtri multi-select chips */
-.chipsWrap{ display:flex; flex-wrap:wrap; gap:6px; margin-top:6px; min-height:22px; }
-.filterChip{
-  display:inline-flex; align-items:center; gap:4px;
-  padding:3px 8px; border-radius:999px; font-size:12px; font-weight:600;
-  background:#F1F5F9; border:1px solid #E2E8F0; color:var(--txt);
-}
-.filterChipRemove{
-  border:none; background:transparent; cursor:pointer;
-  font-size:13px; line-height:1; padding:0; color:#64748B;
-}
-.filterChipRemove:hover{ color:#B91C1C; }
-
-/* Azioni */
-.actions{
-  margin-top: var(--s4);
-  display:flex; align-items:center; justify-content:flex-end; gap:10px; flex-wrap:wrap;
-}
-
-/* Bottoni */
-.btnPrimary{
-  background: var(--brand-1);
-  border: 1px solid var(--brand-1);
-  color:#fff;
-  padding:10px 14px; border-radius:12px; font-weight:800; font-size:14px;
-  cursor:pointer; box-shadow: var(--shadow-sm);
-  transition: transform .12s ease, filter .12s ease;
-}
-.btnPrimary:hover{ filter:brightness(1.04); transform: translateY(-1px); }
-
-.btnOutline{
-  background:#fff; color:var(--txt); border:1px solid var(--border);
-  padding:10px 14px; border-radius:12px; font-weight:800; font-size:14px;
-  cursor:pointer; transition: background .12s ease;
-}
-.btnOutline:hover{ background:#F9FAFB; }
-
-/* Responsive tweak */
-@media (max-width: 860px){ .title{ font-size:24px; } }

@@ -1,11 +1,13 @@
 const express = require('express');
 const router = express.Router();
 const pool = require('../db');
+const requireAuth = require('../middleware/requireAuth');
+const { allowRoles } = require('../middleware/rbac');
 
 /* =========================================================================
    GET /sedi  -> tutte le sedi
 ========================================================================= */
-router.get('/', async (_req, res) => {
+router.get('/', requireAuth, allowRoles('admin'), async (_req, res) => {
   try {
     const result = await pool.query(
       `SELECT id, nome
@@ -23,7 +25,7 @@ router.get('/', async (_req, res) => {
    GET /sedi/:id  -> singola sede
 ========================================================================= */
 // GET /sedi/:id  -> singola sede, con societa_id
-router.get('/:id', async (req, res) => {
+router.get('/:id', requireAuth, allowRoles('admin'), async (req, res) => {
     try {
       const result = await pool.query(
         `
@@ -53,19 +55,19 @@ router.get('/:id', async (req, res) => {
 /* =========================================================================
    POST /sedi  -> nuova sede
 ========================================================================= */
-router.post('/', async (req, res) => {
+router.post('/', requireAuth, allowRoles('admin'), async (req, res) => {
   try {
-    const { nome } = req.body;
+    const { nome, societa_id } = req.body;
 
     if (!nome || !nome.trim()) {
       return res.status(400).json({ error: 'Nome sede obbligatorio' });
     }
 
     const insert = await pool.query(
-      `INSERT INTO sedi (nome)
-       VALUES ($1)
+      `INSERT INTO sedi (nome, societa_id)
+       VALUES ($1, $2)
        RETURNING id`,
-      [nome.trim()]
+      [nome.trim(), societa_id || null]
     );
 
     res.status(201).json({
@@ -87,9 +89,9 @@ router.post('/', async (req, res) => {
 /* =========================================================================
    PUT /sedi/:id  -> aggiorna sede
 ========================================================================= */
-router.put('/:id', async (req, res) => {
+router.put('/:id', requireAuth, allowRoles('admin'), async (req, res) => {
   try {
-    const { nome } = req.body;
+    const { nome, societa_id } = req.body;
     const { id } = req.params;
 
     if (!nome || !nome.trim()) {
@@ -98,9 +100,10 @@ router.put('/:id', async (req, res) => {
 
     await pool.query(
       `UPDATE sedi
-       SET nome = $1
-       WHERE id = $2`,
-      [nome.trim(), id]
+       SET nome = $1,
+           societa_id = $2
+       WHERE id = $3`,
+      [nome.trim(), societa_id || null, id]
     );
 
     res.json({ message: 'Sede aggiornata con successo' });
@@ -118,7 +121,7 @@ router.put('/:id', async (req, res) => {
 /* =========================================================================
    DELETE /sedi/:id  -> elimina sede
 ========================================================================= */
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', requireAuth, allowRoles('admin'), async (req, res) => {
   try {
     const { id } = req.params;
 
@@ -135,71 +138,12 @@ router.delete('/:id', async (req, res) => {
   }
 });
 
-router.post('/', async (req, res) => {
-    try {
-      const { nome, societa_id } = req.body;
-  
-      if (!nome || !nome.trim()) {
-        return res.status(400).json({ error: 'Nome sede obbligatorio' });
-      }
-  
-      const insert = await pool.query(
-        `INSERT INTO sedi (nome, societa_id)
-         VALUES ($1, $2)
-         RETURNING id`,
-        [nome.trim(), societa_id || null]
-      );
-  
-      res.status(201).json({
-        id: insert.rows[0].id,
-        message: 'Sede creata con successo',
-      });
-    } catch (err) {
-      console.error('POST /sedi', err);
-  
-      if (err.code === '23505') {
-        return res.status(400).json({ error: 'Esiste già una sede con questo nome' });
-      }
-  
-      res.status(500).json({ error: 'Errore server durante creazione sede' });
-    }
-  });
-  
-  router.put('/:id', async (req, res) => {
-    try {
-      const { nome, societa_id } = req.body;
-      const { id } = req.params;
-  
-      if (!nome || !nome.trim()) {
-        return res.status(400).json({ error: 'Nome sede obbligatorio' });
-      }
-  
-      await pool.query(
-        `UPDATE sedi
-         SET nome = $1,
-             societa_id = $2
-         WHERE id = $3`,
-        [nome.trim(), societa_id || null, id]
-      );
-  
-      res.json({ message: 'Sede aggiornata con successo' });
-    } catch (err) {
-      console.error('PUT /sedi/:id', err);
-  
-      if (err.code === '23505') {
-        return res.status(400).json({ error: 'Esiste già una sede con questo nome' });
-      }
-  
-      res.status(500).json({ error: 'Errore server durante aggiornamento sede' });
-    }
-  });
-
   /* =========================================================================
    POST /sedi/:id/utenti -> associa una serie di utenti a questa sede
    (aggiorna il campo TEXT "sede" degli utenti, aggiungendo il nome sede
     se non già presente; supporta multi-sede per utente)
 ========================================================================= */
-router.post('/:id/utenti', async (req, res) => {
+router.post('/:id/utenti', requireAuth, allowRoles('admin'), async (req, res) => {
     const { id } = req.params;
     const { utenti_ids } = req.body; // array di id utente
   

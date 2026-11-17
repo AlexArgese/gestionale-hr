@@ -1,0 +1,75 @@
+# Test di ClockAI: parte quando cambiano i file dell'assistente HR.
+#
+# Esegue i test unitari del backend e le domande di regressione di ClockAI
+# (backend/scripts/evalAssistenteHr.js), che fanno chiamate reali a Claude
+# (~0,03 $ a giro) e solo SELECT sul database.
+#
+# Segreti da creare in GitHub → Settings → Secrets and variables → Actions:
+#   ANTHROPIC_API_KEY           chiave API (meglio una dedicata ai test)
+#   CLOCKAI_EVAL_DATABASE_URL   connessione Postgres con un utente in SOLA LETTURA
+# Variabile opzionale: ANTHROPIC_MODEL (default claude-haiku-5-5), da tenere
+# uguale a quella del backend su Render.
+#
+# Per bloccare il deploy se i test falliscono: su Render, nel servizio del
+# backend, impostare Auto-Deploy su "After CI Checks Pass".
+name: ClockAI
+
+on:
+  pull_request:
+    paths:
+      - backend/services/hrAssistant/**
+      - backend/services/anthropicClient.js
+      - backend/routes/assistenteHr.js
+      - backend/scripts/evalAssistenteHr.js
+      - backend/package.json
+      - backend/package-lock.json
+      - .github/workflows/clockai.yml
+  push:
+    branches: [main]
+    paths:
+      - backend/services/hrAssistant/**
+      - backend/services/anthropicClient.js
+      - backend/routes/assistenteHr.js
+      - backend/scripts/evalAssistenteHr.js
+      - backend/package.json
+      - backend/package-lock.json
+      - .github/workflows/clockai.yml
+  workflow_dispatch:
+
+concurrency:
+  group: clockai-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  regressione:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+
+      - run: npm ci
+
+      - name: Test unitari del backend
+        run: npm test
+
+      - name: Domande di regressione ClockAI
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          DATABASE_URL: ${{ secrets.CLOCKAI_EVAL_DATABASE_URL }}
+          ANTHROPIC_MODEL: ${{ vars.ANTHROPIC_MODEL || 'claude-haiku-5-5' }}
+          TZ: Europe/Rome
+        run: |
+          if [ -z "$ANTHROPIC_API_KEY" ] || [ -z "$DATABASE_URL" ]; then
+            echo "::error::Mancano i segreti ANTHROPIC_API_KEY e/o CLOCKAI_EVAL_DATABASE_URL (vedi l'inizio di .github/workflows/clockai.yml)"
+            exit 1
+          fi
+          npm run eval:clockai

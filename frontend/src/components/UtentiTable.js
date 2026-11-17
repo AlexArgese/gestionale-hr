@@ -1,17 +1,26 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import styles from "./UtentiTable.module.css";
 import {
   FiPlus,
   FiSearch,
-  FiCheckCircle,
-  FiSlash,
   FiArchive,
+  FiChevronUp,
+  FiChevronDown,
   FiRotateCcw,
   FiToggleLeft,
   FiToggleRight,
 } from "react-icons/fi";
-import { API_BASE } from "../api";
+import { API_BASE, getIdToken } from "../api";
+import { useToast } from "./ui/Toast";
+import { useConfirm } from "./ui/ConfirmDialog";
+import { CONTRACT_OPTIONS } from "../constants/contracts";
+import Pagination from "./ui/Pagination";
+
+async function authHeaders(extra = {}) {
+  const token = await getIdToken();
+  return { ...extra, ...(token ? { Authorization: `Bearer ${token}` } : {}) };
+}
 
 function UtentiTable({
   fetchUrl,
@@ -21,6 +30,8 @@ function UtentiTable({
   onRowClick,
 }) {
   const navigate = useNavigate();
+  const toast = useToast();
+  const confirm = useConfirm();
 
   const effectiveFetchUrl =
     fetchUrl || `${API_BASE}/utenti${archived ? "/archiviati" : ""}`;
@@ -38,15 +49,6 @@ function UtentiTable({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  const CONTRACT_OPTIONS = [
-    { value: "full_time", label: "Full time 6,40" },
-    { value: "part_time_2", label: "Part time 2" },
-    { value: "part_time_3", label: "Part time 3" },
-    { value: "part_time_4", label: "Part time 4" },
-    { value: "part_time_6", label: "Part time 6" },
-    { value: "part_time_8", label: "Part time 8" },
-    { value: "chiamata_6", label: "Chiamata 6" },
-  ];
 
   const [bulkContract, setBulkContract] = useState("");
 
@@ -74,6 +76,23 @@ function UtentiTable({
   // selezione multipla
   const [selectedIds, setSelectedIds] = useState([]);
   const [bulkLoading, setBulkLoading] = useState(false);
+  const [bulkMenuOpen, setBulkMenuOpen] = useState(false);
+  const bulkMenuRef = useRef(null);
+
+  useEffect(() => {
+    if (!selectedIds.length) setBulkMenuOpen(false);
+  }, [selectedIds.length]);
+
+  useEffect(() => {
+    if (!bulkMenuOpen) return;
+    const onClickOutside = (e) => {
+      if (bulkMenuRef.current && !bulkMenuRef.current.contains(e.target)) {
+        setBulkMenuOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", onClickOutside);
+    return () => document.removeEventListener("mousedown", onClickOutside);
+  }, [bulkMenuOpen]);
 
   // fetch
   useEffect(() => {
@@ -85,7 +104,7 @@ function UtentiTable({
         setSelectedIds([]);
 
         const res = await fetch(effectiveFetchUrl, {
-          headers: { Accept: "application/json, text/plain, */*" },
+          headers: await authHeaders({ Accept: "application/json, text/plain, */*" }),
         });
 
         const ctype = res.headers.get("content-type") || "";
@@ -234,8 +253,6 @@ function UtentiTable({
     [filtered, page, pageSize]
   );
 
-  const from = totalItems === 0 ? 0 : (page - 1) * pageSize + 1;
-  const to = totalItems === 0 ? 0 : Math.min(totalItems, page * pageSize);
 
   const pageItemIds = useMemo(
     () => pageItems.map((u) => u.id).filter(Boolean),
@@ -284,8 +301,7 @@ function UtentiTable({
       state: {
         listStorageKey,
         tableStateKey: storageKey,
-        activeTab,
-        backTo: "/utenti",
+        backTo: `/utenti?tab=${activeTab}`,
       },
     });
   }, [navigate, onRowClick, listStorageKey, storageKey, activeTab]);
@@ -307,7 +323,7 @@ function UtentiTable({
 
   const reloadData = async () => {
     const res = await fetch(effectiveFetchUrl, {
-      headers: { Accept: "application/json, text/plain, */*" },
+      headers: await authHeaders({ Accept: "application/json, text/plain, */*" }),
     });
     const data = await res.json();
     setUtenti(Array.isArray(data) ? data : data?.items || []);
@@ -316,16 +332,18 @@ function UtentiTable({
     if (!selectedIds.length || bulkLoading) return;
 
     if (!selectedHaveUniformState) {
-      alert("Gli utenti selezionati non hanno tutti lo stesso stato.");
+      toast.error("Gli utenti selezionati non hanno tutti lo stesso stato.");
       return;
     }
 
     const nextState = !selectedStateValue;
     const label = nextState ? "attivi" : "non attivi";
 
-    const ok = window.confirm(
-      `Vuoi impostare ${selectedIds.length} dipendenti come ${label}?`
-    );
+    const ok = await confirm({
+      title: "Conferma cambio stato",
+      message: `Vuoi impostare ${selectedIds.length} dipendenti come ${label}?`,
+      confirmLabel: "Conferma",
+    });
     if (!ok) return;
 
     try {
@@ -333,10 +351,10 @@ function UtentiTable({
 
       const res = await fetch(`${API_BASE}/utenti/bulk/stato-attivo`, {
         method: "PATCH",
-        headers: {
+        headers: await authHeaders({
           "Content-Type": "application/json",
           Accept: "application/json, text/plain, */*",
-        },
+        }),
         body: JSON.stringify({
           ids: selectedIds,
           stato_attivo: nextState,
@@ -354,7 +372,7 @@ function UtentiTable({
       await reloadData();
       setSelectedIds([]);
     } catch (e) {
-      alert(e.message || "Errore durante cambio stato");
+      toast.error(e.message || "Errore durante cambio stato");
     } finally {
       setBulkLoading(false);
     }
@@ -366,9 +384,11 @@ function UtentiTable({
     const label =
       CONTRACT_OPTIONS.find((c) => c.value === bulkContract)?.label || bulkContract;
 
-    const ok = window.confirm(
-      `Vuoi impostare il contratto "${label}" a ${selectedIds.length} dipendenti?`
-    );
+    const ok = await confirm({
+      title: "Conferma cambio contratto",
+      message: `Vuoi impostare il contratto "${label}" a ${selectedIds.length} dipendenti?`,
+      confirmLabel: "Conferma",
+    });
     if (!ok) return;
 
     try {
@@ -376,10 +396,10 @@ function UtentiTable({
 
       const res = await fetch(`${API_BASE}/utenti/bulk/tipo-contratto`, {
         method: "PATCH",
-        headers: {
+        headers: await authHeaders({
           "Content-Type": "application/json",
           Accept: "application/json, text/plain, */*",
-        },
+        }),
         body: JSON.stringify({
           ids: selectedIds,
           tipo_contratto: bulkContract,
@@ -398,22 +418,26 @@ function UtentiTable({
       setSelectedIds([]);
       setBulkContract("");
     } catch (e) {
-      alert(e.message || "Errore durante cambio contratto");
+      toast.error(e.message || "Errore durante cambio contratto");
     } finally {
       setBulkLoading(false);
     }
   };
 
   const handleSingleArchive = async (id) => {
-    const ok = window.confirm("Vuoi archiviare questo dipendente?");
+    const ok = await confirm({
+      title: "Archiviare il dipendente?",
+      message: "Non comparirà più tra i dipendenti attivi. Potrai ripristinarlo in qualsiasi momento dalla scheda Archiviati.",
+      confirmLabel: "Archivia",
+    });
     if (!ok) return;
 
     try {
       const res = await fetch(`${API_BASE}/utenti/${id}/archivia`, {
         method: "PATCH",
-        headers: {
+        headers: await authHeaders({
           Accept: "application/json, text/plain, */*",
-        },
+        }),
       });
 
       const ctype = res.headers.get("content-type") || "";
@@ -427,7 +451,7 @@ function UtentiTable({
       await reloadData();
       setSelectedIds((prev) => prev.filter((x) => x !== id));
     } catch (e) {
-      alert(e.message || "Errore durante archiviazione");
+      toast.error(e.message || "Errore durante archiviazione");
     }
   };
 
@@ -435,9 +459,11 @@ function UtentiTable({
     if (!selectedIds.length || bulkLoading) return;
 
     const actionLabel = archived ? "ripristinare" : "archiviare";
-    const ok = window.confirm(
-      `Vuoi ${actionLabel} ${selectedIds.length} dipendenti?`
-    );
+    const ok = await confirm({
+      title: archived ? "Ripristinare i dipendenti?" : "Archiviare i dipendenti?",
+      message: `Vuoi ${actionLabel} ${selectedIds.length} dipendenti?`,
+      confirmLabel: archived ? "Ripristina" : "Archivia",
+    });
     if (!ok) return;
 
     try {
@@ -449,10 +475,10 @@ function UtentiTable({
 
       const res = await fetch(endpoint, {
         method: "PATCH",
-        headers: {
+        headers: await authHeaders({
           "Content-Type": "application/json",
           Accept: "application/json, text/plain, */*",
-        },
+        }),
         body: JSON.stringify({ ids: selectedIds }),
       });
 
@@ -467,22 +493,26 @@ function UtentiTable({
       await reloadData();
       setSelectedIds([]);
     } catch (e) {
-      alert(e.message || "Errore durante operazione multipla");
+      toast.error(e.message || "Errore durante operazione multipla");
     } finally {
       setBulkLoading(false);
     }
   };
 
   const handleSingleRestore = async (id) => {
-    const ok = window.confirm("Vuoi ripristinare questo dipendente?");
+    const ok = await confirm({
+      title: "Ripristinare il dipendente?",
+      message: "Tornerà tra i dipendenti attivi con tutti i suoi dati e documenti.",
+      confirmLabel: "Ripristina",
+    });
     if (!ok) return;
 
     try {
       const res = await fetch(`${API_BASE}/utenti/${id}/ripristina`, {
         method: "PATCH",
-        headers: {
+        headers: await authHeaders({
           Accept: "application/json, text/plain, */*",
-        },
+        }),
       });
 
       const ctype = res.headers.get("content-type") || "";
@@ -496,162 +526,44 @@ function UtentiTable({
       await reloadData();
       setSelectedIds((prev) => prev.filter((x) => x !== id));
     } catch (e) {
-      alert(e.message || "Errore durante ripristino");
+      toast.error(e.message || "Errore durante ripristino");
     }
   };
 
-  const PaginationBar = () => (
-    <div className={styles.paginationBar}>
-      <div className={styles.paginationLeft}>
-        <label className={styles.pageSizeLabel}>Mostra</label>
-        <select
-          className={styles.pageSizeSelect}
-          value={pageSize}
-          onChange={(e) => {
-            const newSize = Number(e.target.value);
-            setPage(1);
-            setPageSize(newSize);
-          }}
-        >
-          <option value={25}>25</option>
-          <option value={50}>50</option>
-          <option value={100}>100</option>
-        </select>
-      </div>
+  const sortIcon = (key) =>
+    sortBy === key ? (sortDir === "asc" ? <FiChevronUp size={13} /> : <FiChevronDown size={13} />) : null;
 
-      <div className={styles.paginationCenter}>
-        <span>Totale: {totalItems}</span>
-        <span className={styles.dot}>•</span>
-        <span>Mostrati {from}–{to}</span>
-        <span className={styles.dot}>•</span>
-        <span>
-          Pagina {page} di {totalPages}
-        </span>
-      </div>
-
-      <div className={styles.paginationControls}>
-        <button
-          className={styles.pageBtn}
-          disabled={page === 1}
-          onClick={() => setPage((p) => p - 1)}
-        >
-          ←
-        </button>
-
-        <button
-          className={styles.pageBtn}
-          disabled={page === totalPages || totalItems === 0}
-          onClick={() => setPage((p) => p + 1)}
-        >
-          →
-        </button>
-      </div>
-    </div>
+  const SortTh = ({ k, children, style }) => (
+    <th
+      className={styles.sortable}
+      onClick={() => toggleSort(k)}
+      style={style}
+      aria-sort={sortBy === k ? (sortDir === "asc" ? "ascending" : "descending") : "none"}
+    >
+      <span className={styles.thInner}>{children}{sortIcon(k)}</span>
+    </th>
   );
 
   return (
     <div className={styles.container}>
-      <div className={styles.header}>
-        <h1 className={styles.title}>
-          {archived ? "Dipendenti archiviati" : "Utenti"}
-        </h1>
-
-        <div className={styles.headerCta}>
-          {!!selectedIds.length && !archived && (
-            <>
-              <button
-                className={`btn btn-primary ${styles.addBtn}`}
-                onClick={handleBulkAction}
-                disabled={bulkLoading}
-              >
-                <FiArchive />
-                {bulkLoading
-                  ? "Operazione in corso..."
-                  : ` Archivia selezionati (${selectedIds.length})`}
-              </button>
-
-              <button
-                className={`btn btn-primary ${styles.addBtn}`}
-                onClick={handleBulkToggleStatus}
-                disabled={bulkLoading || !selectedHaveUniformState}
-                title={
-                  selectedHaveUniformState
-                    ? ""
-                    : "Gli utenti selezionati non hanno tutti lo stesso stato"
-                }
-              >
-                {selectedStateValue ? <FiToggleLeft /> : <FiToggleRight />}
-                {selectedHaveUniformState
-                  ? selectedStateValue
-                    ? ` Imposta non attivi (${selectedIds.length})`
-                    : ` Imposta attivi (${selectedIds.length})`
-                  : " Stato misto"}
-              </button>
-
-              <select
-                className="select"
-                value={bulkContract}
-                onChange={(e) => setBulkContract(e.target.value)}
-                disabled={bulkLoading}
-              >
-                <option value="">Imposta contratto…</option>
-                {CONTRACT_OPTIONS.map((opt) => (
-                  <option key={opt.value} value={opt.value}>
-                    {opt.label}
-                  </option>
-                ))}
-              </select>
-
-              <button
-                className={`btn btn-primary ${styles.addBtn}`}
-                onClick={handleBulkContractChange}
-                disabled={bulkLoading || !bulkContract}
-              >
-                Applica contratto ({selectedIds.length})
-              </button>
-            </>
-          )}
-
-          {!!selectedIds.length && archived && (
-            <button
-              className={`btn btn-secondary ${styles.addBtn}`}
-              onClick={handleBulkAction}
-              disabled={bulkLoading}
-            >
-              <FiRotateCcw />
-              {bulkLoading
-                ? "Operazione in corso..."
-                : ` Ripristina selezionati (${selectedIds.length})`}
-            </button>
-          )}
-
-          {!archived && (
-            <button className={`btn btn-primary ${styles.addBtn}`} onClick={goAdd}>
-              <FiPlus /> Nuovo utente
-            </button>
-          )}
-        </div>
-      </div>
-
-      <div className={styles.underline} />
-
+      {/* Barra strumenti: ricerca e filtri a sinistra, azioni a destra */}
       <div className={styles.toolbar}>
-        <div className={styles.searchWrap}>
-          {q === "" ? <FiSearch className={styles.searchIcon} /> : null}
-          <input
-            className={`input ${styles.search}`}
-            placeholder="     Cerca nome, cognome, email…"
-            value={q}
-            onChange={(e) => {
-              setQ(e.target.value);
-              setPage(1);
-            }}
-          />
-        </div>
-
         <div className={styles.filters}>
+          <div className={`search ${styles.searchBox}`}>
+            <FiSearch size={15} />
+            <input
+              className="input"
+              placeholder="Cerca per nome, cognome o email"
+              value={q}
+              onChange={(e) => {
+                setQ(e.target.value);
+                setPage(1);
+              }}
+            />
+          </div>
+
           <select
-            className="select"
+            className={`select ${styles.filterSelect}`}
             value={filterSede}
             onChange={(e) => {
               setFilterSede(e.target.value);
@@ -666,7 +578,7 @@ function UtentiTable({
           </select>
 
           <select
-            className="select"
+            className={`select ${styles.filterSelect}`}
             value={filterSocieta}
             onChange={(e) => {
               setFilterSocieta(e.target.value);
@@ -681,7 +593,7 @@ function UtentiTable({
           </select>
 
           <select
-            className="select"
+            className={`select ${styles.filterSelect}`}
             value={filterStato}
             onChange={(e) => {
               setFilterStato(e.target.value);
@@ -690,160 +602,222 @@ function UtentiTable({
           >
             <option value="tutti">Tutti gli stati</option>
             <option value="attivi">Solo attivi</option>
-            <option value="disattivi">Solo disattivi</option>
+            <option value="disattivi">Solo non attivi</option>
           </select>
+        </div>
+
+        <div className={styles.actions}>
+          {!!selectedIds.length && (
+            <div className={styles.bulkMenuWrap} ref={bulkMenuRef}>
+              <button
+                type="button"
+                className="btn btn-outline"
+                onClick={() => setBulkMenuOpen((o) => !o)}
+                disabled={bulkLoading}
+                aria-expanded={bulkMenuOpen}
+              >
+                {bulkLoading ? "Operazione in corso…" : `Azioni (${selectedIds.length})`}
+                <FiChevronDown size={15} />
+              </button>
+
+              {bulkMenuOpen && (
+                <div className={styles.bulkMenu} role="menu">
+                  <button
+                    type="button"
+                    className={styles.bulkMenuItem}
+                    onClick={() => {
+                      setBulkMenuOpen(false);
+                      handleBulkAction();
+                    }}
+                    disabled={bulkLoading}
+                  >
+                    {archived ? <FiRotateCcw /> : <FiArchive />}
+                    {archived ? "Ripristina selezionati" : "Archivia selezionati"}
+                  </button>
+
+                  {!archived && (
+                    <button
+                      type="button"
+                      className={styles.bulkMenuItem}
+                      onClick={() => {
+                        setBulkMenuOpen(false);
+                        handleBulkToggleStatus();
+                      }}
+                      disabled={bulkLoading || !selectedHaveUniformState}
+                      title={
+                        selectedHaveUniformState
+                          ? ""
+                          : "I dipendenti selezionati non hanno tutti lo stesso stato"
+                      }
+                    >
+                      {selectedStateValue ? <FiToggleLeft /> : <FiToggleRight />}
+                      {selectedHaveUniformState
+                        ? selectedStateValue
+                          ? "Imposta come non attivi"
+                          : "Imposta come attivi"
+                        : "Stato misto"}
+                    </button>
+                  )}
+
+                  {!archived && (
+                    <div className={styles.bulkMenuSection}>
+                      <span className={styles.bulkMenuLabel}>Tipo di contratto</span>
+                      <div className={styles.bulkMenuContractRow}>
+                        <select
+                          className="select"
+                          value={bulkContract}
+                          onChange={(e) => setBulkContract(e.target.value)}
+                          disabled={bulkLoading}
+                        >
+                          <option value="">Seleziona…</option>
+                          {CONTRACT_OPTIONS.map((opt) => (
+                            <option key={opt.value} value={opt.value}>
+                              {opt.label}
+                            </option>
+                          ))}
+                        </select>
+                        <button
+                          type="button"
+                          className="btn btn-primary btn-sm"
+                          onClick={handleBulkContractChange}
+                          disabled={bulkLoading || !bulkContract}
+                        >
+                          Applica
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
+          {!archived && (
+            <button className="btn btn-primary" onClick={goAdd}>
+              <FiPlus size={16} /> Nuovo dipendente
+            </button>
+          )}
         </div>
       </div>
 
       {!!selectedIds.length && !archived && !selectedHaveUniformState && (
-        <div className={styles.empty} style={{ marginBottom: 12 }}>
-          Gli utenti selezionati non hanno tutti lo stesso stato. Per cambiare
-          stato in blocco, seleziona solo utenti tutti attivi oppure tutti non attivi.
+        <div className="alert alert-info">
+          I dipendenti selezionati non hanno tutti lo stesso stato. Per cambiare stato in blocco,
+          seleziona solo dipendenti attivi oppure solo non attivi.
         </div>
       )}
 
       <div className={`card ${styles.tableCard}`}>
-        {loading && <div className={styles.empty}>Caricamento…</div>}
-        {error && !loading && <div className={styles.empty}>Errore: {error}</div>}
+        {loading && <div className="empty-state">Caricamento…</div>}
+        {error && !loading && <div className="empty-state">Errore: {error}</div>}
 
         {!loading && !error && (
           <>
-            <PaginationBar />
-
-            <table className={styles.table}>
-              <thead className={styles.thead}>
-                <tr>
-                  <th className={styles.th} style={{ width: 44 }}>
-                    <input
-                      type="checkbox"
-                      checked={allPageSelected}
-                      ref={(el) => {
-                        if (el) el.indeterminate = somePageSelected;
-                      }}
-                      onChange={toggleSelectAllPage}
-                      onClick={(e) => e.stopPropagation()}
-                    />
-                  </th>
-
-                  <th
-                    className={styles.th}
-                    onClick={() => toggleSort("nome")}
-                    style={{ cursor: "pointer" }}
-                  >
-                    Cognome / Nome{" "}
-                    {sortBy === "nome" ? (sortDir === "asc" ? "↑" : "↓") : ""}
-                  </th>
-
-                  <th
-                    className={styles.th}
-                    onClick={() => toggleSort("email")}
-                    style={{ cursor: "pointer" }}
-                  >
-                    Email {sortBy === "email" ? (sortDir === "asc" ? "↑" : "↓") : ""}
-                  </th>
-
-                  <th
-                    className={styles.th}
-                    onClick={() => toggleSort("sede")}
-                    style={{ cursor: "pointer" }}
-                  >
-                    Sede {sortBy === "sede" ? (sortDir === "asc" ? "↑" : "↓") : ""}
-                  </th>
-
-                  <th
-                    className={styles.th}
-                    onClick={() => toggleSort("stato")}
-                    style={{ cursor: "pointer", width: 120 }}
-                  >
-                    Stato {sortBy === "stato" ? (sortDir === "asc" ? "↑" : "↓") : ""}
-                  </th>
-
-                  <th className={styles.th} style={{ width: archived ? 130 : 50 }} />
-                </tr>
-              </thead>
-
-              <tbody>
-                {pageItems.map((u) => {
-                  const nomeCompleto = `${u?.cognome || ""} ${u?.nome || ""}`.trim();
-                  const isSelected = selectedIds.includes(u.id);
-
-                  return (
-                    <tr
-                      key={u?.id || nomeCompleto + u?.email}
-                      className={styles.row}
-                      onClick={() => handleRowClick(u)}
-                    >
-                      <td
-                        className={styles.td}
-                        onClick={(e) => {
-                          e.stopPropagation();
+            <div className={styles.tableScroll}>
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th className={styles.checkCol}>
+                      <input
+                        type="checkbox"
+                        className={styles.check}
+                        aria-label="Seleziona tutti nella pagina"
+                        checked={allPageSelected}
+                        ref={(el) => {
+                          if (el) el.indeterminate = somePageSelected;
                         }}
+                        onChange={toggleSelectAllPage}
+                        onClick={(e) => e.stopPropagation()}
+                      />
+                    </th>
+                    <SortTh k="nome">Dipendente</SortTh>
+                    <SortTh k="email">Email</SortTh>
+                    <SortTh k="sede">Sede</SortTh>
+                    <SortTh k="stato" style={{ width: 130 }}>Stato</SortTh>
+                    <th style={{ width: 64 }} aria-label="Azioni" />
+                  </tr>
+                </thead>
+
+                <tbody>
+                  {pageItems.map((u) => {
+                    const nomeCompleto = `${u?.cognome || ""} ${u?.nome || ""}`.trim();
+                    const isSelected = selectedIds.includes(u.id);
+
+                    return (
+                      <tr
+                        key={u?.id || nomeCompleto + u?.email}
+                        className={`${styles.row} ${isSelected ? styles.rowSelected : ""}`}
+                        onClick={() => handleRowClick(u)}
                       >
-                        <input
-                          type="checkbox"
-                          checked={isSelected}
-                          onChange={() => toggleUserSelection(u.id)}
-                        />
-                      </td>
+                        <td className={styles.checkCol} onClick={(e) => e.stopPropagation()}>
+                          <input
+                            type="checkbox"
+                            className={styles.check}
+                            aria-label={`Seleziona ${nomeCompleto}`}
+                            checked={isSelected}
+                            onChange={() => toggleUserSelection(u.id)}
+                          />
+                        </td>
 
-                      <td className={styles.td}>{nomeCompleto || "—"}</td>
-                      <td className={styles.td}>{u?.email || "—"}</td>
-                      <td className={styles.td}>{u?.sede || "—"}</td>
+                        <td className="cell-strong">{nomeCompleto || "—"}</td>
+                        <td className={styles.muted}>{u?.email || "—"}</td>
+                        <td>{u?.sede || "—"}</td>
 
-                      <td className={styles.td}>
-                        {u?.stato_attivo ? (
-                          <span className={styles.badgeOk}>
-                            <FiCheckCircle /> Attivo
-                          </span>
-                        ) : (
-                          <span className={styles.badgeNo}>
-                            <FiSlash /> Non attivo
-                          </span>
-                        )}
-                      </td>
+                        <td>
+                          {u?.stato_attivo ? (
+                            <span className="badge badge-success">Attivo</span>
+                          ) : (
+                            <span className="badge">Non attivo</span>
+                          )}
+                        </td>
 
-                      <td
-                        className={styles.td}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                        }}
-                      >
-                        {archived ? (
-                          <button
-                            type="button"
-                            className="btn btn-secondary arch"
-                            onClick={() => handleSingleRestore(u.id)}
-                          >
-                            <FiRotateCcw />
-                          </button>
-                        ) : (
-                          <button
-                            type="button"
-                            className="btn btn-secondary arch"
-                            onClick={() => handleSingleArchive(u.id)}
-                            title="Archivia dipendente"
-                          >
-                            <FiArchive />
-                          </button>
-                        )}
+                        <td className={styles.actionCell} onClick={(e) => e.stopPropagation()}>
+                          {archived ? (
+                            <button
+                              type="button"
+                              className="btn btn-ghost btn-sm btn-icon"
+                              onClick={() => handleSingleRestore(u.id)}
+                              title="Ripristina dipendente"
+                              aria-label="Ripristina dipendente"
+                            >
+                              <FiRotateCcw size={15} />
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              className="btn btn-ghost btn-sm btn-icon"
+                              onClick={() => handleSingleArchive(u.id)}
+                              title="Archivia dipendente"
+                              aria-label="Archivia dipendente"
+                            >
+                              <FiArchive size={15} />
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+
+                  {!pageItems.length && (
+                    <tr>
+                      <td colSpan={6}>
+                        <div className="empty-state">Nessun dipendente corrisponde ai filtri.</div>
                       </td>
                     </tr>
-                  );
-                })}
+                  )}
+                </tbody>
+              </table>
+            </div>
 
-                {!pageItems.length && (
-                  <tr>
-                    <td className={styles.td} colSpan={6}>
-                      <div className={styles.empty}>
-                        Nessun risultato con i filtri correnti.
-                      </div>
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-
-            <PaginationBar />
+            <Pagination
+              page={page}
+              totalPages={totalPages}
+              totalItems={totalItems}
+              pageSize={pageSize}
+              onPageChange={setPage}
+              onPageSizeChange={(n) => { setPage(1); setPageSize(n); }}
+              itemLabel="dipendenti"
+            />
           </>
         )}
       </div>

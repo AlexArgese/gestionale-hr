@@ -4,13 +4,14 @@ const pool = require('../db');
 require('dotenv').config();
 const admin = require('../firebase-admin');
 const requireAuth = require('../middleware/requireAuth');
+const { allowRoles } = require('../middleware/rbac');
 const { safeSendMail } = require('../lib/notifier');
 
 /* =========================================================================
    GET /utenti/cf/all  -> mapping rapido per CF (deve stare PRIMA di /:id)
    Ritorna solo i campi necessari per l'abbinamento per CF
 ========================================================================= */
-router.get('/cf/all', async (_req, res) => {
+router.get('/cf/all', requireAuth, allowRoles('admin'), async (_req, res) => {
   try {
     const q = await pool.query(`
       SELECT id,
@@ -31,7 +32,7 @@ router.get('/cf/all', async (_req, res) => {
 /* =========================================================================
    GET tutti gli utenti  (include anche codice_fiscale)
 ========================================================================= */
-router.get('/', async (_req, res) => {
+router.get('/', requireAuth, allowRoles('admin'), async (_req, res) => {
   try {
     const result = await pool.query(`
       SELECT
@@ -65,7 +66,7 @@ router.get('/', async (_req, res) => {
 /* =========================================================================
    POST nuovo utente (e invia email)
 ========================================================================= */
-router.post('/', async (req, res) => {
+router.post('/', requireAuth, allowRoles('admin'), async (req, res) => {
   try {
     const {
       nome, cognome, email, ruolo, sede,
@@ -173,7 +174,7 @@ router.delete('/delete-my-account', requireAuth, async (req, res) => {
 });
 
 
-router.get('/archiviati', async (_req, res) => {
+router.get('/archiviati', requireAuth, allowRoles('admin'), async (_req, res) => {
   try {
     const result = await pool.query(`
       SELECT
@@ -204,7 +205,7 @@ router.get('/archiviati', async (_req, res) => {
   }
 });
 
-router.patch('/bulk/archivia', async (req, res) => {
+router.patch('/bulk/archivia', requireAuth, allowRoles('admin'), async (req, res) => {
   try {
     const { ids } = req.body;
 
@@ -231,7 +232,7 @@ router.patch('/bulk/archivia', async (req, res) => {
   }
 });
 
-router.patch('/bulk/ripristina', async (req, res) => {
+router.patch('/bulk/ripristina', requireAuth, allowRoles('admin'), async (req, res) => {
   try {
     const { ids } = req.body;
 
@@ -258,7 +259,7 @@ router.patch('/bulk/ripristina', async (req, res) => {
   }
 });
 
-router.patch('/bulk/stato-attivo', async (req, res) => {
+router.patch('/bulk/stato-attivo', requireAuth, allowRoles('admin'), async (req, res) => {
   try {
     const { ids, stato_attivo } = req.body;
 
@@ -288,7 +289,7 @@ router.patch('/bulk/stato-attivo', async (req, res) => {
   }
 });
 
-router.patch('/bulk/tipo-contratto', async (req, res) => {
+router.patch('/bulk/tipo-contratto', requireAuth, allowRoles('admin'), async (req, res) => {
   try {
     const { ids, tipo_contratto } = req.body;
 
@@ -328,7 +329,7 @@ router.patch('/bulk/tipo-contratto', async (req, res) => {
   }
 });
 
-router.patch('/:id/team-leader', async (req, res) => {
+router.patch('/:id/team-leader', requireAuth, allowRoles('admin'), async (req, res) => {
   const { id } = req.params;
   const { team_leader_sedi } = req.body;
 
@@ -360,7 +361,7 @@ router.patch('/:id/team-leader', async (req, res) => {
   }
 });
 
-router.patch('/:id/archivia', async (req, res) => {
+router.patch('/:id/archivia', requireAuth, allowRoles('admin'), async (req, res) => {
   try {
     const result = await pool.query(`
       UPDATE utenti
@@ -382,7 +383,7 @@ router.patch('/:id/archivia', async (req, res) => {
   }
 });
 
-router.patch('/:id/ripristina', async (req, res) => {
+router.patch('/:id/ripristina', requireAuth, allowRoles('admin'), async (req, res) => {
   try {
     const result = await pool.query(`
       UPDATE utenti
@@ -410,7 +411,7 @@ router.patch('/:id/ripristina', async (req, res) => {
    GET singolo utente
    (DEVE stare dopo /cf/all, altrimenti cattura "cf" come :id)
 ========================================================================= */
-router.get('/:id', async (req, res) => {
+router.get('/:id', requireAuth, allowRoles('admin'), async (req, res) => {
   try {
     const result = await pool.query(`
       SELECT 
@@ -433,7 +434,7 @@ router.get('/:id', async (req, res) => {
 /* =========================================================================
    DELETE utente
 ========================================================================= */
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', requireAuth, allowRoles('admin'), async (req, res) => {
   try {
     await pool.query('DELETE FROM utenti WHERE id = $1', [req.params.id]);
     res.json({ message: 'Utente eliminato con successo' });
@@ -446,7 +447,7 @@ router.delete('/:id', async (req, res) => {
 /* =========================================================================
    PUT update utente
 ========================================================================= */
-router.put('/:id', async (req, res) => {
+router.put('/:id', requireAuth, allowRoles('admin'), async (req, res) => {
   const id = req.params.id;
   const {
     nome, cognome, email, ruolo, sede, stato_attivo, tipo_contratto, societa_id,

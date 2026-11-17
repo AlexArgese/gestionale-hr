@@ -6,6 +6,7 @@ import React, {
   useRef,
   useState,
 } from "react";
+import { FiX, FiMinus, FiPlus, FiChevronLeft, FiChevronRight } from "react-icons/fi";
 import styles from "./ConfermaCaricamentoDocumenti.module.css";
 
 /* posizioni di default dei riquadri, in FRAZIONI 0..1 della pagina — sfalsate per non sovrapporsi */
@@ -14,9 +15,9 @@ const DEFAULT_HEADER = { xPct: 0.09, yPct: 0.055, wPct: 0.5, hPct: 0.035 };
 const DEFAULT_DATE = { xPct: 0.09, yPct: 0.11, wPct: 0.22, hPct: 0.035 };
 
 const LAYERS = {
-  signature: { accent: "#0f172a", label: "FIRMA", def: DEFAULT_SIG, minW: 80, minH: 40 },
-  header: { accent: "#2563eb", label: "INTESTAZIONE", def: DEFAULT_HEADER, minW: 40, minH: 16 },
-  date: { accent: "#d97706", label: "DATA", def: DEFAULT_DATE, minW: 40, minH: 16 },
+  signature: { accent: "#5B4FD6", label: "FIRMA", def: DEFAULT_SIG, minW: 80, minH: 40 },
+  header: { accent: "#1570EF", label: "INTESTAZIONE", def: DEFAULT_HEADER, minW: 40, minH: 16 },
+  date: { accent: "#DC6803", label: "DATA", def: DEFAULT_DATE, minW: 40, minH: 16 },
 };
 
 const clamp = (n, min, max) => Math.max(min, Math.min(max, n));
@@ -423,18 +424,18 @@ export default function ConfermaCaricamentoDocumenti({
   if (!open) return null;
 
   return (
-    <div className={styles.overlay} role="dialog" aria-modal="true">
+    <div className={styles.overlay} role="dialog" aria-modal="true" aria-labelledby="conferma-caricamento-title">
       <div className={styles.panel}>
         {/* HEADER */}
         <div className={styles.header}>
           <div className={styles.headerMain}>
-            <h3 className={styles.title}>{title}</h3>
+            <h3 id="conferma-caricamento-title" className={styles.title}>{title}</h3>
             <div className={styles.subtitle}>
               Verifica i dettagli, attiva gli elementi e trascina i riquadri sull’anteprima.
             </div>
           </div>
-          <button type="button" className={styles.close} onClick={onClose} aria-label="Chiudi">
-            ✕
+          <button type="button" className="modal-close" onClick={onClose} aria-label="Chiudi">
+            <FiX size={18} />
           </button>
         </div>
 
@@ -515,7 +516,7 @@ export default function ConfermaCaricamentoDocumenti({
                           {pageCount > 1 && !onThisPage && (
                             <button
                               type="button"
-                              className={styles.miniBtn}
+                              className={`btn btn-outline btn-sm ${styles.miniBtn}`}
                               onClick={() => moveLayerHere(name)}
                             >
                               Porta qui
@@ -523,7 +524,7 @@ export default function ConfermaCaricamentoDocumenti({
                           )}
                           <button
                             type="button"
-                            className={styles.miniBtn}
+                            className={`btn btn-outline btn-sm ${styles.miniBtn}`}
                             onClick={() => centerLayer(name)}
                           >
                             Centra
@@ -655,7 +656,7 @@ export default function ConfermaCaricamentoDocumenti({
                   disabled={!currentThumb || zoom <= ZOOM_MIN}
                   aria-label="Riduci zoom"
                 >
-                  −
+                  <FiMinus size={14} />
                 </button>
                 <button
                   type="button"
@@ -673,7 +674,7 @@ export default function ConfermaCaricamentoDocumenti({
                   disabled={!currentThumb || zoom >= ZOOM_MAX}
                   aria-label="Aumenta zoom"
                 >
-                  +
+                  <FiPlus size={14} />
                 </button>
 
                 <span className={styles.pagerSep} />
@@ -685,9 +686,9 @@ export default function ConfermaCaricamentoDocumenti({
                   disabled={pageCount <= 1 || activePageIdx === 0}
                   aria-label="Pagina precedente"
                 >
-                  ‹
+                  <FiChevronLeft size={15} />
                 </button>
-                <span>
+                <span className={styles.pageInfo}>
                   Pag. {activePageIdx + 1}
                   {pageCount ? ` / ${pageCount}` : ""}
                 </span>
@@ -698,7 +699,7 @@ export default function ConfermaCaricamentoDocumenti({
                   disabled={pageCount <= 1 || activePageIdx >= pageCount - 1}
                   aria-label="Pagina successiva"
                 >
-                  ›
+                  <FiChevronRight size={15} />
                 </button>
               </div>
             </div>
@@ -720,8 +721,8 @@ export default function ConfermaCaricamentoDocumenti({
                     </span>
                   );
                 })}
-                <span className={styles.legendItem} style={{ color: "#94a3b8" }}>
-                  · clic su un riquadro per selezionarlo
+                <span className={`${styles.legendItem} ${styles.legendHint}`}>
+                  Clic su un riquadro per selezionarlo
                 </span>
               </div>
             )}
@@ -817,12 +818,12 @@ export default function ConfermaCaricamentoDocumenti({
                 } da applicare a ${activeFile ? "«" + activeFile.name + "»" : "ogni file"}.`
               : "Nessun elemento da stampare: verrà caricato il documento così com’è."}
           </div>
-          <button type="button" className={styles.btnGhost} onClick={onClose} disabled={loading}>
+          <button type="button" className="btn btn-outline" onClick={onClose} disabled={loading}>
             Annulla
           </button>
           <button
             type="button"
-            className={styles.btnPrimary}
+            className="btn btn-primary"
             onClick={() =>
               onConfirm?.({
                 require_signature: requireSignature,

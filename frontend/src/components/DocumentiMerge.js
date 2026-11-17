@@ -4,9 +4,18 @@ import { PDFDocument } from "pdf-lib";
 import * as pdfjsLib from "pdfjs-dist";
 import SelettoreDipendenti from "./SelettoreDipendenti";
 import ConfermaCaricamentoDocumenti from "./ConfermaCaricamentoDocumenti";
+import CategoriaDocumentoInput from "./documenti/CategoriaDocumentoInput";
+import UploadDropzone from "./documenti/UploadDropzone";
+import { buildDefaultFileName } from "../utils/documenti";
+import { FiArrowUp, FiArrowDown, FiX } from "react-icons/fi";
 import styles from "./DocumentiMerge.module.css";
 
-import { API_BASE } from "../api";
+import { API_BASE, getIdToken } from "../api";
+
+async function authHeaders(extra = {}) {
+  const token = await getIdToken();
+  return { ...extra, ...(token ? { Authorization: `Bearer ${token}` } : {}) };
+}
 
 const API = API_BASE;
 
@@ -67,7 +76,7 @@ export default function DocumentiMerge({ tipi = [] }) {
   const [mergedThumbs, setMergedThumbs] = useState([]);
 
   useEffect(() => {
-    fetch(`${API}/utenti`)
+    authHeaders().then((headers) => fetch(`${API}/utenti`, { headers }))
       .then((r) => r.json())
       .then(setUtenti)
       .catch(console.error);
@@ -124,16 +133,6 @@ export default function DocumentiMerge({ tipi = [] }) {
     if (inputRef.current) inputRef.current.value = "";
   }
 
-  function onPickFiles(e) {
-    addFiles(e.target.files);
-  }
-
-  const [dragOver, setDragOver] = useState(false);
-  function onDrop(e) {
-    e.preventDefault();
-    setDragOver(false);
-    addFiles(e.dataTransfer.files);
-  }
 
   /* ---------- KEEP ORDER IN SYNC ---------- */
   useEffect(() => {
@@ -264,12 +263,6 @@ export default function DocumentiMerge({ tipi = [] }) {
       };
     });
   }, [computeTargetIds, utentiById, mergedThumbs, tipoDocumento, customFileNames]);
-
-  function buildDefaultFileName(u, tipoDocumento) {
-    const nome = [u?.cognome, u?.nome].filter(Boolean).join(" ").trim();
-    const tipo = String(tipoDocumento || "").trim();
-    return [nome, tipo].filter(Boolean).join(" ").trim();
-  }
 
   async function handleConfermaUpload({
     require_signature,
@@ -433,73 +426,39 @@ export default function DocumentiMerge({ tipi = [] }) {
   return (
     <div className={styles.wrapper}>
       {/* FORM: tipo + scadenza */}
-      <div className={styles.formRow}>
-        <label className={styles.label}>1. Seleziona il tipo documento</label>
+      <div className={styles.formGrid}>
         <div className={styles.formRow}>
-          <input
-            className={`input ${styles.field}`}
-            list="tipi-documento-merge"
+          <label className={styles.label}>1. Seleziona il tipo documento</label>
+          <CategoriaDocumentoInput
             value={tipoDocumento}
-            onChange={(e) => setTipoDocumento(e.target.value.toUpperCase())}
+            onChange={(v) => setTipoDocumento(v.toUpperCase())}
+            options={tipi}
             placeholder="Es. CUD, CONTRATTO, CIRCOLARE…"
-            required
           />
-          <datalist id="tipi-documento-merge">
-            {tipi.map((t) => (
-              <option key={t} value={t} />
-            ))}
-          </datalist>
+        </div>
+
+        <div className={styles.formRow}>
+          <label className={styles.label}>2. Scadenza (opzionale)</label>
+          <input
+            type="date"
+            className={`input ${styles.field}`}
+            value={dataScadenza}
+            onChange={(e) => setDataScadenza(e.target.value)}
+          />
         </div>
       </div>
 
-      <div className={styles.formRow}>
-        <label className={styles.label}>2. Imposta data scadenza (opzionale)</label>
-        <input
-          type="date"
-          className={`input ${styles.field}`}
-          value={dataScadenza}
-          onChange={(e) => setDataScadenza(e.target.value)}
-        />
-      </div>
-
-      {/* DROPZONE PDF */}
+      {/* DROPZONE PDF + ORDINE FILE */}
       <div className={styles.formRow}>
         <label className={styles.label}>3. Seleziona file da unire</label>
-        <div
-          className={`${styles.dropzone} ${
-            dragOver ? styles.dropzoneOver : ""
-          }`}
-          onDragOver={(e) => {
-            e.preventDefault();
-            setDragOver(true);
-          }}
-          onDragLeave={() => setDragOver(false)}
-          onDrop={onDrop}
+        <UploadDropzone
+          inputRef={inputRef}
+          accept="application/pdf"
+          multiple
+          onFiles={addFiles}
+          isEmpty={files.length === 0}
+          promptText="Trascina qui i PDF oppure"
         >
-          <p className={styles.dropText}>
-            Trascina qui i PDF oppure
-          </p>
-          <button
-            type="button"
-            className={`btn ${styles.secondaryBtn}`}
-            onClick={() => inputRef.current?.click()}
-          >
-            Scegli file…
-          </button>
-          <input
-            ref={inputRef}
-            type="file"
-            accept="application/pdf"
-            multiple
-            onChange={onPickFiles}
-            style={{ display: "none" }}
-          />
-        </div>
-      </div>
-
-      {/* ORDINE FILE */}
-      {files.length > 0 && (
-        <div className={styles.orderBox}>
           <div className={styles.orderTitle}>
             <span>
               Ordine{" "}
@@ -509,13 +468,13 @@ export default function DocumentiMerge({ tipi = [] }) {
             </span>
             <div className={styles.orderTitleActions}>
               <button
-                className={`btn ${styles.secondaryBtn} ${styles.smallBtn}`}
+                className={`btn btn-outline btn-sm`}
                 onClick={() => inputRef.current?.click()}
               >
                 Aggiungi altri…
               </button>
               <button
-                className={`btn ${styles.secondaryBtn} ${styles.smallBtn}`}
+                className={`btn btn-outline btn-sm`}
                 onClick={clearAll}
               >
                 Svuota
@@ -541,28 +500,28 @@ export default function DocumentiMerge({ tipi = [] }) {
                     onClick={() => moveUp(idx)}
                     title="Su"
                   >
-                    ↑
+                    <FiArrowUp size={15} />
                   </button>
                   <button
                     className={styles.iconBtn}
                     onClick={() => moveDown(idx)}
                     title="Giù"
                   >
-                    ↓
+                    <FiArrowDown size={15} />
                   </button>
                   <button
                     className={`${styles.iconBtn} ${styles.iconBtnDanger}`}
                     onClick={() => removeFile(idx)}
                     title="Rimuovi"
                   >
-                    ✕
+                    <FiX size={15} />
                   </button>
                 </div>
               </li>
             ))}
           </ul>
-        </div>
-      )}
+        </UploadDropzone>
+      </div>
 
       {/* ASSEGNA A */}
       <div className={styles.formRow}>
@@ -607,7 +566,7 @@ export default function DocumentiMerge({ tipi = [] }) {
             <div className={styles.assignBottom}>
               <button
                 type="button"
-                className={`btn ${styles.secondaryBtn}`}
+                className={`btn btn-outline`}
                 onClick={() => setShowPicker(true)}
               >
                 Cerca e seleziona dipendenti
@@ -633,7 +592,7 @@ export default function DocumentiMerge({ tipi = [] }) {
                       title="Rimuovi"
                       type="button"
                     >
-                      ×
+                      <FiX size={12} />
                     </button>
                   </span>
                 ))}
@@ -661,7 +620,7 @@ export default function DocumentiMerge({ tipi = [] }) {
         >
           <span>{banner.text}</span>
           <button
-            className={`btn ${styles.smallBtn} ${styles.secondaryBtn}`}
+            className={`btn btn-outline btn-sm`}
             onClick={() => setBanner(null)}
             type="button"
           >
@@ -673,7 +632,7 @@ export default function DocumentiMerge({ tipi = [] }) {
       {/* CTA FINALE */}
       <div className={styles.actionsRow}>
         <button
-          className={` btn-primary ${styles.primaryBtn}`}
+          className={`btn btn-primary ${styles.primaryBtn}`}
           disabled={loading || previewPreparing}
           onClick={openPreview}
           type="button"

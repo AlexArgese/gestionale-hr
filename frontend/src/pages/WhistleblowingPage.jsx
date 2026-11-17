@@ -11,7 +11,6 @@ const Icon = ({ d, size = 18, color = 'currentColor', fill = 'none', strokeWidth
   </svg>
 );
 
-const IcoLock     = (p) => <Icon {...p} d="M12 1C9.24 1 7 3.24 7 6v2H5a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V10a2 2 0 0 0-2-2h-2V6c0-2.76-2.24-5-5-5zm0 2c1.66 0 3 1.34 3 3v2H9V6c0-1.66 1.34-3 3-3zm0 10a2 2 0 1 1 0 4 2 2 0 0 1 0-4z" />;
 const IcoShield   = (p) => <Icon {...p} d={['M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z']} />;
 const IcoClipboard= (p) => <Icon {...p} d={['M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2','M9 2h6a1 1 0 0 1 1 1v2a1 1 0 0 1-1 1H9a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1z']} />;
 const IcoKey      = (p) => <Icon {...p} d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0 3 3L22 7l-3-3m-3.5 3.5L19 4" />;
@@ -160,11 +159,11 @@ function HomeView({ onNew, onTrack, onLegal, onPrivacy }) {
       <div style={s.card}>
         <p style={s.cardMeta}>3 fasi</p>
         <div style={s.stepsRow}>
-          <StepCard n={1} icon={<IcoClipboard size={22} color="#6A57D3" />} label="Compila il modulo" />
+          <StepCard n={1} icon={<IcoClipboard size={22} color="#5B4FD6" />} label="Compila il modulo" />
           <div style={s.stepDivider} />
-          <StepCard n={2} icon={<IcoKey size={22} color="#6A57D3" />} label="Crea una password" />
+          <StepCard n={2} icon={<IcoKey size={22} color="#5B4FD6" />} label="Crea una password" />
           <div style={s.stepDivider} />
-          <StepCard n={3} icon={<IcoTag size={22} color="#6A57D3" />} label="Ricevi il codice" />
+          <StepCard n={3} icon={<IcoTag size={22} color="#5B4FD6" />} label="Ricevi il codice" />
         </div>
       </div>
 
@@ -273,11 +272,11 @@ function WbWizard({ onBack, onDone, onLegal, onPrivacy }) {
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
               <div style={{
                 ...s.stepDot,
-                background: i < step ? '#16A34A' : i === step ? 'linear-gradient(135deg,#D0933C,#6A57D3)' : '#EEF2F7',
+                background: i < step ? '#16A34A' : i === step ? '#5B4FD6' : '#EEF2F7',
                 color: i <= step ? '#fff' : '#9CA3AF',
-                boxShadow: i === step ? '0 2px 10px rgba(106,87,211,0.35)' : 'none',
+                boxShadow: 'none',
               }}>
-                {i < step ? <IcoCheck size={14} color="#fff" /> : <span style={{ fontSize: 13, fontWeight: 700 }}>{i + 1}</span>}
+                {i < step ? <IcoCheck size={14} color="#fff" /> : <span style={{ fontSize: 13, fontWeight: 600 }}>{i + 1}</span>}
               </div>
               <span style={{ fontSize: 11, color: i === step ? '#0F172A' : '#9CA3AF', fontWeight: i === step ? 700 : 400, textAlign: 'center', maxWidth: 80 }}>
                 {label}
@@ -320,7 +319,7 @@ function WbWizard({ onBack, onDone, onLegal, onPrivacy }) {
 
           <F label="Allegati (opzionale)">
             <button type="button" style={s.uploadBtn} onClick={() => fileRef.current?.click()}>
-              <IcoPaperclip size={15} color="#6A57D3" /> Aggiungi file
+              <IcoPaperclip size={15} color="#5B4FD6" /> Aggiungi file
             </button>
             <input ref={fileRef} type="file" multiple style={{ display: 'none' }} onChange={handleFileAdd} />
             {files.map((f, i) => (
@@ -335,7 +334,7 @@ function WbWizard({ onBack, onDone, onLegal, onPrivacy }) {
 
           <label style={s.checkRow}>
             <input type="checkbox" checked={form.policy} onChange={e => up('policy', e.target.checked)}
-              style={{ width: 16, height: 16, cursor: 'pointer', flexShrink: 0, accentColor: '#6A57D3' }} />
+              style={{ width: 16, height: 16, cursor: 'pointer', flexShrink: 0, accentColor: '#5B4FD6' }} />
             <span style={{ fontSize: 14, color: '#334155', lineHeight: 1.5 }}>
               Ho letto e preso visione del{' '}
               <button style={s.inlineLink} onClick={onLegal}>Sistema informativo interno e difesa dell'informatore</button>
@@ -411,17 +410,17 @@ function WbWizard({ onBack, onDone, onLegal, onPrivacy }) {
               <IcoCheck size={22} color="#16A34A" />
             </div>
             <div>
-              <h2 style={{ margin: 0, fontSize: 18, fontWeight: 800, color: '#0F172A' }}>Segnalazione inviata</h2>
+              <h2 style={{ margin: 0, fontSize: 18, fontWeight: 600, color: '#0F172A' }}>Segnalazione inviata</h2>
               <p style={{ margin: '3px 0 0', color: '#64748B', fontSize: 14 }}>Ricevuta in modo sicuro e cifrato.</p>
             </div>
           </div>
 
           <div style={s.receiptBox}>
-            <p style={{ margin: '0 0 8px', fontSize: 12, fontWeight: 700, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+            <p style={{ margin: '0 0 8px', fontSize: 12, fontWeight: 600, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
               Codice protocollo
             </p>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <code style={{ fontSize: 22, fontWeight: 900, color: '#0F172A', letterSpacing: '0.05em', fontFamily: 'monospace' }}>
+              <code style={{ fontSize: 22, fontWeight: 600, color: '#0F172A', letterSpacing: '0.05em', fontFamily: 'monospace' }}>
                 {receipt.protocol}
               </code>
               <CopyBtn text={receipt.protocol} />
@@ -469,7 +468,7 @@ function CopyBtn({ text }) {
   };
   return (
     <button style={s.copyBtn} onClick={copy}>
-      <IcoCopy size={14} color={done ? '#16A34A' : '#6A57D3'} />
+      <IcoCopy size={14} color={done ? '#16A34A' : '#5B4FD6'} />
       {done ? 'Copiato' : 'Copia'}
     </button>
   );
@@ -549,14 +548,14 @@ function TrackView({ prefill, onBack }) {
         <div style={s.card}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12, flexWrap: 'wrap', marginBottom: 16 }}>
             <div>
-              <h3 style={{ margin: '0 0 4px', fontSize: 15, fontWeight: 700, color: '#0F172A' }}>{thread.title}</h3>
-              <code style={{ color: '#6A57D3', fontSize: 12 }}>{thread.protocol}</code>
+              <h3 style={{ margin: '0 0 4px', fontSize: 15, fontWeight: 600, color: '#0F172A' }}>{thread.title}</h3>
+              <code style={{ color: '#5B4FD6', fontSize: 12 }}>{thread.protocol}</code>
             </div>
             <span style={{
               background: (STATUS_COLORS[status] || '#64748B') + '18',
               color: STATUS_COLORS[status] || '#64748B',
               border: `1px solid ${(STATUS_COLORS[status] || '#64748B')}44`,
-              borderRadius: 20, padding: '4px 14px', fontSize: 13, fontWeight: 700, whiteSpace: 'nowrap',
+              borderRadius: 20, padding: '4px 14px', fontSize: 13, fontWeight: 600, whiteSpace: 'nowrap',
             }}>
               {STATUS_LABELS[status] || status}
             </span>
@@ -598,14 +597,14 @@ function ProgressBar({ status }) {
           <div style={{ textAlign: 'center', minWidth: 72 }}>
             <div style={{
               width: 28, height: 28, borderRadius: '50%', margin: '0 auto 4px',
-              background: i < idx ? '#16A34A' : i === idx ? 'linear-gradient(135deg,#D0933C,#6A57D3)' : '#EEF2F7',
+              background: i < idx ? '#16A34A' : i === idx ? '#5B4FD6' : '#EEF2F7',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
             }}>
               {i < idx
                 ? <IcoCheck size={14} color="#fff" />
-                : <span style={{ fontSize: 12, fontWeight: 700, color: i === idx ? '#fff' : '#9CA3AF' }}>{i + 1}</span>}
+                : <span style={{ fontSize: 12, fontWeight: 600, color: i === idx ? '#fff' : '#9CA3AF' }}>{i + 1}</span>}
             </div>
-            <span style={{ fontSize: 11, color: i === idx ? '#6A57D3' : i < idx ? '#16A34A' : '#9CA3AF', fontWeight: i === idx ? 700 : 400 }}>
+            <span style={{ fontSize: 11, color: i === idx ? '#5B4FD6' : i < idx ? '#16A34A' : '#9CA3AF', fontWeight: i === idx ? 700 : 400 }}>
               {labels[i]}
             </span>
           </div>
@@ -635,7 +634,7 @@ function Bubble({ msg }) {
       </span>
       <div style={{
         maxWidth: '78%', padding: '10px 14px', fontSize: 14, lineHeight: 1.6, wordBreak: 'break-word', whiteSpace: 'pre-wrap',
-        background: isMe ? 'linear-gradient(135deg,#6A57D3,#8B78E6)' : '#F1F5F9',
+        background: isMe ? '#5B4FD6' : '#F1F5F9',
         color: isMe ? '#fff' : '#0F172A',
         borderRadius: isMe ? '14px 14px 3px 14px' : '14px 14px 14px 3px',
         boxShadow: '0 1px 4px rgba(15,23,42,.07)',
@@ -659,7 +658,7 @@ function F({ label, children }) {
 function SRow({ k, v }) {
   return (
     <div style={{ display: 'flex', gap: 10, marginBottom: 6 }}>
-      <span style={{ fontSize: 11, color: '#94A3B8', fontWeight: 700, minWidth: 72, textTransform: 'uppercase', letterSpacing: '0.05em', paddingTop: 2 }}>{k}</span>
+      <span style={{ fontSize: 11, color: '#94A3B8', fontWeight: 600, minWidth: 72, textTransform: 'uppercase', letterSpacing: '0.05em', paddingTop: 2 }}>{k}</span>
       <span style={{ fontSize: 14, color: '#0F172A' }}>{v}</span>
     </div>
   );
@@ -685,8 +684,8 @@ function LegalPage({ onBack }) {
           { t: 'Diritto a risposta entro termine ragionevole', d: 'Conferma di ricezione entro 7 giorni. Il termine per l\'elaborazione delle indagini non può superare i tre mesi.' },
           { t: 'Diritto alla cancellazione dei dati', d: 'Dopo tre mesi i dati devono essere cancellati, tranne quando necessario per conservare prove o in caso di procedimenti giudiziari.' },
         ].map(item => (
-          <div key={item.t} style={{ borderLeft: '3px solid #6A57D3', paddingLeft: 14, marginBottom: 14 }}>
-            <p style={{ margin: 0, fontWeight: 700, color: '#0F172A', fontSize: 14 }}>{item.t}</p>
+          <div key={item.t} style={{ borderLeft: '3px solid #5B4FD6', paddingLeft: 14, marginBottom: 14 }}>
+            <p style={{ margin: 0, fontWeight: 600, color: '#0F172A', fontSize: 14 }}>{item.t}</p>
             <p style={{ margin: '3px 0 0', color: '#64748B', fontSize: 14 }}>{item.d}</p>
           </div>
         ))}
@@ -698,11 +697,11 @@ function LegalPage({ onBack }) {
         <p>Il Canale deve essere usato responsabilmente. Se i fatti sono manifestamente falsi e la segnalazione è presentata in mala fede: (i) la segnalazione verrà archiviata; (ii) il responsabile HR verrà informato per le misure disciplinari; (iii) la sanzione verrà comunicata all'organo di gestione.</p>
       </LS>
       <LS title="Procedura di indagine">
-        <p style={{ fontWeight: 700, marginBottom: 6 }}>Fase iniziale</p>
+        <p style={{ fontWeight: 600, marginBottom: 6 }}>Fase iniziale</p>
         <p>Il segnalatore compila il modulo individualmente. L'azienda conferma la ricezione entro 7 giorni e può richiedere informazioni aggiuntive. Se non arriva risposta entro 30 giorni, la segnalazione si considera rinunciata (salvo casi critici).</p>
-        <p style={{ fontWeight: 700, margin: '16px 0 6px' }}>Fase istruttiva</p>
+        <p style={{ fontWeight: 600, margin: '16px 0 6px' }}>Fase istruttiva</p>
         <p>Viene assegnato un livello di rischio (BASSO, MEDIO, ALTO, CRITICO). Il termine di risoluzione è di 3 mesi, prorogabili a 6 in casi eccezionali.</p>
-        <p style={{ fontWeight: 700, margin: '16px 0 6px' }}>Fase di risoluzione</p>
+        <p style={{ fontWeight: 600, margin: '16px 0 6px' }}>Fase di risoluzione</p>
         <p>L'azienda emette una Risoluzione documentata comunicata al segnalatore e alla parte segnalata. Esiti possibili: verifica con misure correttive; nessuna verifica con chiusura del caso; rinvio a un'altra istanza o alle autorità.</p>
       </LS>
     </LegalShell>
@@ -721,9 +720,9 @@ function PrivacyPage({ onBack }) {
         <p style={{ marginTop: 8 }}>Contatti: <strong>clockeasyapp@gmail.com</strong></p>
       </LS>
       <LS title="2. Dati raccolti">
-        <p style={{ fontWeight: 700, marginBottom: 6 }}>Segnalatore (se non anonimo):</p>
+        <p style={{ fontWeight: 600, marginBottom: 6 }}>Segnalatore (se non anonimo):</p>
         <ul style={s.ul}><li>Nome e cognome</li><li>Email e telefono</li><li>Descrizione dei fatti e documenti allegati</li></ul>
-        <p style={{ fontWeight: 700, margin: '12px 0 6px' }}>Persona segnalata:</p>
+        <p style={{ fontWeight: 600, margin: '12px 0 6px' }}>Persona segnalata:</p>
         <ul style={s.ul}><li>Dati identificativi e di contatto</li><li>Dati lavorativi, fiscali, finanziari se forniti nel corso dell'indagine</li></ul>
       </LS>
       <LS title="3. Finalità">
@@ -769,11 +768,11 @@ function PrivacyPage({ onBack }) {
 
 function LegalShell({ title, onBack, children }) {
   return (
-    <div style={{ background: '#F6F8FA', minHeight: '100vh' }}>
+    <div style={{ background: '#F8F9FB', minHeight: '100vh' }}>
       <div style={{ maxWidth: 740, margin: '0 auto', padding: '32px 24px 60px' }}>
         <button style={s.backLink} onClick={onBack}>← Torna al modulo</button>
         <div style={s.gradientBar} />
-        <h1 style={{ fontSize: 'clamp(17px,3vw,22px)', fontWeight: 900, color: '#0F172A', margin: '16px 0 28px', lineHeight: 1.35 }}>{title}</h1>
+        <h1 style={{ fontSize: 'clamp(17px,3vw,22px)', fontWeight: 600, color: '#0F172A', margin: '16px 0 28px', lineHeight: 1.35 }}>{title}</h1>
         {children}
         <button style={{ ...s.btnPrimary, marginTop: 8 }} onClick={onBack}>← Torna al modulo</button>
       </div>
@@ -784,21 +783,21 @@ function LegalShell({ title, onBack, children }) {
 function LS({ title, children }) {
   return (
     <div style={{ marginBottom: 30 }}>
-      <h2 style={{ fontSize: 15, fontWeight: 800, color: '#0F172A', margin: '0 0 12px', paddingBottom: 8, borderBottom: '1px solid #EEF2F7' }}>{title}</h2>
+      <h2 style={{ fontSize: 15, fontWeight: 600, color: '#0F172A', margin: '0 0 12px', paddingBottom: 8, borderBottom: '1px solid #EEF2F7' }}>{title}</h2>
       <div style={{ color: '#334155', fontSize: 14, lineHeight: 1.8 }}>{children}</div>
     </div>
   );
 }
 
 /* ── Styles ── */
-const SHADOW = '0 4px 20px rgba(15,23,42,.07)';
+const SHADOW = '0 1px 2px rgba(15,23,42,.05)';
 
 const s = {
-  page: { minHeight: '100vh', background: '#F6F8FA', fontFamily: 'ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif', color: '#334155', display: 'flex', flexDirection: 'column' },
+  page: { minHeight: '100vh', background: '#F8F9FB', fontFamily: '"Inter",ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif', color: '#334155', display: 'flex', flexDirection: 'column' },
 
   header: { background: '#fff', borderBottom: '1px solid #EEF2F7', position: 'sticky', top: 0, zIndex: 50 },
   headerInner: { maxWidth: 760, margin: '0 auto', padding: '12px 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' },
-  headerBtn: { background: '#6A57D3', color: '#fff', border: 'none', borderRadius: 10, padding: '8px 18px', fontSize: 14, fontWeight: 600, cursor: 'pointer' },
+  headerBtn: { background: '#5B4FD6', color: '#fff', border: 'none', borderRadius: 10, padding: '8px 18px', fontSize: 14, fontWeight: 600, cursor: 'pointer' },
   headerBtnGhost: { background: 'none', border: 'none', cursor: 'pointer', color: '#64748B', fontWeight: 600, fontSize: 14 },
 
   main: { flex: 1, padding: '32px 20px 52px' },
@@ -810,48 +809,48 @@ const s = {
 
   /* Hero */
   hero: { textAlign: 'center', padding: '8px 0 4px' },
-  heroBadge: { display: 'inline-flex', alignItems: 'center', gap: 6, background: '#EEF2FF', color: '#6A57D3', borderRadius: 20, padding: '5px 14px', fontSize: 12, fontWeight: 700, marginBottom: 14 },
-  heroTitle: { margin: '0 0 10px', fontSize: 'clamp(22px,4vw,28px)', fontWeight: 900, color: '#0F172A', letterSpacing: '-0.01em' },
+  heroBadge: { display: 'inline-flex', alignItems: 'center', gap: 6, background: '#F1F2F4', color: '#5B4FD6', borderRadius: 4, padding: '5px 14px', fontSize: 12, fontWeight: 600, marginBottom: 14 },
+  heroTitle: { margin: '0 0 10px', fontSize: 'clamp(22px,4vw,28px)', fontWeight: 600, color: '#0F172A', letterSpacing: '-0.01em' },
   heroSub: { margin: '0 auto', color: '#64748B', fontSize: 15, lineHeight: 1.65, maxWidth: 460 },
 
   /* Cards */
-  card: { background: '#fff', borderRadius: 16, border: '1px solid #EEF2F7', padding: '20px 22px', boxShadow: SHADOW },
-  cardTitle: { margin: '0 0 4px', fontSize: 17, fontWeight: 800, color: '#0F172A' },
+  card: { background: '#fff', borderRadius: 10, border: '1px solid #EEF2F7', padding: '20px 22px', boxShadow: SHADOW },
+  cardTitle: { margin: '0 0 4px', fontSize: 17, fontWeight: 600, color: '#0F172A' },
   cardSub: { margin: '0 0 18px', color: '#64748B', fontSize: 14 },
-  cardMeta: { margin: '0 0 14px', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#94A3B8' },
+  cardMeta: { margin: '0 0 14px', fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#94A3B8' },
 
   /* Steps preview */
   stepsRow: { display: 'flex', alignItems: 'flex-start', gap: 8 },
   stepCard: { flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, textAlign: 'center' },
-  stepIcon: { width: 46, height: 46, borderRadius: 13, background: '#EEF2FF', display: 'flex', alignItems: 'center', justifyContent: 'center' },
+  stepIcon: { width: 46, height: 46, borderRadius: 10, background: '#F1F2F4', display: 'flex', alignItems: 'center', justifyContent: 'center' },
   stepDivider: { width: 32, height: 1, background: '#EEF2F7', marginTop: 23, flexShrink: 0 },
-  stepN: { fontSize: 11, fontWeight: 700, color: '#94A3B8', textTransform: 'uppercase', letterSpacing: '0.05em' },
+  stepN: { fontSize: 11, fontWeight: 600, color: '#94A3B8', textTransform: 'uppercase', letterSpacing: '0.05em' },
   stepLabel: { fontSize: 13, color: '#334155', fontWeight: 600 },
 
   /* Chips */
   chip: { background: '#F1F5F9', border: '1px solid #E2E8F0', borderRadius: 20, padding: '4px 12px', fontSize: 13, color: '#475569' },
 
   /* Buttons */
-  btnPrimary: { background: 'linear-gradient(135deg,#D0933C,#6A57D3)', color: '#fff', border: 'none', borderRadius: 12, padding: '13px 26px', fontSize: 15, fontWeight: 700, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 8, boxShadow: '0 3px 14px rgba(106,87,211,.28)' },
-  btnOutline: { background: '#fff', color: '#6A57D3', border: '1.5px solid #6A57D3', borderRadius: 12, padding: '12px 22px', fontSize: 15, fontWeight: 700, cursor: 'pointer' },
-  linkBtn: { background: 'none', border: 'none', cursor: 'pointer', color: '#6A57D3', fontSize: 13, padding: 0, textDecoration: 'underline' },
+  btnPrimary: { background: '#5B4FD6', color: '#fff', border: 'none', borderRadius: 10, padding: '13px 26px', fontSize: 15, fontWeight: 600, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 8, boxShadow: 'none' },
+  btnOutline: { background: '#fff', color: '#5B4FD6', border: '1px solid #5B4FD6', borderRadius: 10, padding: '12px 22px', fontSize: 15, fontWeight: 600, cursor: 'pointer' },
+  linkBtn: { background: 'none', border: 'none', cursor: 'pointer', color: '#5B4FD6', fontSize: 13, padding: 0, textDecoration: 'underline' },
   backLink: { background: 'none', border: 'none', cursor: 'pointer', color: '#64748B', fontSize: 14, fontWeight: 500, padding: '2px 0', alignSelf: 'flex-start' },
 
   /* Step indicator */
-  stepIndicator: { background: '#fff', border: '1px solid #EEF2F7', borderRadius: 14, padding: '16px 20px', display: 'flex', alignItems: 'flex-start', boxShadow: SHADOW },
+  stepIndicator: { background: '#fff', border: '1px solid #EEF2F7', borderRadius: 10, padding: '16px 20px', display: 'flex', alignItems: 'flex-start', boxShadow: SHADOW },
   stepDot: { width: 30, height: 30, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center' },
 
   /* Form */
   label: { display: 'block', fontSize: 13, fontWeight: 600, color: '#374151', marginBottom: 6 },
-  input: { width: '100%', boxSizing: 'border-box', border: '1.5px solid #E5E7EB', borderRadius: 10, padding: '10px 13px', fontSize: 14, color: '#0F172A', background: '#fff', fontFamily: 'inherit', outline: 'none' },
-  select: { width: '100%', boxSizing: 'border-box', border: '1.5px solid #E5E7EB', borderRadius: 10, padding: '10px 13px', fontSize: 14, color: '#0F172A', background: '#fff', fontFamily: 'inherit', cursor: 'pointer' },
+  input: { width: '100%', boxSizing: 'border-box', border: '1px solid #D0D5DD', borderRadius: 10, padding: '10px 13px', fontSize: 14, color: '#0F172A', background: '#fff', fontFamily: 'inherit', outline: 'none' },
+  select: { width: '100%', boxSizing: 'border-box', border: '1px solid #D0D5DD', borderRadius: 10, padding: '10px 13px', fontSize: 14, color: '#0F172A', background: '#fff', fontFamily: 'inherit', cursor: 'pointer' },
   checkRow: { display: 'flex', alignItems: 'flex-start', gap: 10, cursor: 'pointer', marginBottom: 16 },
-  inlineLink: { background: 'none', border: 'none', cursor: 'pointer', color: '#6A57D3', fontSize: 14, padding: 0, textDecoration: 'underline' },
+  inlineLink: { background: 'none', border: 'none', cursor: 'pointer', color: '#5B4FD6', fontSize: 14, padding: 0, textDecoration: 'underline' },
 
   /* Upload */
-  uploadBtn: { display: 'inline-flex', alignItems: 'center', gap: 6, background: '#EEF2FF', border: '1px solid #DDD6FE', borderRadius: 10, padding: '8px 16px', fontSize: 14, color: '#6A57D3', fontWeight: 600, cursor: 'pointer', marginBottom: 8 },
+  uploadBtn: { display: 'inline-flex', alignItems: 'center', gap: 6, background: '#F1F2F4', border: '1px solid #E2E5EA', borderRadius: 10, padding: '8px 16px', fontSize: 14, color: '#5B4FD6', fontWeight: 600, cursor: 'pointer', marginBottom: 8 },
   fileRow: { display: 'flex', alignItems: 'center', gap: 8, background: '#F8FAFC', border: '1px solid #EEF2F7', borderRadius: 8, padding: '7px 10px', marginBottom: 4 },
-  fileRemove: { background: 'none', border: 'none', color: '#EF4444', cursor: 'pointer', fontWeight: 700, fontSize: 13, padding: '0 2px' },
+  fileRemove: { background: 'none', border: 'none', color: '#EF4444', cursor: 'pointer', fontWeight: 600, fontSize: 13, padding: '0 2px' },
 
   /* Misc */
   summaryBox: { background: '#F8FAFC', border: '1px solid #EEF2F7', borderRadius: 10, padding: '12px 14px', marginBottom: 16 },
@@ -861,10 +860,10 @@ const s = {
 
   successCircle: { width: 46, height: 46, borderRadius: '50%', background: '#DCFCE7', border: '1px solid #BBF7D0', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
   receiptBox: { background: '#F0FDF4', border: '1px solid #BBF7D0', borderRadius: 12, padding: '16px 18px', marginBottom: 14 },
-  copyBtn: { display: 'inline-flex', alignItems: 'center', gap: 5, background: '#EEF2FF', border: '1px solid #DDD6FE', borderRadius: 8, padding: '6px 12px', fontSize: 13, fontWeight: 600, cursor: 'pointer', color: '#6A57D3' },
+  copyBtn: { display: 'inline-flex', alignItems: 'center', gap: 5, background: '#F1F2F4', border: '1px solid #E2E5EA', borderRadius: 8, padding: '6px 12px', fontSize: 13, fontWeight: 600, cursor: 'pointer', color: '#5B4FD6' },
 
   messages: { background: '#F8FAFC', borderRadius: 12, border: '1px solid #EEF2F7', padding: '12px 14px', maxHeight: 380, overflowY: 'auto', display: 'flex', flexDirection: 'column' },
 
-  gradientBar: { height: 4, width: 50, borderRadius: 2, background: 'linear-gradient(90deg,#D0933C,#6A57D3)', marginTop: 12 },
+  gradientBar: { height: 4, width: 50, borderRadius: 2, background: '#5B4FD6', marginTop: 12 },
   ul: { paddingLeft: 18, margin: 0, lineHeight: 2.1 },
 };

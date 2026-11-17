@@ -6,7 +6,7 @@ const hasDbUrl = !!process.env.DATABASE_URL;
 const pool = hasDbUrl
   ? new Pool({
       connectionString: process.env.DATABASE_URL,
-      ssl: { rejectUnauthorized: false },
+      ssl: { rejectUnauthorized: true },
       idleTimeoutMillis: 30000,
       connectionTimeoutMillis: 10000,
     })

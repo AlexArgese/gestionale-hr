@@ -1,0 +1,69 @@
+.box {
+  border: 1.5px dashed var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  transition: border-color .12s ease, background .12s ease;
+}
+
+.boxOver {
+  border-color: var(--accent);
+  background: rgba(91, 79, 214, .04);
+}
+
+/* Stato vuoto: prompt grande centrato */
+.prompt {
+  padding: 28px 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.promptText {
+  margin: 0;
+  font-size: 14px;
+  color: var(--txt-muted);
+}
+
+.browseBtn {
+  font-size: 13.5px;
+  font-weight: 600;
+  border: 1px solid var(--border);
+  color: var(--txt-strong);
+  background-color: var(--surface);
+  border-radius: var(--radius-sm);
+  padding: 9px 16px;
+  transition: background .12s ease;
+}
+
+.browseBtn:hover {
+  background: var(--gray-50);
+}
+
+/* Stato condensato: fascia sottile + contenuto (lista/griglia file) */
+.condensedBar {
+  display: flex;
+  justify-content: flex-end;
+  padding: 8px 10px;
+  border-bottom: 1px dashed var(--border);
+}
+
+.condensedTrigger {
+  border: none;
+  background: transparent;
+  color: var(--accent);
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 4px 6px;
+  border-radius: var(--radius-sm);
+}
+
+.condensedTrigger:hover {
+  background: rgba(91, 79, 214, .08);
+}
+
+.content {
+  padding: 12px;
+}

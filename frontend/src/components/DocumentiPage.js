@@ -5,29 +5,45 @@ import {
   FiRefreshCw, FiDownload, FiTrash2,
   FiX, FiUsers, FiMapPin, FiCalendar, FiFileText, FiChevronRight, FiBell,
 } from "react-icons/fi";
-import { API_BASE } from "../api";
+import { API_BASE, getIdToken } from "../api";
 import styles from "./DocumentiPage.module.css";
+import { useToast } from "./ui/Toast";
+import { useConfirm } from "./ui/ConfirmDialog";
+import Pagination from "./ui/Pagination";
 
 const API = API_BASE;
+
+async function authHeaders(extra = {}) {
+  const token = await getIdToken();
+  return { ...extra, ...(token ? { Authorization: `Bearer ${token}` } : {}) };
+}
+
+async function openDocumentoFile(docId) {
+  const headers = await authHeaders();
+  const res = await fetch(`${API}/documenti/${docId}/presigned`, { headers });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const { url } = await res.json();
+  window.open(url, "_blank", "noopener,noreferrer");
+}
 
 const MODES = [
   {
     id: "carica",
     Icon: FiFilePlus,
-    label: "Carica diretto",
-    desc: "Carica documenti assegnandoli a un dipendente via codice fiscale.",
+    label: "Carica documenti",
+    desc: "Carica uno o più file e assegnali ai dipendenti tramite codice fiscale.",
   },
   {
     id: "split",
     Icon: FiScissors,
-    label: "Split automatico (CF)",
-    desc: "Dividi un PDF multi-pagina e assegna ogni sezione al dipendente corrispondente.",
+    label: "Dividi PDF per dipendente",
+    desc: "Separa un PDF di più pagine e assegna ogni parte al dipendente giusto.",
   },
   {
     id: "merge",
     Icon: FiLayers,
-    label: "Merge PDF",
-    desc: "Unisci più PDF in un unico file e assegna il risultato a un dipendente.",
+    label: "Unisci PDF",
+    desc: "Unisci più PDF in un unico file e assegnalo a un dipendente.",
   },
 ];
 
@@ -42,6 +58,8 @@ function firmaStatoDa(dest) {
 
 export default function DocumentiPage() {
   const navigate = useNavigate();
+  const toast = useToast();
+  const confirm = useConfirm();
   const [cronologia, setCronologia] = useState([]);
   const [loadingCron, setLoadingCron] = useState(false);
   const [errorCron, setErrorCron] = useState("");
@@ -56,7 +74,7 @@ export default function DocumentiPage() {
     setErrorCron("");
     try {
       const res = await fetch(`${API}/documenti?limit=${targetPageSize}&page=${targetPage}`, {
-        headers: { Authorization: localStorage.getItem("token") || "" },
+        headers: await authHeaders(),
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
@@ -85,9 +103,15 @@ export default function DocumentiPage() {
 
   // Elimina un singolo destinatario dal batch
   const eliminaSingolo = async (docId, urlFile) => {
-    if (!window.confirm("Rimuovere questo destinatario dal documento?")) return;
+    const ok = await confirm({
+      title: "Rimuovere il destinatario?",
+      message: "Il dipendente non vedrà più questo documento nell'app.",
+      danger: true,
+      confirmLabel: "Rimuovi",
+    });
+    if (!ok) return;
     try {
-      const res = await fetch(`${API}/documenti/${docId}`, { method: "DELETE" });
+      const res = await fetch(`${API}/documenti/${docId}`, { method: "DELETE", headers: await authHeaders() });
       if (!res.ok) throw new Error();
       // aggiorna cronologia
       setCronologia(prev => prev.map(d => {
@@ -104,20 +128,26 @@ export default function DocumentiPage() {
         return { ...prev, destinatari: nuovi, n_destinatari: nuovi.length };
       });
     } catch {
-      alert("Errore durante l'eliminazione.");
+      toast.error("Errore durante l'eliminazione.");
     }
   };
 
   // Elimina l'intero batch
   const eliminaBatch = async (doc) => {
-    if (!window.confirm("Eliminare il documento per TUTTI i destinatari? L'azione è irreversibile.")) return;
+    const ok = await confirm({
+      title: "Eliminare il documento?",
+      message: "Il documento verrà eliminato per tutti i destinatari. L'azione non si può annullare.",
+      danger: true,
+      confirmLabel: "Elimina",
+    });
+    if (!ok) return;
     try {
       const body = doc.batch_id
         ? { batch_id: doc.batch_id }
         : { url_file: doc.url_file };
       const res = await fetch(`${API}/documenti/batch`, {
         method: "DELETE",
-        headers: { "Content-Type": "application/json" },
+        headers: await authHeaders({ "Content-Type": "application/json" }),
         body: JSON.stringify(body),
       });
       if (!res.ok) throw new Error();
@@ -125,110 +155,101 @@ export default function DocumentiPage() {
       setCronologia(prev => prev.filter(d => (d.batch_id || d.url_file) !== key));
       setSelectedDoc(null);
     } catch {
-      alert("Errore durante l'eliminazione.");
+      toast.error("Errore durante l'eliminazione.");
     }
   };
 
   return (
-    <div className={styles.container}>
-      <div className={styles.header}>
-        <h1 className={styles.title}>Documenti</h1>
+    <div className="page">
+      <header className="page-header">
+        <div className="page-header-text">
+          <h1 className="page-title">Documenti</h1>
+          <p className="page-subtitle">Carica buste paga e documenti, e segui lo stato delle firme.</p>
+        </div>
+      </header>
+
+      {/* Operazioni */}
+      <div className={styles.modeGrid}>
+        {MODES.map(({ id, Icon, label, desc }) => (
+          <button
+            key={id}
+            className={styles.modeCard}
+            onClick={() => navigate(`/documenti/${id}`)}
+          >
+            <span className={styles.modeIconWrap}><Icon size={18} /></span>
+            <span className={styles.modeText}>
+              <span className={styles.modeLabel}>{label}</span>
+              <span className={styles.modeDesc}>{desc}</span>
+            </span>
+            <FiChevronRight className={styles.modeArrow} size={16} />
+          </button>
+        ))}
       </div>
-      <div className={styles.underline} />
 
-      <div className={styles.layout}>
-        {/* LEFT: selettore operazione */}
-        <aside className={styles.left}>
-          <h3 className={styles.panelTitle}>Operazione</h3>
-          <div className={styles.modeList}>
-            {MODES.map(({ id, Icon, label, desc }) => (
-              <button
-                key={id}
-                className={styles.modeCard}
-                onClick={() => navigate(`/documenti/${id}`)}
-              >
-                <div className={styles.modeIconWrap}><Icon /></div>
-                <div className={styles.modeText}>
-                  <div className={styles.modeLabel}>{label}</div>
-                  <div className={styles.modeDesc}>{desc}</div>
-                </div>
-                <FiChevronRight className={styles.modeArrow} />
-              </button>
-            ))}
+      {/* Cronologia */}
+      <section className={`card ${styles.historyCard}`}>
+        <div className="card-head">
+          <div>
+            <h2 className="card-title">Cronologia caricamenti</h2>
+            <p className="card-desc">Apri un caricamento per vedere destinatari e stato delle firme.</p>
           </div>
-        </aside>
+          <button
+            className="btn btn-outline btn-sm"
+            onClick={() => fetchCronologia(page, pageSize)}
+            disabled={loadingCron}
+          >
+            <FiRefreshCw size={14} className={loadingCron ? styles.spinning : ""} /> Aggiorna
+          </button>
+        </div>
 
-        {/* RIGHT: cronologia */}
-        <main className={styles.right}>
-          <div className={styles.cronHeader}>
-            <h3 className={styles.panelTitle}>Cronologia caricamenti</h3>
-            <button
-              className={styles.refreshBtn}
-              onClick={() => fetchCronologia(page, pageSize)}
-              disabled={loadingCron}
-              title="Aggiorna"
-            >
-              <FiRefreshCw className={loadingCron ? styles.spinning : ""} />
-            </button>
+        {loadingCron && <div className="empty-state">Caricamento…</div>}
+        {errorCron && <div className="empty-state">{errorCron}</div>}
+        {!loadingCron && !errorCron && cronologia.length === 0 && (
+          <div className="empty-state">
+            <span className="empty-state-title">Nessun caricamento</span>
+            <span>Usa una delle operazioni qui sopra per caricare i primi documenti.</span>
           </div>
+        )}
 
-          {loadingCron && <div className={styles.stateMsg}>Caricamento…</div>}
-          {errorCron  && <div className={styles.stateMsg}>{errorCron}</div>}
-          {!loadingCron && !errorCron && cronologia.length === 0 && (
-            <div className={styles.stateMsg}>
-              Nessun caricamento recente. Usa le operazioni a sinistra per caricare documenti.
-            </div>
-          )}
-
-          <div className={styles.cronList}>
-            {cronologia.map(doc => (
-              <CronologiaItem
-                key={doc.batch_id || doc.url_file}
-                doc={doc}
-                isSelected={(selectedDoc?.batch_id || selectedDoc?.url_file) === (doc.batch_id || doc.url_file)}
-                onClick={() => setSelectedDoc(doc)}
-                onDelete={() => eliminaBatch(doc)}
-              />
-            ))}
+        {!loadingCron && !errorCron && cronologia.length > 0 && (
+          <div className={styles.tableScroll}>
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>Documento</th>
+                  <th>Destinatari</th>
+                  <th>Firma</th>
+                  <th>Caricato il</th>
+                  <th aria-label="Azioni" />
+                </tr>
+              </thead>
+              <tbody>
+                {cronologia.map(doc => (
+                  <CronologiaItem
+                    key={doc.batch_id || doc.url_file}
+                    doc={doc}
+                    isSelected={(selectedDoc?.batch_id || selectedDoc?.url_file) === (doc.batch_id || doc.url_file)}
+                    onClick={() => setSelectedDoc(doc)}
+                    onDelete={() => eliminaBatch(doc)}
+                  />
+                ))}
+              </tbody>
+            </table>
           </div>
+        )}
 
-          {!loadingCron && !errorCron && totalItems > 0 && (
-            <div className={styles.cronPagination}>
-              <label className={styles.pageSizeSelect}>
-                Per pagina
-                <select
-                  value={pageSize}
-                  onChange={e => handlePageSizeChange(Number(e.target.value))}
-                >
-                  <option value={25}>25</option>
-                  <option value={50}>50</option>
-                  <option value={100}>100</option>
-                </select>
-              </label>
-
-              <div className={styles.pageNav}>
-                <button
-                  className={styles.pageBtn}
-                  onClick={() => setPage(p => Math.max(p - 1, 1))}
-                  disabled={page <= 1}
-                >
-                  ‹ Precedente
-                </button>
-                <span className={styles.pageInfo}>
-                  Pagina {page} di {totalPages} · {totalItems} totali
-                </span>
-                <button
-                  className={styles.pageBtn}
-                  onClick={() => setPage(p => Math.min(p + 1, totalPages))}
-                  disabled={page >= totalPages}
-                >
-                  Successiva ›
-                </button>
-              </div>
-            </div>
-          )}
-        </main>
-      </div>
+        {!loadingCron && !errorCron && totalItems > 0 && (
+          <Pagination
+            page={page}
+            totalPages={totalPages}
+            totalItems={totalItems}
+            pageSize={pageSize}
+            onPageChange={setPage}
+            onPageSizeChange={handlePageSizeChange}
+            itemLabel="caricamenti"
+          />
+        )}
+      </section>
 
       {/* DRAWER dettaglio */}
       {selectedDoc && (
@@ -263,50 +284,52 @@ function CronologiaItem({ doc, isSelected, onClick, onDelete }) {
   )];
 
   return (
-    <div
-      className={`${styles.cronItem} ${isSelected ? styles.cronItemSelected : ""}`}
+    <tr
+      className={`${styles.cronRow} ${isSelected ? styles.cronRowSelected : ""}`}
       onClick={onClick}
-      role="button"
       tabIndex={0}
       onKeyDown={e => e.key === "Enter" && onClick()}
     >
-      <div className={styles.cronExtBadge}>{ext || "DOC"}</div>
-
-      <div className={styles.cronMeta}>
-        <div className={styles.cronNome}>{doc.nome_file || "—"}</div>
-        <div className={styles.cronSub}>
-          {doc.tipo_documento && <span>{doc.tipo_documento}</span>}
-          {sediUniche.length > 0 && <span> · {sediUniche.slice(0, 2).join(", ")}{sediUniche.length > 2 ? "…" : ""}</span>}
-          <span> · {dataFmt}</span>
+      <td>
+        <div className={styles.docCell}>
+          <span className={styles.extBadge}>{ext || "DOC"}</span>
+          <div className={styles.docText}>
+            <span className={styles.docName} title={doc.nome_file}>{doc.nome_file || "—"}</span>
+            <span className={styles.docSub}>
+              {[doc.tipo_documento, sediUniche.slice(0, 2).join(", ") + (sediUniche.length > 2 ? "…" : "")]
+                .filter(Boolean).join(" · ")}
+            </span>
+          </div>
         </div>
-        <div className={styles.cronBadgeRow}>
-          <span className={styles.destBadge}>
-            <FiUsers /> {doc.n_destinatari} {doc.n_destinatari === 1 ? "dest." : "dest."}
-          </span>
-          {hasFirmaOk      && <span className={`${styles.firmaBadge} ${styles.firma_firmato}`}>✓ Firmato</span>}
-          {hasFirmaPendente && <span className={`${styles.firmaBadge} ${styles.firma_attesa}`}>⏳ Firma in attesa</span>}
-        </div>
-      </div>
-
-      <div className={styles.cronActions} onClick={e => e.stopPropagation()}>
-        <a
-          className={styles.actionBtn}
-          href={`${API}/documenti/${doc.id}/download`}
-          target="_blank"
-          rel="noreferrer"
-          title="Scarica"
-        >
-          <FiDownload />
-        </a>
+      </td>
+      <td className="tabular">{doc.n_destinatari}</td>
+      <td>
+        {hasFirmaPendente
+          ? <span className="badge badge-warning">In attesa</span>
+          : hasFirmaOk
+            ? <span className="badge badge-success">Firmato</span>
+            : <span className={styles.dash}>—</span>}
+      </td>
+      <td className={`tabular ${styles.dateCell}`}>{dataFmt}</td>
+      <td className={styles.rowActions} onClick={e => e.stopPropagation()}>
         <button
-          className={`${styles.actionBtn} ${styles.actionDanger}`}
-          onClick={onDelete}
-          title="Elimina tutti"
+          className="btn btn-ghost btn-sm btn-icon"
+          onClick={() => openDocumentoFile(doc.id).catch(console.error)}
+          title="Apri documento"
+          aria-label="Apri documento"
         >
-          <FiTrash2 />
+          <FiDownload size={15} />
         </button>
-      </div>
-    </div>
+        <button
+          className={`btn btn-ghost btn-sm btn-icon ${styles.dangerIcon}`}
+          onClick={onDelete}
+          title="Elimina per tutti"
+          aria-label="Elimina per tutti"
+        >
+          <FiTrash2 size={15} />
+        </button>
+      </td>
+    </tr>
   );
 }
 
@@ -321,7 +344,7 @@ function DocDetailDrawer({ doc, onClose, onEliminaSingolo, onEliminaBatch }) {
     try {
       const res = await fetch(`${API}/documenti/remind-firma`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: localStorage.getItem('token') || '' },
+        headers: await authHeaders({ 'Content-Type': 'application/json' }),
         body: JSON.stringify({ doc_ids: docIds }),
       });
       const data = await res.json();
@@ -370,7 +393,7 @@ function DocDetailDrawer({ doc, onClose, onEliminaSingolo, onEliminaBatch }) {
               <div className={styles.drawerTipo}>{doc.tipo_documento || "—"}</div>
             </div>
           </div>
-          <button className={styles.drawerClose} onClick={onClose}><FiX /></button>
+          <button className="modal-close" onClick={onClose} aria-label="Chiudi"><FiX size={18} /></button>
         </div>
 
         <div className={styles.drawerBody}>
@@ -435,7 +458,7 @@ function DocDetailDrawer({ doc, onClose, onEliminaSingolo, onEliminaBatch }) {
             <div className={styles.drawerSectionTitle}><FiUsers /> Destinatari</div>
 
             {remindResult && (
-              <div className={remindResult.error ? styles.remindError : styles.remindSuccess}>
+              <div className={`alert ${remindResult.error ? "alert-danger" : "alert-success"} ${styles.remindAlert}`}>
                 {remindResult.error
                   ? `Errore: ${remindResult.error}`
                   : `Mail inviate: ${remindResult.sent}${remindResult.errors?.length ? ` · ${remindResult.errors.length} non consegnate` : ''}`}
@@ -459,8 +482,8 @@ function DocDetailDrawer({ doc, onClose, onEliminaSingolo, onEliminaBatch }) {
                         {d.email && <span> · {d.email}</span>}
                       </div>
                       {firma && (
-                        <span className={`${styles.firmaBadge} ${styles[`firma_${firma}`]}`}>
-                          {firma === "firmato" ? "✓ Firmato" : "⏳ In attesa di firma"}
+                        <span className={`badge ${firma === "firmato" ? "badge-success" : "badge-warning"} ${styles.destBadge}`}>
+                          {firma === "firmato" ? "Firmato" : "In attesa di firma"}
                           {firma === "firmato" && d.signed_at
                             ? ` · ${new Date(d.signed_at).toLocaleDateString("it-IT")}`
                             : ""}
@@ -473,36 +496,37 @@ function DocDetailDrawer({ doc, onClose, onEliminaSingolo, onEliminaBatch }) {
                           rel="noreferrer"
                           className={styles.firmaLink}
                         >
-                          Link firma →
+                          Apri link di firma
                         </a>
                       )}
                     </div>
                     <div className={styles.destActions}>
                       {firma === "attesa" && (
                         <button
-                          className={`${styles.actionBtn} ${styles.actionRemind}`}
+                          className="btn btn-ghost btn-sm btn-icon"
                           onClick={() => sendRemind([d.id])}
                           disabled={remindSending.has(d.id)}
                           title="Invia promemoria firma"
+                          aria-label="Invia promemoria firma"
                         >
-                          <FiBell />
+                          <FiBell size={15} />
                         </button>
                       )}
-                      <a
-                        className={styles.actionBtn}
-                        href={`${API}/documenti/${d.id}/download`}
-                        target="_blank"
-                        rel="noreferrer"
-                        title="Scarica"
-                      >
-                        <FiDownload />
-                      </a>
                       <button
-                        className={`${styles.actionBtn} ${styles.actionDanger}`}
+                        className="btn btn-ghost btn-sm btn-icon"
+                        onClick={() => openDocumentoFile(d.id).catch(console.error)}
+                        title="Apri documento"
+                        aria-label="Apri documento"
+                      >
+                        <FiDownload size={15} />
+                      </button>
+                      <button
+                        className={`btn btn-ghost btn-sm btn-icon ${styles.dangerIcon}`}
                         onClick={() => onEliminaSingolo(d.id, doc.url_file)}
                         title="Rimuovi questo destinatario"
+                        aria-label="Rimuovi questo destinatario"
                       >
-                        <FiTrash2 />
+                        <FiTrash2 size={15} />
                       </button>
                     </div>
                   </div>
@@ -514,22 +538,23 @@ function DocDetailDrawer({ doc, onClose, onEliminaSingolo, onEliminaBatch }) {
 
         {/* Footer */}
         <div className={styles.drawerFooter}>
-          <button className={styles.btnOutline} onClick={onClose}>Chiudi</button>
+          <button
+            className="btn btn-danger-outline"
+            onClick={() => onEliminaBatch(doc.url_file)}
+          >
+            <FiTrash2 size={15} /> Elimina per tutti
+          </button>
+          <span className={styles.footerSpacer} />
           {pendingIds.length > 0 && (
             <button
-              className={styles.btnRemind}
+              className="btn btn-outline"
               onClick={() => sendRemind(pendingIds)}
               disabled={remindSending.size > 0}
             >
-              <FiBell /> {remindSending.size > 0 ? 'Invio…' : `Promemoria a tutti (${pendingIds.length})`}
+              <FiBell size={15} /> {remindSending.size > 0 ? 'Invio…' : `Promemoria a tutti (${pendingIds.length})`}
             </button>
           )}
-          <button
-            className={styles.btnDanger}
-            onClick={() => onEliminaBatch(doc.url_file)}
-          >
-            <FiTrash2 /> Elimina per tutti
-          </button>
+          <button className="btn btn-primary" onClick={onClose}>Chiudi</button>
         </div>
       </aside>
     </>

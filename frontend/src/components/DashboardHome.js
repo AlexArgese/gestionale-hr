@@ -1,18 +1,30 @@
 import React, { useEffect, useState } from 'react';
 import {
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, PieChart, Pie, Cell
 } from 'recharts';
 import { useNavigate } from 'react-router-dom';
 import Select from 'react-select';
 import styles from './DashboardHome.module.css';
-import { API_BASE } from "../api";
+import { API_BASE, getIdToken, downloadWithAuth } from "../api";
 
-import { FiUsers, FiAlertCircle, FiBell, FiDownload, FiMapPin, FiHome } from 'react-icons/fi';
-import { BsBriefcase } from 'react-icons/bs';
+import { FiDownload, FiSend, FiChevronLeft, FiChevronRight } from 'react-icons/fi';
 import AppAdoptionWidget from './AppAdoptionWidget';
 
 const API = API_BASE;
+
+const ACCENT = '#5B4FD6';
+const COLORS = ['#5B4FD6', '#A39CEB', '#D0933C', '#98A2B3', '#E4C79A', '#6B62C9'];
+const AXIS_TICK = { fontSize: 12, fill: '#667085' };
+const TOOLTIP_STYLE = {
+  border: '1px solid #E4E7EC', borderRadius: 8, fontSize: 13,
+  boxShadow: '0 4px 12px -2px rgba(16,24,40,.08)',
+};
+
+async function authHeaders(extra = {}) {
+  const token = await getIdToken();
+  return { ...extra, ...(token ? { Authorization: `Bearer ${token}` } : {}) };
+}
 
 function DashboardHome() {
   const navigate = useNavigate();
@@ -23,7 +35,7 @@ function DashboardHome() {
   const [selectedAvvisi, setSelectedAvvisi] = useState(new Set());
   const [sending, setSending] = useState(false);
   const [sendResult, setSendResult] = useState(null);
-  const [avvisiPageSize, setAvvisiPageSize] = useState(25);
+  const [avvisiPageSize, setAvvisiPageSize] = useState(10);
   const [avvisiPage, setAvvisiPage] = useState(1);
 
   // Presenze oggi
@@ -33,17 +45,17 @@ function DashboardHome() {
   const [selectedSediOggi, setSelectedSediOggi] = useState([]);
 
   useEffect(() => {
-    fetch(`${API}/dashboard/dipendenti/stato`)
+    authHeaders().then((headers) => fetch(`${API}/dashboard/dipendenti/stato`, { headers }))
       .then(res => res.ok ? res.json() : res.text().then(t => { throw new Error(t) }))
       .then(data => Array.isArray(data) ? setDipendentiStato(data) : setDipendentiStato([]))
       .catch(err => console.error('Dipendenti stato:', err.message));
 
-    fetch(`${API}/dashboard/distribuzione/societa`)
+    authHeaders().then((headers) => fetch(`${API}/dashboard/distribuzione/societa`, { headers }))
       .then(r => r.json())
       .then(data => Array.isArray(data) ? setDistribuzione(data) : setDistribuzione([]))
       .catch(err => console.error('Distribuzione:', err.message));
 
-    fetch(`${API}/dashboard/storico/assunzioni`)
+    authHeaders().then((headers) => fetch(`${API}/dashboard/storico/assunzioni`, { headers }))
       .then(r => r.json())
       .then(data => {
         if (Array.isArray(data)) {
@@ -59,17 +71,17 @@ function DashboardHome() {
       })
       .catch(err => console.error('Storico:', err.message));
 
-    fetch(`${API}/dashboard/avvisi/documenti`)
+    authHeaders().then((headers) => fetch(`${API}/dashboard/avvisi/documenti`, { headers }))
       .then(r => r.json())
       .then(data => Array.isArray(data) ? setAvvisi(data) : setAvvisi([]))
       .catch(err => console.error('Avvisi:', err.message));
 
-    fetch(`${API}/societa`)
+    authHeaders().then((headers) => fetch(`${API}/societa`, { headers }))
       .then(r => r.json())
       .then(data => setSocietaOptions(data.map(s => ({ label: s.ragione_sociale, value: s.ragione_sociale }))))
       .catch(() => {});
 
-    fetch(`${API}/sedi`)
+    authHeaders().then((headers) => fetch(`${API}/sedi`, { headers }))
       .then(r => r.json())
       .then(data => setSedeOptions(
         data.map(s => { const n = s.nome || s.sede || s.label || ''; return n ? { label: n, value: n } : null; }).filter(Boolean)
@@ -108,7 +120,7 @@ function DashboardHome() {
     try {
       const res = await fetch(`${API}/documenti/remind-firma`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: localStorage.getItem('token') || '' },
+        headers: await authHeaders({ 'Content-Type': 'application/json' }),
         body: JSON.stringify({ doc_ids: [...selectedAvvisi] }),
       });
       const data = await res.json();
@@ -121,216 +133,283 @@ function DashboardHome() {
     }
   };
 
-  const handleDownloadOggi = () => {
+  const handleDownloadOggi = async () => {
     const params = new URLSearchParams();
     selectedSocietaOggi.forEach(s => params.append('societa', s.value));
     selectedSediOggi.forEach(s => params.append('sede', s.value));
-    window.open(`${API}/presenze/export-oggi?${params.toString()}`, '_blank');
+    try {
+      await downloadWithAuth(`${API}/presenze/export-oggi?${params.toString()}`, 'presenze_oggi.xlsx');
+    } catch (e) {
+      console.error(e);
+    }
   };
 
-  const COLORS = ['#D0933C', '#6A57D3', '#82ca9d', '#ff8042'];
+
+  // Statistiche derivate dai dati già caricati (nessuna chiamata aggiuntiva)
+  const totaleDipendenti = distribuzione.reduce((sum, d) => sum + (Number(d.totale) || 0), 0);
+  const societaAttive = distribuzione.length;
+  const ultimoMese = storico.length ? storico[storico.length - 1] : null;
+
+  const oggi = new Intl.DateTimeFormat('it-IT', { weekday: 'long', day: 'numeric', month: 'long' }).format(new Date());
 
   return (
-    <div className={styles.dashboardContainer}>
-      <div className={styles.dashboardHeader}>
-        <h1 className={styles.dashboardTitle}>Dashboard HR</h1>
-        <div className={styles.dashboardUnderline} />
-      </div>
-
-      <div className={styles.grafici}>
-        {/* GRAFICO DIPENDENTI TOTALI / ATTIVI */}
-        <div className={styles.grafico}>
-          <h3 className={styles.sectionTitle}>
-            <FiUsers /> Dipendenti totali e attivi
-          </h3>
-          <ResponsiveContainer width="100%" height={300}>
-            <BarChart data={dipendentiStato}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="nome" />
-              <YAxis />
-              <Tooltip />
-              <Legend />
-              <Bar dataKey="totale" fill="#6A57D3" name="Dipendenti" />
-            </BarChart>
-          </ResponsiveContainer>
+    <div className="page">
+      <header className="page-header">
+        <div className="page-header-text">
+          <h1 className="page-title">Dashboard</h1>
+          <p className={`page-subtitle ${styles.capitalize}`}>{oggi}</p>
         </div>
+      </header>
 
-        {/* GRAFICO DISTRIBUZIONE SOCIETA */}
-        <div className={styles.grafico}>
-          <h3 className={styles.sectionTitle}>
-            <BsBriefcase /> Dipendenti per Società
-          </h3>
-          <ResponsiveContainer width="100%" height={300}>
-            <PieChart>
-              <Pie data={distribuzione} dataKey="totale" nameKey="societa" label>
-                {distribuzione.map((_, index) => (
-                  <Cell key={index} fill={COLORS[index % COLORS.length]} />
-                ))}
-              </Pie>
-              <Tooltip />
-            </PieChart>
-          </ResponsiveContainer>
+      {/* ===== Numeri chiave ===== */}
+      <div className={styles.statGrid}>
+        <div className={`card ${styles.stat}`}>
+          <span className={styles.statLabel}>Dipendenti attivi</span>
+          <span className={styles.statValue}>{totaleDipendenti}</span>
         </div>
-
-        {/* GRAFICO STORICO ASSUNZIONI */}
-        <div className={styles.grafico}>
-          <h3 className={styles.sectionTitle}>
-            <FiUsers /> Assunzioni per mese
-          </h3>
-          <ResponsiveContainer width="100%" height={300}>
-            <BarChart data={storico}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="mese" />
-              <YAxis />
-              <Tooltip />
-              <Legend />
-              <Bar dataKey="totale" fill="#6A57D3" name="Assunzioni" />
-            </BarChart>
-          </ResponsiveContainer>
+        <div className={`card ${styles.stat}`}>
+          <span className={styles.statLabel}>Società attive</span>
+          <span className={styles.statValue}>{societaAttive}</span>
+        </div>
+        <div className={`card ${styles.stat}`}>
+          <span className={styles.statLabel}>Documenti da firmare</span>
+          <span className={styles.statValue}>{avvisi.length}</span>
+        </div>
+        <div className={`card ${styles.stat}`}>
+          <span className={styles.statLabel}>Ultime assunzioni</span>
+          <span className={styles.statValue}>{ultimoMese ? ultimoMese.totale : '—'}</span>
+          {ultimoMese && <span className={styles.statSub}>{ultimoMese.mese}</span>}
         </div>
       </div>
 
-      {/* PRESENZE OGGI */}
-      <div className={styles.section}>
-        <div className={styles.sectionHeader}>
-          <h3 className={styles.sectionTitle}>
-            <FiDownload /> Presenze di oggi
-          </h3>
-        </div>
-        <div className={styles.oggi}>
-          <div className={styles.oggiGroup}>
-            <label className={styles.oggiLabel}><FiHome /> Società</label>
-            <Select
-              classNamePrefix="dash-select"
-              options={societaOptions}
-              value={selectedSocietaOggi}
-              onChange={setSelectedSocietaOggi}
-              isMulti isClearable isSearchable closeMenuOnSelect={false}
-              placeholder="Tutte le società"
-            />
-          </div>
-          <div className={styles.oggiGroup}>
-            <label className={styles.oggiLabel}><FiMapPin /> Sedi</label>
-            <Select
-              classNamePrefix="dash-select"
-              options={sedeOptions}
-              value={selectedSediOggi}
-              onChange={setSelectedSediOggi}
-              isMulti isClearable isSearchable closeMenuOnSelect={false}
-              placeholder="Tutte le sedi"
-            />
-          </div>
-          <button className={styles.buttonPrimary} onClick={handleDownloadOggi}>
-            <FiDownload /> Scarica Excel
-          </button>
-        </div>
-      </div>
-
-      {/* APP ADOPTION */}
-      <AppAdoptionWidget />
-
-      {/* AVVISI */}
-      <div className={styles.section}>
-        <div className={styles.sectionHeader}>
-          <h3 className={styles.sectionTitle}>
-            <FiAlertCircle /> Documenti in attesa di firma
-          </h3>
-          {avvisi.length > 0 && (
-            <div className={styles.remindToolbar}>
-              <label className={styles.checkAll}>
-                <input
-                  type="checkbox"
-                  checked={selectedAvvisi.size === avvisi.length}
-                  onChange={toggleAll}
-                />
-                Seleziona tutti
-              </label>
+      <div className={styles.columns}>
+        {/* ===== Colonna principale ===== */}
+        <section className={`card ${styles.cardFlush}`}>
+          <div className="card-head">
+            <div>
+              <h2 className="card-title">Documenti in attesa di firma</h2>
+              <p className="card-desc">Seleziona i dipendenti a cui inviare un promemoria via email.</p>
+            </div>
+            {avvisi.length > 0 && (
               <button
-                className={styles.buttonPrimary}
+                className="btn btn-primary btn-sm"
                 disabled={selectedAvvisi.size === 0 || sending}
                 onClick={sendReminders}
               >
-                <FiBell />
+                <FiSend size={14} />
                 {sending ? 'Invio…' : `Invia promemoria${selectedAvvisi.size > 0 ? ` (${selectedAvvisi.size})` : ''}`}
               </button>
+            )}
+          </div>
+
+          {sendResult && (
+            <div className={styles.alertWrap}>
+              <div className={`alert ${sendResult.error ? 'alert-danger' : 'alert-success'}`}>
+                {sendResult.error
+                  ? `Errore: ${sendResult.error}`
+                  : `Email inviate: ${sendResult.sent}${sendResult.errors?.length ? ` · ${sendResult.errors.length} non consegnate` : ''}`}
+              </div>
             </div>
           )}
+
+          {avvisi.length === 0 ? (
+            <div className="empty-state">
+              <span className="empty-state-title">Nessun documento in attesa</span>
+              <span>Tutti i documenti inviati risultano firmati.</span>
+            </div>
+          ) : (
+            <>
+              <div className={styles.tableScroll}>
+                <table className="data-table">
+                  <thead>
+                    <tr>
+                      <th className={styles.checkCol}>
+                        <input
+                          type="checkbox"
+                          className={styles.check}
+                          aria-label="Seleziona tutti"
+                          checked={selectedAvvisi.size === avvisi.length}
+                          onChange={toggleAll}
+                        />
+                      </th>
+                      <th>Dipendente</th>
+                      <th>Documento</th>
+                      <th>Tipo</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {avvisiPaginati.map((a, i) => (
+                      <tr key={a.id ?? i}>
+                        <td className={styles.checkCol}>
+                          <input
+                            type="checkbox"
+                            className={styles.check}
+                            aria-label={`Seleziona ${a.nome} ${a.cognome}`}
+                            checked={selectedAvvisi.has(a.id)}
+                            onChange={() => toggleAvviso(a.id)}
+                          />
+                        </td>
+                        <td>
+                          <button
+                            className={styles.personLink}
+                            onClick={() => navigate(`/utenti/${a.utente_id}`)}
+                          >
+                            {a.nome} {a.cognome}
+                          </button>
+                        </td>
+                        <td className={styles.fileCell} title={a.nome_file}>{a.nome_file}</td>
+                        <td><span className="badge">{a.tipo_documento || '—'}</span></td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              <div className={styles.pagination}>
+                <label className={styles.pageSize}>
+                  Righe per pagina
+                  <select
+                    className="select"
+                    value={avvisiPageSize}
+                    onChange={e => handleAvvisiPageSizeChange(Number(e.target.value))}
+                  >
+                    <option value={10}>10</option>
+                    <option value={25}>25</option>
+                    <option value={50}>50</option>
+                  </select>
+                </label>
+                <div className={styles.pageNav}>
+                  <span className={styles.pageInfo}>
+                    Pagina {avvisiPageClamped} di {avvisiTotalPages} · {avvisi.length} documenti
+                  </span>
+                  <button
+                    className="btn btn-outline btn-sm btn-icon"
+                    onClick={() => setAvvisiPage(p => Math.max(p - 1, 1))}
+                    disabled={avvisiPageClamped <= 1}
+                    aria-label="Pagina precedente"
+                  >
+                    <FiChevronLeft size={16} />
+                  </button>
+                  <button
+                    className="btn btn-outline btn-sm btn-icon"
+                    onClick={() => setAvvisiPage(p => Math.min(p + 1, avvisiTotalPages))}
+                    disabled={avvisiPageClamped >= avvisiTotalPages}
+                    aria-label="Pagina successiva"
+                  >
+                    <FiChevronRight size={16} />
+                  </button>
+                </div>
+              </div>
+            </>
+          )}
+        </section>
+
+        {/* ===== Colonna laterale ===== */}
+        <div className={styles.sideCol}>
+          <section className="card">
+            <div className="card-head">
+              <div>
+                <h2 className="card-title">Presenze di oggi</h2>
+                <p className="card-desc">Esporta le timbrature della giornata in Excel.</p>
+              </div>
+            </div>
+            <div className={`card-body ${styles.oggi}`}>
+              <div className="field">
+                <span className="field-label">Società</span>
+                <Select
+                  classNamePrefix="rs"
+                  options={societaOptions}
+                  value={selectedSocietaOggi}
+                  onChange={setSelectedSocietaOggi}
+                  isMulti isClearable isSearchable closeMenuOnSelect={false}
+                  placeholder="Tutte le società"
+                />
+              </div>
+              <div className="field">
+                <span className="field-label">Sedi</span>
+                <Select
+                  classNamePrefix="rs"
+                  options={sedeOptions}
+                  value={selectedSediOggi}
+                  onChange={setSelectedSediOggi}
+                  isMulti isClearable isSearchable closeMenuOnSelect={false}
+                  placeholder="Tutte le sedi"
+                />
+              </div>
+              <button className="btn btn-outline" onClick={handleDownloadOggi}>
+                <FiDownload size={15} /> Scarica Excel
+              </button>
+            </div>
+          </section>
+
+          <AppAdoptionWidget />
         </div>
+      </div>
 
-        {sendResult && (
-          <div className={sendResult.error ? styles.alertError : styles.alertSuccess}>
-            {sendResult.error
-              ? `Errore: ${sendResult.error}`
-              : `Mail inviate: ${sendResult.sent}${sendResult.errors?.length ? ` · ${sendResult.errors.length} non consegnate` : ''}`}
+      {/* ===== Andamento ===== */}
+      <div className={styles.charts}>
+        <section className="card">
+          <div className="card-head"><h2 className="card-title">Dipendenti totali e attivi</h2></div>
+          <div className={styles.chartBody}>
+            <ResponsiveContainer width="100%" height={220}>
+              <BarChart data={dipendentiStato} margin={{ top: 4, right: 4, left: -16, bottom: 0 }}>
+                <CartesianGrid vertical={false} stroke="#EEF0F3" />
+                <XAxis dataKey="nome" tick={AXIS_TICK} axisLine={false} tickLine={false} />
+                <YAxis tick={AXIS_TICK} axisLine={false} tickLine={false} allowDecimals={false} />
+                <Tooltip cursor={{ fill: '#F8F9FB' }} contentStyle={TOOLTIP_STYLE} />
+                <Bar dataKey="totale" fill={ACCENT} name="Dipendenti" radius={[4, 4, 0, 0]} maxBarSize={36} />
+              </BarChart>
+            </ResponsiveContainer>
           </div>
-        )}
+        </section>
 
-        {avvisi.length === 0 ? (
-          <p className={styles.muted}>Nessun documento in attesa di firma</p>
-        ) : (
-          <>
-            <ul className={styles.list}>
-              {avvisiPaginati.map((a, i) => (
-                <li key={i} className={styles.listItem}>
-                  <input
-                    type="checkbox"
-                    className={styles.avvisoCheck}
-                    checked={selectedAvvisi.has(a.id)}
-                    onChange={() => toggleAvviso(a.id)}
-                  />
-                  <div>
-                    <b
-                      className={styles.linkStrong}
-                      onClick={() => navigate(`/utenti/${a.utente_id}`)}
-                    >
-                      {a.nome} {a.cognome}
-                    </b>
-                    {' — '}
-                    <span>{a.nome_file}</span>
-                    {' — '}
-                    <span>{a.tipo_documento}</span>
-                    {' '}
-                    <span className={styles.badgeWarning}>In attesa di firma</span>
-                  </div>
+        <section className="card">
+          <div className="card-head"><h2 className="card-title">Dipendenti per società</h2></div>
+          <div className={styles.chartBody}>
+            <ResponsiveContainer width="100%" height={220}>
+              <PieChart>
+                <Pie
+                  data={distribuzione}
+                  dataKey="totale"
+                  nameKey="societa"
+                  innerRadius={56}
+                  outerRadius={86}
+                  paddingAngle={2}
+                  stroke="none"
+                >
+                  {distribuzione.map((_, index) => (
+                    <Cell key={index} fill={COLORS[index % COLORS.length]} />
+                  ))}
+                </Pie>
+                <Tooltip contentStyle={TOOLTIP_STYLE} />
+              </PieChart>
+            </ResponsiveContainer>
+            <ul className={styles.legend}>
+              {distribuzione.map((d, i) => (
+                <li key={d.societa ?? i}>
+                  <span className={styles.legendDot} style={{ background: COLORS[i % COLORS.length] }} />
+                  <span className={styles.legendName}>{d.societa}</span>
+                  <span className={styles.legendValue}>{d.totale}</span>
                 </li>
               ))}
             </ul>
+          </div>
+        </section>
 
-            <div className={styles.avvisiPagination}>
-              <label className={styles.pageSizeSelect}>
-                Per pagina
-                <select
-                  value={avvisiPageSize}
-                  onChange={e => handleAvvisiPageSizeChange(Number(e.target.value))}
-                >
-                  <option value={25}>25</option>
-                  <option value={50}>50</option>
-                  <option value={100}>100</option>
-                </select>
-              </label>
-
-              <div className={styles.pageNav}>
-                <button
-                  className={styles.pageBtn}
-                  onClick={() => setAvvisiPage(p => Math.max(p - 1, 1))}
-                  disabled={avvisiPageClamped <= 1}
-                >
-                  ‹ Precedente
-                </button>
-                <span className={styles.pageInfo}>
-                  Pagina {avvisiPageClamped} di {avvisiTotalPages} · {avvisi.length} totali
-                </span>
-                <button
-                  className={styles.pageBtn}
-                  onClick={() => setAvvisiPage(p => Math.min(p + 1, avvisiTotalPages))}
-                  disabled={avvisiPageClamped >= avvisiTotalPages}
-                >
-                  Successiva ›
-                </button>
-              </div>
-            </div>
-          </>
-        )}
+        <section className="card">
+          <div className="card-head"><h2 className="card-title">Assunzioni per mese</h2></div>
+          <div className={styles.chartBody}>
+            <ResponsiveContainer width="100%" height={220}>
+              <BarChart data={storico} margin={{ top: 4, right: 4, left: -16, bottom: 0 }}>
+                <CartesianGrid vertical={false} stroke="#EEF0F3" />
+                <XAxis dataKey="mese" tick={AXIS_TICK} axisLine={false} tickLine={false} />
+                <YAxis tick={AXIS_TICK} axisLine={false} tickLine={false} allowDecimals={false} />
+                <Tooltip cursor={{ fill: '#F8F9FB' }} contentStyle={TOOLTIP_STYLE} />
+                <Bar dataKey="totale" fill={ACCENT} name="Assunzioni" radius={[4, 4, 0, 0]} maxBarSize={36} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </section>
       </div>
     </div>
   );

@@ -1,0 +1,10 @@
+.tableCard { overflow: hidden; }
+.cardActions { display: flex; gap: var(--sp-2); }
+.alertWrap { padding: var(--sp-4) var(--sp-5) 0; }
+.tableScroll { overflow-x: auto; }
+.tableScroll :global(.data-table) th:first-child,
+.tableScroll :global(.data-table) td:first-child { padding-left: var(--sp-5); }
+.empName { vertical-align: top !important; }
+.shiftsCount { margin-left: var(--sp-2); font-size: var(--fs-xs); font-weight: 400; color: var(--txt-muted); }
+.exportRow { display: grid; grid-template-columns: repeat(2, minmax(0, 200px)); gap: var(--sp-4); }
+@media (max-width: 520px) { .exportRow { grid-template-columns: 1fr; } }
