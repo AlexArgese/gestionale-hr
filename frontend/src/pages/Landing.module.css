@@ -1325,22 +1325,7 @@
   flex: none;
 }
 
-/* ---------- calcolatore ---------- */
-.calc {
-  display: grid;
-  grid-template-columns: 1.3fr 1fr;
-  border-radius: 28px;
-  overflow: hidden;
-  border: 1px solid var(--border);
-  box-shadow: var(--shadow);
-  background: #fff;
-}
-.calcInputs {
-  padding: 40px;
-  display: flex;
-  flex-direction: column;
-  gap: 26px;
-}
+/* ---------- pacchetti ---------- */
 .range {
   display: flex;
   flex-direction: column;
@@ -1386,73 +1371,213 @@
   background: #fff;
   border: 3px solid var(--violet);
 }
-.calcBars {
+.pkSlider {
+  max-width: 560px;
+  margin: 0 auto 40px;
+  padding: 22px 26px;
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  box-shadow: var(--shadow-s);
+}
+.pkGrid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 22px;
+  align-items: stretch;
+}
+.pkCard {
+  position: relative;
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  padding-top: 8px !important;
-  border-top: 1px solid var(--border);
+  padding: 32px 28px 28px;
+  border-radius: 24px;
+  background: #fff;
+  border: 1px solid var(--border);
+  transition: transform 0.3s, box-shadow 0.3s, border-color 0.3s;
 }
-.calcBars li {
-  display: grid;
-  grid-template-columns: 1.4fr 1fr 48px;
-  gap: 14px;
-  align-items: center;
+.pkCard:hover {
+  transform: translateY(-4px);
+  box-shadow: var(--shadow);
+}
+.pkPopular {
+  border: 2px solid var(--violet);
+  box-shadow: 0 24px 60px rgba(91, 79, 214, 0.18);
+}
+.pkBadge {
+  position: absolute;
+  top: -14px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 5px 14px;
+  border-radius: 999px;
+  background: var(--grad);
+  color: #fff;
+  font-size: 12.5px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+.pkCard h3 {
+  font-size: 24px;
+}
+.pkTagline {
+  margin-top: 6px !important;
+  color: var(--muted);
+  font-size: 15px;
+  min-height: 46px;
+}
+.pkPrice {
+  margin: 18px 0 22px;
+  padding-bottom: 22px;
+  border-bottom: 1px solid var(--border);
+}
+.pkPerEmp {
+  display: flex;
+  align-items: flex-start;
+  gap: 4px;
+}
+.pkEuro {
+  font-family: var(--display);
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--txt-strong);
+  margin-top: 6px;
+}
+.pkAmount {
+  font-family: var(--display);
+  font-size: 52px;
+  font-weight: 700;
+  line-height: 1;
+  color: var(--txt-strong);
+  letter-spacing: -0.03em;
+}
+.pkPopular .pkAmount,
+.pkPopular .pkEuro {
+  color: var(--violet);
+}
+.pkUnit {
+  margin: 8px 0 0 8px;
+  font-size: 13px;
+  line-height: 1.3;
+  color: var(--muted);
+}
+.pkTotal {
+  margin-top: 14px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: var(--bg-alt);
   font-size: 14px;
+  color: var(--txt);
 }
-.calcBars b {
-  text-align: right;
+.pkTotal b {
   color: var(--txt-strong);
   font-variant-numeric: tabular-nums;
 }
-.calcBar {
-  height: 8px;
-  border-radius: 8px;
-  background: var(--bg-alt);
-  overflow: hidden;
+.pkTotal small {
+  color: var(--muted);
 }
-.calcBar span {
-  display: block;
-  height: 100%;
-  border-radius: 8px;
-  background: var(--grad);
-  transition: width 0.5s cubic-bezier(0.2, 0.7, 0.2, 1);
+.pkOnRequest {
+  display: inline-block;
+  font-family: var(--display);
+  font-size: 26px;
+  font-weight: 700;
+  color: var(--txt-strong);
 }
-.calcResult {
-  padding: 40px;
+.pkList {
   display: flex;
   flex-direction: column;
-  justify-content: center;
-  align-items: flex-start;
   gap: 10px;
-  background: radial-gradient(400px 300px at 100% 0%, rgba(208, 147, 60, 0.35), transparent 60%), var(--violet);
-  color: #e6e3ff;
+  margin-bottom: 26px !important;
+  flex: 1;
 }
-.calcLabel {
-  font-weight: 600;
+.pkList li {
+  display: flex;
+  gap: 9px;
+  align-items: flex-start;
+  font-size: 14.5px;
+  color: var(--txt-strong);
+}
+.pkList li svg {
+  flex: none;
+  margin-top: 3px;
+  color: var(--ok);
+}
+.pkList li.pkOff {
+  color: #a3abba;
+}
+.pkList li.pkOff svg {
+  color: #c4cad4;
+}
+.pkList li.pkAddon {
+  color: var(--muted);
+  padding-top: 10px;
+  border-top: 1px dashed var(--border);
+}
+.pkList li.pkAddon svg {
+  color: var(--orange);
+}
+.pkAddons {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 22px;
+  margin-top: 22px;
+}
+.pkAddonCard {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 6px 16px;
+  padding: 24px;
+  border-radius: 20px;
+  background: var(--navy);
+  color: #c7cbe0;
+}
+.pkAddonIcon {
+  grid-row: span 3;
+  width: 46px;
+  height: 46px;
+  border-radius: 13px;
+  display: grid;
+  place-items: center;
+  background: var(--grad);
+  color: #fff;
+}
+.pkAddonCard h4 {
+  color: #fff !important;
+  font-size: 18px;
+}
+.pkAddonCard p {
+  font-size: 14.5px;
+  margin-top: 4px !important;
+}
+.pkAddonPrice {
+  grid-column: 2;
+  margin-top: 6px;
+  color: #fff;
   font-size: 15px;
 }
-.calcBig {
+.pkAddonPrice b {
   font-family: var(--display);
-  font-size: clamp(56px, 7vw, 84px);
-  font-weight: 700;
-  line-height: 1;
-  color: #fff;
-  font-variant-numeric: tabular-nums;
+  font-size: 20px;
+  color: #f0b766;
 }
-.calcBig small {
-  font-size: 28px;
+.pkAddonLink {
+  grid-column: 2;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   font-weight: 600;
+  color: #fff !important;
+  width: fit-content;
 }
-.calcDays {
-  font-size: 16px;
-  margin-bottom: 18px;
+.pkAddonLink:hover {
+  color: #f0b766 !important;
 }
-.calcNote {
-  margin-top: 14px;
-  font-size: 12.5px;
-  color: #c9c3ff;
-  line-height: 1.5;
+.pkNote {
+  margin-top: 26px !important;
+  text-align: center;
+  font-size: 13.5px;
+  color: var(--muted);
 }
 
 /* ---------- ClockAI ---------- */
@@ -1909,6 +2034,17 @@
 
 /* ---------- responsive ---------- */
 @media (max-width: 1080px) {
+  .pkGrid {
+    grid-template-columns: 1fr;
+    max-width: 480px;
+    margin: 0 auto;
+  }
+  .pkPopular {
+    order: -1;
+  }
+  .pkTagline {
+    min-height: 0;
+  }
   .strGrid {
     grid-template-columns: repeat(2, 1fr);
   }
@@ -1956,7 +2092,7 @@
   .heroInner,
   .dayGrid,
   .modGrid,
-  .calc,
+  .pkAddons,
   .aiGrid,
   .contactGrid {
     grid-template-columns: 1fr;
@@ -2037,16 +2173,10 @@
     width: 270px;
     height: 540px;
   }
-  .calcInputs,
-  .calcResult,
   .form,
-  .modPanel {
+  .modPanel,
+  .pkCard {
     padding: 24px;
-  }
-  .calcBars li {
-    grid-template-columns: 1fr 70px 40px;
-    gap: 10px;
-    font-size: 13px;
   }
   .formRow {
     grid-template-columns: 1fr;

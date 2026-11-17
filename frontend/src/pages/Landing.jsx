@@ -174,7 +174,7 @@ const NAV_LINKS = [
   ['#perche', 'Perché ClockEasy'],
   ['#giornata', 'Come funziona'],
   ['#moduli', 'Moduli'],
-  ['#clockai', 'ClockAI'],
+  ['#pacchetti', 'Pacchetti'],
   ['#faq', 'FAQ'],
 ];
 
@@ -781,101 +781,179 @@ function Modules({ reduced }) {
 }
 
 /* ------------------------------------------------------------------ */
-/* CALCOLATORE TEMPO RISPARMIATO (stima indicativa, non prezzi)        */
+/* PACCHETTI                                                           */
 /* ------------------------------------------------------------------ */
 
-// Minuti al mese per dipendente che si stimano risparmiati, voce per voce.
-const SAVINGS = [
-  { key: 'presenze', label: 'Raccolta e controllo presenze', perEmp: 12 },
-  { key: 'documenti', label: 'Distribuzione cedolini e documenti', perEmp: 5 },
-  { key: 'comunicazioni', label: 'Comunicazioni e conferme di lettura', perEmp: 4 },
-  { key: 'firme', label: 'Firme e archiviazione', perEmp: 4 },
+// Metti a false per nascondere tutti i prezzi dal sito (pacchetti e FAQ restano, con "prezzo su richiesta").
+const SHOW_PRICES = true;
+const MAX_EMP_LISTINO = 250; // oltre questa soglia: preventivo su misura
+
+const PKG_FEATURES = [
+  { key: 'presenze', label: 'Presenze e timbratura con QR dinamico' },
+  { key: 'export', label: 'Export presenze per il consulente' },
+  { key: 'dipendenti', label: 'Anagrafica dipendenti e più sedi' },
+  { key: 'documenti', label: 'Documenti e cedolini divisi per codice fiscale' },
+  { key: 'comunicazioni', label: 'Comunicazioni con conferma di lettura' },
+  { key: 'teamleader', label: 'Dashboard per i team leader' },
+  { key: 'clockai', label: 'ClockAI, assistente HR' },
+  { key: 'whistleblowing', label: 'Canale whistleblowing' },
 ];
-const PER_SEDE_MIN = 60; // coordinamento tra sedi, minuti al mese per sede aggiuntiva
 
-function Calculator() {
-  const [emp, setEmp] = useState(40);
-  const [sedi, setSedi] = useState(2);
+const PACKAGES = [
+  {
+    id: 'essenziale',
+    name: 'Essenziale',
+    tagline: 'Presenze e documenti, senza carta.',
+    perEmp: 2,
+    min: 29,
+    features: ['presenze', 'export', 'dipendenti', 'documenti'],
+  },
+  {
+    id: 'pro',
+    name: 'Pro',
+    tagline: 'Tutta la comunicazione con il personale.',
+    perEmp: 3.5,
+    min: 49,
+    popular: true,
+    features: ['presenze', 'export', 'dipendenti', 'documenti', 'comunicazioni', 'teamleader'],
+  },
+  {
+    id: 'completo',
+    name: 'Completo',
+    tagline: 'Con intelligenza artificiale e whistleblowing.',
+    perEmp: 5,
+    min: 99,
+    features: PKG_FEATURES.map((f) => f.key),
+  },
+];
 
-  const rows = SAVINGS.map((r) => ({ ...r, min: r.perEmp * emp }));
-  const coord = Math.max(0, sedi - 1) * PER_SEDE_MIN;
-  const totalMin = rows.reduce((a, r) => a + r.min, 0) + coord;
-  const hours = totalMin / 60;
-  const days = hours / 8;
-  const max = Math.max(...rows.map((r) => r.min), coord, 1);
+const eur = (n, d = 0) =>
+  n.toLocaleString('it-IT', { minimumFractionDigits: d, maximumFractionDigits: d });
+
+function Packages({ onChoose }) {
+  const [emp, setEmp] = useState(30);
+  const custom = emp > MAX_EMP_LISTINO;
 
   return (
-    <section className={s.section} id="risparmio">
+    <section className={`${s.section} ${s.sectionAlt}`} id="pacchetti">
       <div className={s.inner}>
         <div className={s.sectionHead} data-reveal>
-          <span className={s.eyebrow}>Tempo risparmiato</span>
-          <h2 className={s.h2}>Quanto tempo ti restituisce ClockEasy?</h2>
-          <p className={s.sub}>Muovi i cursori con i numeri della tua azienda e guarda la stima cambiare.</p>
+          <span className={s.eyebrow}>Pacchetti</span>
+          <h2 className={s.h2}>Scegli il pacchetto giusto per la tua azienda</h2>
+          <p className={s.sub}>
+            {SHOW_PRICES
+              ? 'Paghi solo per i dipendenti che hai. Sposta il cursore e vedi subito quanto costa ogni pacchetto.'
+              : 'Tre pacchetti pensati per crescere con te. Dicci quanti siete e ti prepariamo un preventivo.'}
+          </p>
         </div>
 
-        <div className={s.calc} data-reveal>
-          <div className={s.calcInputs}>
+        {SHOW_PRICES && (
+          <div className={s.pkSlider} data-reveal>
             <label className={s.range}>
               <span className={s.rangeHead}>
-                Dipendenti <b>{emp}</b>
-              </span>
-              <input
-                type="range"
-                min="5"
-                max="500"
-                step="5"
-                value={emp}
-                onChange={(e) => setEmp(Number(e.target.value))}
-                style={{ '--p': `${((emp - 5) / 495) * 100}%` }}
-              />
-            </label>
-            <label className={s.range}>
-              <span className={s.rangeHead}>
-                Sedi <b>{sedi}</b>
+                Quanti dipendenti avete? <b>{custom ? `${MAX_EMP_LISTINO}+` : emp}</b>
               </span>
               <input
                 type="range"
                 min="1"
-                max="20"
+                max={MAX_EMP_LISTINO + 10}
                 step="1"
-                value={sedi}
-                onChange={(e) => setSedi(Number(e.target.value))}
-                style={{ '--p': `${((sedi - 1) / 19) * 100}%` }}
+                value={emp}
+                onChange={(e) => setEmp(Number(e.target.value))}
+                style={{ '--p': `${((emp - 1) / (MAX_EMP_LISTINO + 9)) * 100}%` }}
+                aria-label="Numero di dipendenti"
               />
             </label>
-
-            <ul className={s.calcBars}>
-              {rows.map((r) => (
-                <li key={r.key}>
-                  <span>{r.label}</span>
-                  <span className={s.calcBar}><span style={{ width: `${(r.min / max) * 100}%` }} /></span>
-                  <b>{Math.round(r.min / 60)} h</b>
-                </li>
-              ))}
-              <li>
-                <span>Coordinamento tra sedi</span>
-                <span className={s.calcBar}><span style={{ width: `${(coord / max) * 100}%` }} /></span>
-                <b>{Math.round(coord / 60)} h</b>
-              </li>
-            </ul>
           </div>
+        )}
 
-          <div className={s.calcResult}>
-            <span className={s.calcLabel}>Ogni mese, circa</span>
-            <span className={s.calcBig}>
-              <AnimatedNumber value={Math.round(hours)} /> <small>ore</small>
-            </span>
-            <span className={s.calcDays}>
-              cioè ≈ <AnimatedNumber value={days} decimals={1} /> giornate lavorative restituite all'ufficio HR
-            </span>
-            <a href="#contatti" className={`${s.btn} ${s.btnWhite}`}>
-              Parliamo della tua azienda <Icon name="arrow" size={18} />
+        <div className={s.pkGrid} data-reveal>
+          {PACKAGES.map((p) => {
+            const total = Math.max(p.min, emp * p.perEmp);
+            const atMin = emp * p.perEmp < p.min;
+            return (
+              <article key={p.id} className={`${s.pkCard} ${p.popular ? s.pkPopular : ''}`}>
+                {p.popular && <span className={s.pkBadge}>Il più scelto</span>}
+                <h3>{p.name}</h3>
+                <p className={s.pkTagline}>{p.tagline}</p>
+
+                {SHOW_PRICES ? (
+                  <div className={s.pkPrice}>
+                    <div className={s.pkPerEmp}>
+                      <span className={s.pkEuro}>€</span>
+                      <span className={s.pkAmount}>{eur(p.perEmp, p.perEmp % 1 ? 2 : 0)}</span>
+                      <span className={s.pkUnit}>per dipendente<br />al mese</span>
+                    </div>
+                    <div className={s.pkTotal}>
+                      {custom ? (
+                        <>Oltre {MAX_EMP_LISTINO} dipendenti: <b>preventivo su misura</b></>
+                      ) : (
+                        <>
+                          Per {emp} {emp === 1 ? 'dipendente' : 'dipendenti'}: <b>€ <AnimatedNumber value={total} decimals={total % 1 ? 2 : 0} /> /mese</b>
+                          {atMin && <small> (minimo mensile)</small>}
+                        </>
+                      )}
+                    </div>
+                  </div>
+                ) : (
+                  <div className={s.pkPrice}>
+                    <span className={s.pkOnRequest}>Prezzo su richiesta</span>
+                  </div>
+                )}
+
+                <ul className={s.pkList}>
+                  {PKG_FEATURES.map((f) => {
+                    const on = p.features.includes(f.key);
+                    return (
+                      <li key={f.key} className={on ? '' : s.pkOff}>
+                        <Icon name={on ? 'check' : 'x'} size={16} /> {f.label}
+                      </li>
+                    );
+                  })}
+                  <li className={s.pkAddon}>
+                    <Icon name="plus" size={16} /> Firma elettronica a consumo
+                  </li>
+                </ul>
+
+                <a
+                  href="#contatti"
+                  className={`${s.btn} ${p.popular ? s.btnPrimary : s.btnOutline} ${s.btnBlock}`}
+                  onClick={() => onChoose?.(p.name)}
+                >
+                  {SHOW_PRICES ? 'Richiedi un preventivo' : 'Richiedi il prezzo'}
+                </a>
+              </article>
+            );
+          })}
+        </div>
+
+        <div className={s.pkAddons} data-reveal>
+          <div className={s.pkAddonCard}>
+            <span className={s.pkAddonIcon}><Icon name="sign" /></span>
+            <div>
+              <h4>Firma elettronica</h4>
+              <p>Contratti, lettere e informative firmati dal telefono. Si attiva su qualsiasi pacchetto e paghi solo le firme che usi.</p>
+            </div>
+            <span className={s.pkAddonPrice}>{SHOW_PRICES ? <>da <b>€ 2,50</b> a firma</> : 'Su richiesta'}</span>
+          </div>
+          <div className={s.pkAddonCard}>
+            <span className={s.pkAddonIcon}><Icon name="shield" /></span>
+            <div>
+              <h4>Solo whistleblowing</h4>
+              <p>Ti serve solo il canale di segnalazione, obbligatorio per le aziende private con almeno 50 dipendenti (D.Lgs. 24/2023)? Lo attivi anche da solo.</p>
+            </div>
+            <span className={s.pkAddonPrice}>{SHOW_PRICES ? <><b>€ 390</b> all'anno</> : 'Su richiesta'}</span>
+            <a href="#contatti" className={s.pkAddonLink} onClick={() => onChoose?.('Solo whistleblowing')}>
+              Richiedi <Icon name="arrow" size={16} />
             </a>
-            <span className={s.calcNote}>
-              Stima indicativa basata su tempi medi per attività manuali tipiche. Il risultato reale dipende da come lavora oggi la tua azienda.
-            </span>
           </div>
         </div>
+
+        <p className={s.pkNote}>
+          {SHOW_PRICES
+            ? `Prezzi IVA esclusa, con fatturazione annuale. Oltre ${MAX_EMP_LISTINO} dipendenti o per esigenze particolari prepariamo un preventivo su misura.`
+            : 'Il prezzo dipende dal numero di dipendenti e dal pacchetto scelto.'}
+        </p>
       </div>
     </section>
   );
@@ -1079,7 +1157,9 @@ function Strengths() {
 const FAQ = [
   {
     q: 'Quanto costa ClockEasy?',
-    a: "Ogni azienda è diversa per numero di dipendenti, sedi e moduli necessari, quindi non abbiamo un listino unico. Scrivici: prepariamo insieme una proposta su misura, senza impegno.",
+    a: SHOW_PRICES
+      ? "Dipende dal pacchetto: da 2 € a 5 € per dipendente al mese, IVA esclusa e con fatturazione annuale, con un piccolo minimo mensile. La firma elettronica si paga a consumo. Oltre 250 dipendenti prepariamo un preventivo su misura."
+      : "Dipende dal numero di dipendenti e dal pacchetto scelto. Scrivici: ti mandiamo un preventivo preciso, senza impegno.",
   },
   {
     q: 'Come timbrano i dipendenti?',
@@ -1091,7 +1171,7 @@ const FAQ = [
   },
   {
     q: 'Posso attivare solo alcuni moduli?',
-    a: 'Sì. Puoi partire, ad esempio, solo da presenze e documenti e aggiungere comunicazioni, firma, ClockAI o whistleblowing in un secondo momento.',
+    a: "Sì. Puoi partire dal pacchetto Essenziale e passare a Pro o Completo quando vuoi, senza perdere nulla. La firma elettronica si aggiunge a qualsiasi pacchetto e il whistleblowing si può attivare anche da solo.",
   },
   {
     q: 'Quanto ci vuole per partire?',
@@ -1106,7 +1186,7 @@ const FAQ = [
 function Faq() {
   const [open, setOpen] = useState(0);
   return (
-    <section className={`${s.section} ${s.sectionAlt}`} id="faq">
+    <section className={s.section} id="faq">
       <div className={`${s.inner} ${s.faqInner}`}>
         <div className={s.sectionHead} data-reveal>
           <span className={s.eyebrow}>FAQ</span>
@@ -1144,20 +1224,26 @@ function Faq() {
 /* CONTATTI                                                            */
 /* ------------------------------------------------------------------ */
 
-function Contact() {
-  const [form, setForm] = useState({ nome: '', azienda: '', email: '', telefono: '', dipendenti: '', messaggio: '' });
+const PKG_OPTIONS = ['Essenziale', 'Pro', 'Completo', 'Solo whistleblowing', 'Non lo so ancora'];
+
+function Contact({ pacchetto }) {
+  const [form, setForm] = useState({ nome: '', azienda: '', email: '', telefono: '', dipendenti: '', pacchetto: '', messaggio: '' });
+  useEffect(() => {
+    if (pacchetto) setForm((f) => ({ ...f, pacchetto }));
+  }, [pacchetto]);
   const [sent, setSent] = useState(false);
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
 
   const submit = (e) => {
     e.preventDefault();
-    const subject = `Richiesta informazioni ClockEasy — ${form.azienda || form.nome}`;
+    const subject = `Richiesta ${form.pacchetto ? `preventivo ${form.pacchetto}` : 'informazioni'} ClockEasy — ${form.azienda || form.nome}`;
     const body = [
       `Nome: ${form.nome}`,
       `Azienda: ${form.azienda}`,
       `Email: ${form.email}`,
       form.telefono ? `Telefono: ${form.telefono}` : null,
       form.dipendenti ? `Numero dipendenti: ${form.dipendenti}` : null,
+      form.pacchetto ? `Pacchetto di interesse: ${form.pacchetto}` : null,
       '',
       form.messaggio,
     ]
@@ -1173,14 +1259,14 @@ function Contact() {
       <div className={`${s.inner} ${s.contactGrid}`}>
         <div className={s.contactCopy} data-reveal>
           <span className={`${s.eyebrow} ${s.eyebrowLight}`}>Contatti</span>
-          <h2 className={`${s.h2} ${s.light}`}>Il prezzo giusto lo costruiamo insieme</h2>
+          <h2 className={`${s.h2} ${s.light}`}>Richiedi una demo o un preventivo</h2>
           <p className={`${s.sub} ${s.subLight}`}>
-            Non esiste un listino uguale per tutti: dipende da quante persone lavorano con te, quante sedi hai e quali
-            moduli ti servono. Raccontaci la tua azienda e ti preparo una proposta su misura, con una demo dal vivo.
+            Raccontaci la tua azienda: quante persone lavorano con te, quante sedi hai e cosa ti serve. Ti mostro
+            ClockEasy dal vivo e ti preparo un preventivo preciso sul pacchetto giusto.
           </p>
           <ul className={s.contactPoints}>
             <li><Icon name="check" size={18} /> Demo gratuita e senza impegno</li>
-            <li><Icon name="check" size={18} /> Proposta costruita sui tuoi numeri</li>
+            <li><Icon name="check" size={18} /> Preventivo preciso sui tuoi numeri</li>
             <li><Icon name="check" size={18} /> Ti rispondo personalmente</li>
           </ul>
           <a className={s.contactMail} href={`mailto:${CONTACT_EMAIL}`}>
@@ -1218,6 +1304,15 @@ function Contact() {
               <option>51–250</option>
               <option>251–500</option>
               <option>Più di 500</option>
+            </select>
+          </label>
+          <label>
+            Pacchetto di interesse
+            <select value={form.pacchetto} onChange={set('pacchetto')}>
+              <option value="">Seleziona…</option>
+              {PKG_OPTIONS.map((o) => (
+                <option key={o}>{o}</option>
+              ))}
             </select>
           </label>
           <label>
@@ -1260,6 +1355,7 @@ function Footer() {
           <a href="#perche">Perché ClockEasy</a>
           <a href="#moduli">Moduli</a>
           <a href="#clockai">ClockAI</a>
+          <a href="#pacchetti">Pacchetti</a>
           <a href="#faq">FAQ</a>
         </div>
         <div className={s.footerCol}>
@@ -1286,6 +1382,7 @@ function Footer() {
 export default function Landing() {
   const rootRef = useRef(null);
   const reduced = usePrefersReducedMotion();
+  const [pacchetto, setPacchetto] = useState('');
   useReveal(rootRef);
 
   useEffect(() => {
@@ -1304,11 +1401,11 @@ export default function Landing() {
         <BeforeAfter />
         <DayTimeline reduced={reduced} />
         <Modules reduced={reduced} />
-        <Calculator />
         <ClockAIDemo reduced={reduced} />
         <Strengths />
+        <Packages onChoose={setPacchetto} />
         <Faq />
-        <Contact />
+        <Contact pacchetto={pacchetto} />
       </main>
       <Footer />
     </div>
