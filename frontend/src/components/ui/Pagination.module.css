@@ -1,0 +1,10 @@
+.bar {
+  display: flex; align-items: center; justify-content: space-between; gap: var(--sp-3);
+  flex-wrap: wrap;
+  padding: var(--sp-3) var(--sp-5);
+  border-top: 1px solid var(--divider);
+}
+.left, .right { display: flex; align-items: center; gap: var(--sp-2); }
+.size { display: flex; align-items: center; gap: var(--sp-2); font-size: var(--fs-sm); color: var(--txt-muted); white-space: nowrap; }
+.size select { width: auto; height: 32px; padding: 0 8px; font-size: var(--fs-sm); }
+.info { font-size: var(--fs-sm); color: var(--txt-muted); margin-right: var(--sp-2); white-space: nowrap; font-variant-numeric: tabular-nums; }

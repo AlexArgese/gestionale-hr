@@ -1,20 +1,45 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import Select from 'react-select';
-import {
-  FiDownload,
-  FiCalendar,
-  FiUsers,
-  FiMapPin,
-  FiFileText,
-  FiSave,
-  FiHome
-} from 'react-icons/fi';
+import { FiDownload } from 'react-icons/fi';
 import styles from './PresenzeExport.module.css';
-import { API_BASE } from "../api";
+import { API_BASE, getIdToken, downloadWithAuth } from "../api";
+import { useToast } from './ui/Toast';
 
 const API = API_BASE;
 
+async function authHeaders(extra = {}) {
+  const token = await getIdToken();
+  return { ...extra, ...(token ? { Authorization: `Bearer ${token}` } : {}) };
+}
+
+const NOMI_MESI = [
+  'Gennaio', 'Febbraio', 'Marzo', 'Aprile', 'Maggio', 'Giugno',
+  'Luglio', 'Agosto', 'Settembre', 'Ottobre', 'Novembre', 'Dicembre',
+];
+
+// Il libro paga si prepara a mese chiuso: di default il mese precedente.
+function mesePrecedente() {
+  const d = new Date();
+  d.setDate(1);
+  d.setMonth(d.getMonth() - 1);
+  return { anno: d.getFullYear(), mese: d.getMonth() + 1 };
+}
+
+// downloadWithAuth riporta "HTTP 404 {"error":"…"}": mostra solo il messaggio.
+function messaggioErrore(e) {
+  const testo = (e && e.message) || '';
+  const json = /\{.*\}\s*$/.exec(testo);
+  if (json) {
+    try {
+      const dati = JSON.parse(json[0]);
+      if (dati && dati.error) return dati.error;
+    } catch {}
+  }
+  return testo || 'Errore durante il download';
+}
+
 function PresenzeExport() {
+  const toast = useToast();
   // Stato date + filtro "solo presenti"
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
@@ -23,27 +48,24 @@ function PresenzeExport() {
 
   // Opzioni select
   const [sedeOptions, setSedeOptions] = useState([]);
-  const [utentiOptions, setUtentiOptions] = useState([]);
 
   // Valori selezionati
   const [selectedSedi, setSelectedSedi] = useState([]);
   const [societaOptions, setSocietaOptions] = useState([]);
   const [selectedSocieta, setSelectedSocieta] = useState([]);
-  const [selectedUtenti, setSelectedUtenti] = useState([]);
-  const [nota, setNota] = useState('');
+
+  // Libro paga: mese da scaricare
+  const [libroPeriodo, setLibroPeriodo] = useState(mesePrecedente);
+  const [libroInCorso, setLibroInCorso] = useState(false);
+  const [libroSocieta, setLibroSocieta] = useState([]);
+  const [libroSedi, setLibroSedi] = useState([]);
+  const anniLibro = useMemo(() => {
+    const corrente = new Date().getFullYear();
+    return [corrente, corrente - 1, corrente - 2, corrente - 3];
+  }, []);
 
   useEffect(() => {
-    fetch(`${API}/utenti`)
-      .then((r) => r.json())
-      .then((data) => {
-        setUtentiOptions(data.map((u) => ({
-          label: `${u.nome} ${u.cognome}`,
-          value: u.id,
-        })));
-      })
-      .catch(() => {});
-
-    fetch(`${API}/societa`)
+    authHeaders().then((headers) => fetch(`${API}/societa`, { headers }))
       .then((r) => r.json())
       .then((data) => {
         setSocietaOptions(data.map((s) => ({
@@ -54,7 +76,7 @@ function PresenzeExport() {
       .catch(() => {});
 
     // Carico sedi dalla tabella sedi
-    fetch(`${API}/sedi`)
+    authHeaders().then((headers) => fetch(`${API}/sedi`, { headers }))
       .then((r) => r.json())
       .then((data) => {
         const sedi = data
@@ -84,13 +106,11 @@ function PresenzeExport() {
   }, [startDate, endDate]);
 
   const canDownload = hasRange;
-  const canSaveNote =
-    hasRange && selectedUtenti.length > 0 && nota.trim().length > 0;
 
   // Download Excel
-  const handleDownload = () => {
+  const handleDownload = async () => {
     if (!hasRange) {
-      alert('Seleziona entrambe le date');
+      toast.error('Seleziona entrambe le date');
       return;
     }
 
@@ -109,152 +129,83 @@ function PresenzeExport() {
       params.append('societa', s.value);
     });
 
-    window.open(
-      `${API}/presenze/export?${params.toString()}`,
-      '_blank'
-    );
-  };
-
-  // Salvataggio nota
-  const handleSaveNote = () => {
-    if (!canSaveNote) {
-      alert('Compila tutti i campi per salvare una nota');
-      return;
+    try {
+      await downloadWithAuth(`${API}/presenze/export?${params.toString()}`, 'presenze.xlsx');
+    } catch (e) {
+      toast.error(e.message || 'Errore durante il download');
     }
-
-    const payload = {
-      utenti: selectedUtenti.map((u) => u.value),
-      start: startDate,
-      end: endDate,
-      nota: nota.trim(),
-    };
-
-    const conferma = window.confirm(
-      `Confermi il salvataggio della nota per ${
-        selectedUtenti.length
-      } dipendente/i nel periodo ${rangeLabel}?`
-    );
-
-    if (!conferma) return;
-
-    fetch(`${API}/presenze/note`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-    })
-      .then((r) => r.json())
-      .then((data) => {
-        if (data.success) {
-          alert('Nota salvata correttamente');
-          setNota('');
-          setSelectedUtenti([]);
-        } else {
-          alert('Errore: ' + (data.error || 'salvataggio nota fallito'));
-        }
-      })
-      .catch(() => {
-        alert('Errore di comunicazione con il server');
-      });
   };
 
-  const Icon = ({ Cmp, className }) =>
-    Cmp ? <Cmp className={className} /> : null;
+  // Download libro paga del mese (base precompilata dalle timbrature)
+  const handleDownloadLibroPaga = async () => {
+    const mese = `${libroPeriodo.anno}-${String(libroPeriodo.mese).padStart(2, '0')}`;
+
+    const params = new URLSearchParams();
+    params.append('mese', mese);
+
+    libroSedi.forEach((s) => {
+      params.append('sede', s.value);
+    });
+    libroSocieta.forEach((s) => {
+      params.append('societa', s.value);
+    });
+
+    setLibroInCorso(true);
+    try {
+      await downloadWithAuth(
+        `${API}/presenze/libro-paga?${params.toString()}`,
+        `libro_paga_${mese}.xlsx`
+      );
+    } catch (e) {
+      toast.error(messaggioErrore(e));
+    } finally {
+      setLibroInCorso(false);
+    }
+  };
 
   return (
-    <div className={styles.container}>
-      {/* HEADER */}
-      <div className={styles.header}>
-        <h2 className={styles.title}>
-          <Icon Cmp={FiDownload} className={styles.titleIcon} />
-          Gestione Presenze
-        </h2>
-      </div>
+    <div className="page">
+      <header className="page-header">
+        <div className="page-header-text">
+          <h1 className="page-title">Presenze</h1>
+          <p className="page-subtitle">Esporta le timbrature e prepara la base del libro paga.</p>
+        </div>
+      </header>
 
-      {/* TOOLBAR SUPERIORE: intervallo + solo presenti */}
-      <div className={styles.toolbar}>
-        <div className={styles.toolbarRow}>
-          <div className={styles.group}>
-            <label className={styles.label}>
-              <Icon Cmp={FiCalendar} className={styles.labelIcon} />
-              Data inizio
-            </label>
-            <div className={styles.inputIcon}>
-              <Icon Cmp={FiCalendar} className={styles.icon} />
+      {/* ===== Esportazione ===== */}
+      <section className="card">
+        <div className="card-head">
+          <div>
+            <h2 className="card-title">Esporta presenze</h2>
+            <p className="card-desc">Scegli il periodo e, se serve, filtra per società e sede.</p>
+          </div>
+          <span className="badge">{rangeLabel}</span>
+        </div>
+
+        <div className="card-body">
+          <div className={styles.filtersGrid}>
+            <label className="field">
+              <span className="field-label">Dal</span>
               <input
                 type="date"
                 className="input"
                 value={startDate}
                 onChange={(e) => setStartDate(e.target.value)}
               />
-            </div>
-          </div>
-
-          <div className={styles.group}>
-            <label className={styles.label}>
-              <Icon Cmp={FiCalendar} className={styles.labelIcon} />
-              Data fine
             </label>
-            <div className={styles.inputIcon}>
-              <Icon Cmp={FiCalendar} className={styles.icon} />
+            <label className="field">
+              <span className="field-label">Al</span>
               <input
                 type="date"
                 className="input"
                 value={endDate}
                 onChange={(e) => setEndDate(e.target.value)}
               />
-            </div>
-          </div>
-
-          <div className={styles.group}>
-            <label className={styles.inline}>
-              <input
-                type="checkbox"
-                checked={soloPresenti}
-                onChange={(e) => setSoloPresenti(e.target.checked)}
-              />
-              <span className={styles.help}>Mostra solo i presenti</span>
             </label>
-            <label className={styles.inline}>
-              <input
-                type="checkbox"
-                checked={dettagli}
-                onChange={(e) => setDettagli(e.target.checked)}
-              />
-              <span className={styles.help}>Dettaglio per giornata</span>
-            </label>
-          </div>
-        </div>
-
-        <div className={styles.toolbarRange}>
-          <span className={styles.rangeLabelTitle}>Intervallo attivo:</span>
-          <span className={styles.rangeBadge}>{rangeLabel}</span>
-        </div>
-      </div>
-
-      <div className={styles.underline} />
-
-      {/* LAYOUT A DUE CARD */}
-      <div className={styles.layout}>
-        {/* CARD EXPORT */}
-        <div className={styles.card}>
-          <div className={styles.cardHeader}>
-            <div className={styles.cardTitleWrap}>
-              <h3 className={styles.sectionTitle}>
-                <Icon Cmp={FiDownload} className={styles.sectionIcon} />
-                Esporta presenze
-              </h3>
-              <span className={styles.rangeBadgeSmall}>{rangeLabel}</span>
-            </div>
-          </div>
-
-          <div className={styles.group}>
-            <label className={styles.label}>
-              <Icon Cmp={FiHome} className={styles.labelIcon} />
-              Società
-            </label>
-            <div className={styles.selectWrap}>
+            <div className="field">
+              <span className="field-label">Società</span>
               <Select
-                classNamePrefix="presenze-select"
+                classNamePrefix="rs"
                 options={societaOptions}
                 value={selectedSocieta}
                 onChange={setSelectedSocieta}
@@ -265,100 +216,132 @@ function PresenzeExport() {
                 placeholder="Tutte le società"
               />
             </div>
-          </div>
-
-          <div className={styles.cardBody}>
-            <div className={styles.group}>
-              <label className={styles.label}>
-                <Icon Cmp={FiMapPin} className={styles.labelIcon} />
-                Sedi
-              </label>
-              <div className={styles.selectWrap}>
-                <Select
-                  classNamePrefix="presenze-select"
-                  options={sedeOptions}
-                  value={selectedSedi}
-                  onChange={setSelectedSedi}
-                  isMulti
-                  isClearable
-                  isSearchable
-                  closeMenuOnSelect={false}
-                  placeholder="Seleziona una o più sedi"
-                />
-              </div>
-            </div>
-
-            <div className={styles.actions}>
-              <button
-                className={styles.btnPrimary}
-                onClick={handleDownload}
-                disabled={!canDownload}
-              >
-                <Icon Cmp={FiDownload} />
-                Scarica Excel
-              </button>
-            </div>
-          </div>
-        </div>
-
-        {/* CARD NOTE */}
-        <div className={styles.card}>
-          <div className={styles.cardHeader}>
-            <div className={styles.cardTitleWrap}>
-              <h3 className={styles.sectionTitle}>
-                <Icon Cmp={FiFileText} className={styles.sectionIcon} />
-                Note presenze
-              </h3>
-              <span className={styles.rangeBadgeSmall}>{rangeLabel}</span>
-            </div>
-          </div>
-
-          <div className={styles.cardBody}>
-            <div className={styles.group}>
-              <label className={styles.label}>
-                <Icon Cmp={FiUsers} className={styles.labelIcon} />
-                Dipendenti
-              </label>
-              <div className={styles.selectWrap}>
-                <Select
-                  classNamePrefix="presenze-select"
-                  options={utentiOptions}
-                  value={selectedUtenti}
-                  onChange={setSelectedUtenti}
-                  isMulti
-                  isSearchable
-                  placeholder="Seleziona uno o più dipendenti"
-                />
-              </div>
-            </div>
-
-            <div className={styles.group}>
-              <label className={styles.label}>
-                <Icon Cmp={FiFileText} className={styles.labelIcon} />
-                Nota
-              </label>
-              <textarea
-                className="textarea"
-                value={nota}
-                onChange={(e) => setNota(e.target.value)}
-                rows="3"
-                placeholder="Scrivi una nota collegata all'intervallo attivo..."
+            <div className="field">
+              <span className="field-label">Sedi</span>
+              <Select
+                classNamePrefix="rs"
+                options={sedeOptions}
+                value={selectedSedi}
+                onChange={setSelectedSedi}
+                isMulti
+                isClearable
+                isSearchable
+                closeMenuOnSelect={false}
+                placeholder="Tutte le sedi"
               />
             </div>
+          </div>
 
-            <div className={styles.actions}>
-              <button
-                className={styles.btnPrimary}
-                onClick={handleSaveNote}
-                disabled={!canSaveNote}
+          <div className={styles.options}>
+            <label className={styles.checkRow}>
+              <input
+                type="checkbox"
+                checked={soloPresenti}
+                onChange={(e) => setSoloPresenti(e.target.checked)}
+              />
+              Solo dipendenti presenti nel periodo
+            </label>
+            <label className={styles.checkRow}>
+              <input
+                type="checkbox"
+                checked={dettagli}
+                onChange={(e) => setDettagli(e.target.checked)}
+              />
+              Aggiungi il dettaglio giorno per giorno
+            </label>
+          </div>
+        </div>
+
+        <div className="card-foot">
+          <button className="btn btn-primary" onClick={handleDownload} disabled={!canDownload}>
+            <FiDownload size={15} /> Scarica Excel
+          </button>
+        </div>
+      </section>
+
+      {/* ===== Libro paga ===== */}
+      <section className="card">
+        <div className="card-head">
+          <div>
+            <h2 className="card-title">Libro paga</h2>
+            <p className="card-desc">
+              Base precompilata del mese: calendario, festività e giorni lavorati dalle timbrature.
+            </p>
+          </div>
+        </div>
+        <div className="card-body">
+          <div className={styles.filtersGrid}>
+            <label className="field" htmlFor="libro-paga-mese">
+              <span className="field-label">Mese</span>
+              <select
+                id="libro-paga-mese"
+                className="select"
+                value={libroPeriodo.mese}
+                onChange={(e) =>
+                  setLibroPeriodo((p) => ({ ...p, mese: Number(e.target.value) }))
+                }
               >
-                <Icon Cmp={FiSave} />
-                Salva nota
-              </button>
+                {NOMI_MESI.map((nome, i) => (
+                  <option key={nome} value={i + 1}>{nome}</option>
+                ))}
+              </select>
+            </label>
+            <label className="field" htmlFor="libro-paga-anno">
+              <span className="field-label">Anno</span>
+              <select
+                id="libro-paga-anno"
+                className="select"
+                value={libroPeriodo.anno}
+                onChange={(e) =>
+                  setLibroPeriodo((p) => ({ ...p, anno: Number(e.target.value) }))
+                }
+              >
+                {anniLibro.map((anno) => (
+                  <option key={anno} value={anno}>{anno}</option>
+                ))}
+              </select>
+            </label>
+            <div className="field">
+              <span className="field-label">Società</span>
+              <Select
+                classNamePrefix="rs"
+                options={societaOptions}
+                value={libroSocieta}
+                onChange={setLibroSocieta}
+                isMulti
+                isClearable
+                isSearchable
+                closeMenuOnSelect={false}
+                placeholder="Tutte le società"
+              />
+            </div>
+            <div className="field">
+              <span className="field-label">Sedi</span>
+              <Select
+                classNamePrefix="rs"
+                options={sedeOptions}
+                value={libroSedi}
+                onChange={setLibroSedi}
+                isMulti
+                isClearable
+                isSearchable
+                closeMenuOnSelect={false}
+                placeholder="Tutte le sedi"
+              />
             </div>
           </div>
         </div>
-      </div>
+        <div className="card-foot">
+          <button
+            className="btn btn-primary"
+            onClick={handleDownloadLibroPaga}
+            disabled={libroInCorso}
+          >
+            <FiDownload size={15} />
+            {libroInCorso ? 'Preparazione…' : 'Scarica libro paga'}
+          </button>
+        </div>
+      </section>
     </div>
   );
 }

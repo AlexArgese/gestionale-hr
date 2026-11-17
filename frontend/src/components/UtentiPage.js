@@ -1,80 +1,62 @@
 // frontend/src/components/UtentiPage.js
-import React, { useEffect, useState } from "react";
-import { useLocation } from "react-router-dom";
+import { useSearchParams } from "react-router-dom";
 import UtentiTable from "./UtentiTable";
 import SediTable from "./SediTable";
-import styles from "./UtentiTable.module.css";
 
-const TAB_STORAGE_KEY = "utentiPage:activeTab";
+const TABS = [
+  { key: "utenti", label: "Attivi" },
+  { key: "archiviati", label: "Archiviati" },
+  { key: "sedi", label: "Sedi" },
+];
+
+const SOTTOTITOLI = {
+  utenti: "Anagrafica dei dipendenti, stato e sede di lavoro.",
+  archiviati: "Dipendenti archiviati: non compaiono nelle altre sezioni.",
+  sedi: "Sedi di lavoro e relative impostazioni di timbratura.",
+};
 
 function UtentiPage() {
-  const location = useLocation();
+  const [searchParams, setSearchParams] = useSearchParams();
 
-  const getInitialTab = () => {
-    if (location.state?.activeTab) return location.state.activeTab;
+  const rawTab = searchParams.get("tab");
+  const activeTab = TABS.some((t) => t.key === rawTab) ? rawTab : "utenti";
 
-    try {
-      const saved = sessionStorage.getItem(TAB_STORAGE_KEY);
-      if (saved) return saved;
-    } catch {}
-
-    return "utenti";
+  const setActiveTab = (tab) => {
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      next.set("tab", tab);
+      return next;
+    });
   };
 
-  const [activeTab, setActiveTab] = useState(getInitialTab); // "utenti" | "archiviati" | "sedi"
-
-  useEffect(() => {
-    try {
-      sessionStorage.setItem(TAB_STORAGE_KEY, activeTab);
-    } catch {}
-  }, [activeTab]);
-
-  useEffect(() => {
-    if (location.state?.activeTab && location.state.activeTab !== activeTab) {
-      setActiveTab(location.state.activeTab);
-    }
-  }, [location.state, activeTab]);
-
   return (
-    <>
-      <div className={styles.subnavBar}>
-        <div className={styles.subnav}>
-          <button
-            type="button"
-            className={`${styles.subnavLink} ${
-              activeTab === "utenti" ? styles.subnavLinkActive : ""
-            }`}
-            onClick={() => setActiveTab("utenti")}
-          >
-            Dipendenti
-          </button>
-
-          <button
-            type="button"
-            className={`${styles.subnavLink} ${
-              activeTab === "archiviati" ? styles.subnavLinkActive : ""
-            }`}
-            onClick={() => setActiveTab("archiviati")}
-          >
-            Archiviati
-          </button>
-
-          <button
-            type="button"
-            className={`${styles.subnavLink} ${
-              activeTab === "sedi" ? styles.subnavLinkActive : ""
-            }`}
-            onClick={() => setActiveTab("sedi")}
-          >
-            Sedi
-          </button>
+    <div className="page">
+      <header className="page-header">
+        <div className="page-header-text">
+          <h1 className="page-title">Dipendenti</h1>
+          <p className="page-subtitle">{SOTTOTITOLI[activeTab]}</p>
         </div>
+      </header>
+
+      <div className="tabs" role="tablist">
+        {TABS.map((t) => (
+          <button
+            key={t.key}
+            type="button"
+            role="tab"
+            aria-selected={activeTab === t.key}
+            className="tab"
+            onClick={() => setActiveTab(t.key)}
+          >
+            {t.label}
+          </button>
+        ))}
       </div>
 
       {activeTab === "utenti" && <UtentiTable archived={false} activeTab="utenti" />}
       {activeTab === "archiviati" && <UtentiTable archived activeTab="archiviati" />}
       {activeTab === "sedi" && <SediTable />}
-    </>
+    </div>
   );
 }
 

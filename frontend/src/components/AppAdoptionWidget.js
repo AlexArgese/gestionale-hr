@@ -1,9 +1,16 @@
 import React, { useEffect, useRef, useState, useMemo } from 'react';
-import { PieChart, Pie, Cell, Tooltip } from 'recharts';
-import { API_BASE } from '../api';
+import { API_BASE, getIdToken } from '../api';
+
 import { FaMobileAlt, FaApple, FaAndroid, FaTimes, FaPaperPlane } from 'react-icons/fa';
 import { FiSearch } from 'react-icons/fi';
 import styles from './AppAdoptionWidget.module.css';
+import { useToast } from './ui/Toast';
+import { useConfirm } from './ui/ConfirmDialog';
+
+async function authHeaders(extra = {}) {
+  const token = await getIdToken();
+  return { ...extra, ...(token ? { Authorization: `Bearer ${token}` } : {}) };
+}
 
 const API = API_BASE;
 const PLATFORM_COLORS = { ios: '#6A57D3', android: '#D0933C' };
@@ -13,9 +20,9 @@ function PlatformBadge({ platforms }) {
   return (
     <span className={styles.badgeGroup}>
       {list.map(p => (
-        <span key={p} className={styles.platformBadge} data-platform={p}>
+        <span key={p} className="badge">
           {p === 'ios' ? <FaApple /> : <FaAndroid />}
-          {p === 'ios' ? ' iOS' : ' Android'}
+          {p === 'ios' ? 'iOS' : 'Android'}
         </span>
       ))}
     </span>
@@ -28,6 +35,8 @@ function formatDate(dateStr) {
 }
 
 export default function AppAdoptionWidget() {
+  const toast = useToast();
+  const confirm = useConfirm();
   const [conApp, setConApp] = useState([]);
   const [senzaApp, setSenzaApp] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -39,10 +48,10 @@ export default function AppAdoptionWidget() {
   const selectAllRef = useRef(null);
 
   useEffect(() => {
-    Promise.all([
-      fetch(`${API}/dashboard/app/con-app`).then(r => r.json()),
-      fetch(`${API}/dashboard/app/senza-app`).then(r => r.json()),
-    ])
+    authHeaders().then((headers) => Promise.all([
+      fetch(`${API}/dashboard/app/con-app`, { headers }).then(r => r.json()),
+      fetch(`${API}/dashboard/app/senza-app`, { headers }).then(r => r.json()),
+    ]))
       .then(([con, senza]) => {
         setConApp(Array.isArray(con) ? con : []);
         setSenzaApp(Array.isArray(senza) ? senza : []);
@@ -137,247 +146,216 @@ export default function AppAdoptionWidget() {
   const handleSendReminder = async () => {
     const ids = [...selectedIds];
     const count = ids.length;
-    const ok = window.confirm(
-      `Inviare email promemoria a ${count} dipendent${count === 1 ? 'e' : 'i'} selezionat${count === 1 ? 'o' : 'i'}?\n\nVerrà inviata un'email con il link per scaricare l'app ClockEasy.`
-    );
+    const ok = await confirm({
+      title: 'Inviare il promemoria?',
+      message: `Inviare email promemoria a ${count} dipendent${count === 1 ? 'e' : 'i'} selezionat${count === 1 ? 'o' : 'i'}? Verrà inviata un'email con il link per scaricare l'app ClockEasy.`,
+      confirmLabel: 'Invia',
+    });
     if (!ok) return;
 
     setSending(true);
     try {
       const res = await fetch(`${API}/dashboard/app/invia-promemoria`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: await authHeaders({ 'Content-Type': 'application/json' }),
         body: JSON.stringify({ utente_ids: ids }),
       });
       const data = await res.json();
-      const msg = data.errori?.length > 0
-        ? `✅ Email inviate: ${data.inviati}\n⚠️ Errori: ${data.errori.length}`
-        : `✅ Email inviate con successo a ${data.inviati} dipendent${data.inviati === 1 ? 'e' : 'i'}!`;
-      alert(msg);
+      if (data.errori?.length > 0) {
+        toast.error(`Email inviate: ${data.inviati}. Errori: ${data.errori.length}`);
+      } else {
+        toast.success(`Email inviate con successo a ${data.inviati} dipendent${data.inviati === 1 ? 'e' : 'i'}!`);
+      }
       setSelectedIds(new Set());
     } catch (e) {
-      alert('Errore durante l\'invio. Riprova.');
+      toast.error('Errore durante l\'invio. Riprova.');
       console.error(e);
     } finally {
       setSending(false);
     }
   };
 
-  const emptyChart = [{ name: 'Nessuno', value: 1, color: '#E5E7EB' }];
-  const displayChart = chartData.length > 0 ? chartData : emptyChart;
+  const piattaforma = (nome) => chartData.find(d => d.name === nome)?.value || 0;
 
   return (
     <>
-      {/* ── Compact Widget Card ── */}
-      <div
-        className={styles.widget}
-        onClick={() => setOverlayOpen(true)}
-        role="button"
-        tabIndex={0}
-        onKeyDown={e => e.key === 'Enter' && setOverlayOpen(true)}
-      >
-        <div className={styles.widgetHeader}>
-          <h3 className={styles.widgetTitle}>
-            <FaMobileAlt /> Adozione App Mobile
-          </h3>
-          <div className={styles.widgetHeaderRight}>
-            <span className={styles.activeOnlyBadge}>Solo dipendenti attivi</span>
-            <span className={styles.widgetHint}>Clicca per dettagli →</span>
+      {/* ── Riquadro compatto ── */}
+      <section className="card">
+        <div className="card-head">
+          <div>
+            <h2 className="card-title">App mobile</h2>
+            <p className="card-desc">Dipendenti attivi che hanno installato l'app.</p>
           </div>
         </div>
 
         {loading ? (
-          <div className={styles.loading}>Caricamento…</div>
+          <div className="empty-state">Caricamento…</div>
         ) : (
-          <div className={styles.widgetBody}>
-            <div className={styles.chartWrap}>
-              <PieChart width={150} height={150}>
-                <Pie
-                  data={displayChart}
-                  cx={70} cy={70}
-                  innerRadius={45} outerRadius={65}
-                  paddingAngle={chartData.length > 1 ? 3 : 0}
-                  dataKey="value"
-                  startAngle={90} endAngle={-270}
-                  isAnimationActive={false}
-                >
-                  {displayChart.map((entry, i) => <Cell key={i} fill={entry.color} />)}
-                </Pie>
-                <Tooltip formatter={(v, n) => [v + ' utenti', n]} />
-              </PieChart>
-              <div className={styles.chartCenter}>
-                <span className={styles.chartCenterNum}>{conApp.length}</span>
-                <span className={styles.chartCenterLabel}>utenti</span>
-              </div>
+          <div className="card-body">
+            <div className={styles.headline}>
+              <span className={styles.big}>{pct}%</span>
+              <span className={styles.of}>{conApp.length} su {total} dipendenti</span>
             </div>
-
-            <div className={styles.widgetStats}>
-              <div className={styles.statLine}>
-                <span className={styles.statBig}>{conApp.length}</span>
-                <span className={styles.statOf}>/ {total} dipendenti</span>
-              </div>
-              <div className={styles.progressBar}>
-                <div className={styles.progressFill} style={{ width: `${pct}%` }} />
-              </div>
-              <div className={styles.statPct}>{pct}% ha installato l'app</div>
-              <div className={styles.platformSummary}>
-                {chartData.map(d => (
-                  <span key={d.name} className={styles.platformChip} style={{ background: d.color }}>
-                    {d.name === 'iOS' ? <FaApple /> : <FaAndroid />} {d.name}: {d.value}
-                  </span>
-                ))}
-                {senzaApp.length > 0 && (
-                  <span className={styles.platformChipMissing}>Mancanti: {senzaApp.length}</span>
-                )}
-              </div>
+            <div className={styles.progress} aria-hidden="true">
+              <div className={styles.progressFill} style={{ width: `${pct}%` }} />
             </div>
+            <dl className={styles.breakdown}>
+              <div><dt><FaApple /> iOS</dt><dd>{piattaforma('iOS')}</dd></div>
+              <div><dt><FaAndroid /> Android</dt><dd>{piattaforma('Android')}</dd></div>
+              <div><dt><FaMobileAlt /> Senza app</dt><dd>{senzaApp.length}</dd></div>
+            </dl>
           </div>
         )}
-      </div>
+        <div className="card-foot">
+          <button className="btn btn-outline btn-sm" onClick={() => setOverlayOpen(true)} disabled={loading}>
+            Vedi dettagli
+          </button>
+        </div>
+      </section>
 
-      {/* ── Overlay Modal ── */}
+      {/* ── Dettaglio ── */}
       {overlayOpen && (
         <div
-          className={styles.overlay}
+          className="modal-overlay"
           onClick={e => { if (e.target === e.currentTarget) setOverlayOpen(false); }}
         >
-          <div className={styles.modal}>
-            {/* Header */}
-            <div className={styles.modalHeader}>
-              <h2 className={styles.modalTitle}><FaMobileAlt /> Adozione App Mobile</h2>
-              <button className={styles.closeBtn} onClick={() => setOverlayOpen(false)}>
+          <div className={`modal ${styles.modal}`} role="dialog" aria-modal="true" aria-labelledby="adozione-titolo">
+            <div className="modal-head">
+              <div>
+                <h2 id="adozione-titolo" className="modal-title">App mobile</h2>
+                <p className="modal-desc">
+                  {conApp.length} con l'app · {senzaApp.length} senza app · {pct}% di adozione
+                </p>
+              </div>
+              <button className="modal-close" onClick={() => setOverlayOpen(false)} aria-label="Chiudi">
                 <FaTimes />
               </button>
             </div>
 
-            {/* Summary */}
-            <div className={styles.modalSummary}>
-              <span className={styles.summaryItem} style={{ color: '#6A57D3' }}>
-                <strong>{conApp.length}</strong> con l'app
-              </span>
-              <span className={styles.summarySep}>·</span>
-              <span className={styles.summaryItem} style={{ color: '#D0933C' }}>
-                <strong>{senzaApp.length}</strong> senza app
-              </span>
-              <span className={styles.summarySep}>·</span>
-              <span className={styles.summaryItem}><strong>{pct}%</strong> adozione</span>
+            <div className={styles.modalTools}>
+              <div className="tabs" role="tablist">
+                <button
+                  role="tab"
+                  aria-selected={activeTab === 'con'}
+                  className="tab"
+                  onClick={() => handleTabChange('con')}
+                >
+                  Con l'app <span className={styles.tabCount}>{conApp.length}</span>
+                </button>
+                <button
+                  role="tab"
+                  aria-selected={activeTab === 'senza'}
+                  className="tab"
+                  onClick={() => handleTabChange('senza')}
+                >
+                  Senza app <span className={styles.tabCount}>{senzaApp.length}</span>
+                </button>
+              </div>
+              <div className="search">
+                <FiSearch size={15} />
+                <input
+                  className="input"
+                  placeholder="Cerca dipendente o sede"
+                  value={search}
+                  onChange={e => setSearch(e.target.value)}
+                  autoFocus
+                />
+              </div>
             </div>
 
-            {/* Tabs */}
-            <div className={styles.tabs}>
-              <button
-                className={`${styles.tab} ${activeTab === 'con' ? styles.tabActive : ''}`}
-                onClick={() => handleTabChange('con')}
-              >
-                Con l'app ({conApp.length})
-              </button>
-              <button
-                className={`${styles.tab} ${activeTab === 'senza' ? styles.tabActive : ''}`}
-                onClick={() => handleTabChange('senza')}
-              >
-                Senza app ({senzaApp.length})
-              </button>
-            </div>
-
-            {/* Search */}
-            <div className={styles.searchWrap}>
-              <FiSearch className={styles.searchIcon} />
-              <input
-                className={styles.searchInput}
-                placeholder="Cerca dipendente o sede…"
-                value={search}
-                onChange={e => setSearch(e.target.value)}
-                autoFocus
-              />
-            </div>
-
-            {/* Tab content */}
-            <div className={styles.modalBody}>
+            <div className={`modal-body ${styles.modalBody}`}>
               {activeTab === 'con' ? (
                 filteredCon.length === 0 ? (
-                  <p className={styles.empty}>Nessun risultato</p>
+                  <div className="empty-state">Nessun risultato</div>
                 ) : (
-                  <table className={styles.table}>
-                    <thead>
-                      <tr>
-                        <th>Dipendente</th>
-                        <th>Sede</th>
-                        <th>Piattaforma</th>
-                        <th>Prima registrazione</th>
-                        <th>Ultimo utilizzo</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {filteredCon.map(u => (
-                        <tr key={u.id}>
-                          <td className={styles.nameCell}>{u.nome} {u.cognome}</td>
-                          <td className={styles.sedeCell}>{u.sede || '—'}</td>
-                          <td><PlatformBadge platforms={u.piattaforme} /></td>
-                          <td className={styles.dateCell}>{formatDate(u.prima_registrazione_app)}</td>
-                          <td className={styles.dateCell}>{formatDate(u.ultimo_utilizzo_app)}</td>
+                  <div className="table-wrap">
+                    <table className="data-table">
+                      <thead>
+                        <tr>
+                          <th>Dipendente</th>
+                          <th>Sede</th>
+                          <th>Piattaforma</th>
+                          <th>Prima registrazione</th>
+                          <th>Ultimo utilizzo</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                      </thead>
+                      <tbody>
+                        {filteredCon.map(u => (
+                          <tr key={u.id}>
+                            <td className="cell-strong">{u.nome} {u.cognome}</td>
+                            <td>{u.sede || '—'}</td>
+                            <td><PlatformBadge platforms={u.piattaforme} /></td>
+                            <td className="tabular">{formatDate(u.prima_registrazione_app)}</td>
+                            <td className="tabular">{formatDate(u.ultimo_utilizzo_app)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
                 )
               ) : (
                 filteredSenza.length === 0 ? (
-                  <p className={styles.empty}>
-                    {senzaApp.length === 0 ? 'Tutti i dipendenti hanno installato l\'app! 🎉' : 'Nessun risultato'}
-                  </p>
+                  <div className="empty-state">
+                    {senzaApp.length === 0 ? 'Tutti i dipendenti hanno installato l\'app.' : 'Nessun risultato'}
+                  </div>
                 ) : (
-                  <>
-                    {/* Seleziona tutti */}
-                    <div className={styles.selectAllRow}>
-                      <label className={styles.selectAllLabel}>
-                        <input
-                          ref={selectAllRef}
-                          type="checkbox"
-                          className={styles.checkbox}
-                          onChange={toggleAll}
-                        />
-                        Seleziona tutti ({filteredSenza.length})
-                      </label>
-                    </div>
-
-                    {/* Lista */}
-                    <div className={styles.senzaList}>
-                      {filteredSenza.map(u => (
-                        <label key={u.id} className={styles.senzaItem}>
-                          <input
-                            type="checkbox"
-                            className={styles.checkbox}
-                            checked={selectedIds.has(u.id)}
-                            onChange={() => toggleOne(u.id)}
-                          />
-                          <div className={styles.senzaAvatar}>
-                            {(u.nome?.[0] || '').toUpperCase()}{(u.cognome?.[0] || '').toUpperCase()}
-                          </div>
-                          <div className={styles.senzaInfo}>
-                            <div className={styles.senzaName}>{u.nome} {u.cognome}</div>
-                            <div className={styles.senzaMeta}>{u.sede || '—'} · {u.email}</div>
-                          </div>
-                        </label>
-                      ))}
-                    </div>
-                  </>
+                  <div className="table-wrap">
+                    <table className="data-table">
+                      <thead>
+                        <tr>
+                          <th className={styles.checkCol}>
+                            <input
+                              ref={selectAllRef}
+                              type="checkbox"
+                              className={styles.checkbox}
+                              onChange={toggleAll}
+                              aria-label="Seleziona tutti"
+                            />
+                          </th>
+                          <th>Dipendente</th>
+                          <th>Sede</th>
+                          <th>Email</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {filteredSenza.map(u => (
+                          <tr key={u.id} className={styles.clickRow} onClick={() => toggleOne(u.id)}>
+                            <td className={styles.checkCol}>
+                              <input
+                                type="checkbox"
+                                className={styles.checkbox}
+                                checked={selectedIds.has(u.id)}
+                                onChange={() => toggleOne(u.id)}
+                                onClick={e => e.stopPropagation()}
+                                aria-label={`Seleziona ${u.nome} ${u.cognome}`}
+                              />
+                            </td>
+                            <td className="cell-strong">{u.nome} {u.cognome}</td>
+                            <td>{u.sede || '—'}</td>
+                            <td className="muted">{u.email}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
                 )
               )}
             </div>
 
-            {/* Action bar — appare solo con selezione attiva */}
-            {activeTab === 'senza' && selectedIds.size > 0 && (
-              <div className={styles.actionBar}>
-                <span className={styles.actionCount}>
-                  {selectedIds.size} dipendent{selectedIds.size === 1 ? 'e' : 'i'} selezionat{selectedIds.size === 1 ? 'o' : 'i'}
+            {activeTab === 'senza' && (
+              <div className="modal-foot">
+                <span className="muted">
+                  {selectedIds.size > 0
+                    ? `${selectedIds.size} dipendent${selectedIds.size === 1 ? 'e' : 'i'} selezionat${selectedIds.size === 1 ? 'o' : 'i'}`
+                    : 'Seleziona i dipendenti a cui inviare il link dell\'app'}
                 </span>
                 <button
-                  className={styles.sendBtn}
+                  className="btn btn-primary"
                   onClick={handleSendReminder}
-                  disabled={sending}
+                  disabled={sending || selectedIds.size === 0}
                 >
-                  <FaPaperPlane />
-                  {sending ? 'Invio in corso…' : 'Invia email promemoria'}
+                  <FaPaperPlane size={13} />
+                  {sending ? 'Invio in corso…' : 'Invia promemoria'}
                 </button>
               </div>
             )}

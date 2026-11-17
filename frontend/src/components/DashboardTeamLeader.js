@@ -1,6 +1,9 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { getAuth } from 'firebase/auth';
 import { API_BASE } from '../api';
+import { useToast } from './ui/Toast';
+import { FiDownload, FiRefreshCw } from 'react-icons/fi';
+import styles from './DashboardTeamLeader.module.css';
 
 function fmtTime(iso) {
   if (!iso) return '—';
@@ -19,6 +22,7 @@ async function getToken() {
 }
 
 export default function DashboardTeamLeader({ me }) {
+  const toast = useToast();
   const [presenze, setPresenze] = useState([]);
   const [date, setDate] = useState('');
   const [loading, setLoading] = useState(false);
@@ -75,13 +79,13 @@ export default function DashboardTeamLeader({ me }) {
         `presenze_oggi_${date}${selectedSede ? `_${selectedSede}` : ''}.xlsx`
       );
     } catch (e) {
-      alert('Errore download: ' + e.message);
+      toast.error('Errore download: ' + e.message);
     }
   };
 
   const downloadRange = async () => {
-    if (!dateStart || !dateEnd) return alert('Seleziona le date');
-    if (dateStart > dateEnd) return alert('La data inizio deve essere prima della fine');
+    if (!dateStart || !dateEnd) return toast.error('Seleziona le date');
+    if (dateStart > dateEnd) return toast.error('La data inizio deve essere prima della fine');
     setExporting(true);
     try {
       await downloadBlob(
@@ -89,7 +93,7 @@ export default function DashboardTeamLeader({ me }) {
         `presenze_${dateStart}_${dateEnd}${selectedSede ? `_${selectedSede}` : ''}.xlsx`
       );
     } catch (e) {
-      alert('Errore download: ' + e.message);
+      toast.error('Errore download: ' + e.message);
     } finally {
       setExporting(false);
     }
@@ -106,154 +110,116 @@ export default function DashboardTeamLeader({ me }) {
     a.cognome.localeCompare(b.cognome, 'it')
   );
 
-  const card = { background: '#fff', borderRadius: 12, border: '1px solid #E5E7EB', padding: 20, marginBottom: 24 };
-
   return (
-    <div style={{ maxWidth: 960, margin: '0 auto', padding: '24px 16px' }}>
-      <div style={{ marginBottom: 24 }}>
-        <h1 style={{ fontSize: 22, fontWeight: 700, color: '#111827', margin: '0 0 4px 0' }}>
-          Dashboard Team Leader
-        </h1>
-        <p style={{ color: '#6B7280', margin: 0, fontSize: 14 }}>
-          Sedi assegnate: <strong>{tlSedi.join(', ') || '—'}</strong>
-        </p>
-      </div>
+    <div className="page">
+      <header className="page-header">
+        <div className="page-header-text">
+          <h1 className="page-title">Presenze delle tue sedi</h1>
+          <p className="page-subtitle">Sedi assegnate: {tlSedi.join(', ') || '—'}</p>
+        </div>
+      </header>
 
-      {/* Filtro sede — solo se TL ha più di una sede */}
       {tlSedi.length > 1 && (
-        <div style={{ display: 'flex', gap: 8, marginBottom: 20, flexWrap: 'wrap' }}>
-          {['', ...tlSedi].map(sede => {
-            const active = selectedSede === sede;
-            return (
-              <button
-                key={sede || '__all__'}
-                onClick={() => setSelectedSede(sede)}
-                style={{
-                  padding: '6px 18px',
-                  borderRadius: 20,
-                  border: active ? 'none' : '1px solid #D1D5DB',
-                  background: active ? '#D0933C' : '#fff',
-                  color: active ? '#fff' : '#374151',
-                  fontWeight: active ? 700 : 400,
-                  fontSize: 14,
-                  cursor: 'pointer',
-                  transition: 'all .15s',
-                }}
-              >
-                {sede || 'Tutte le sedi'}
-              </button>
-            );
-          })}
+        <div className="tabs" role="tablist">
+          {['', ...tlSedi].map(sede => (
+            <button
+              key={sede || '__all__'}
+              type="button"
+              role="tab"
+              aria-selected={selectedSede === sede}
+              className="tab"
+              onClick={() => setSelectedSede(sede)}
+            >
+              {sede || 'Tutte le sedi'}
+            </button>
+          ))}
         </div>
       )}
 
-      {/* Presenze oggi */}
-      <div style={card}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16, flexWrap: 'wrap', gap: 8 }}>
-          <h2 style={{ fontSize: 16, fontWeight: 600, margin: 0 }}>
-            Presenze di oggi{date ? ` — ${fmtDateLabel(date)}` : ''}
-          </h2>
-          <div style={{ display: 'flex', gap: 8 }}>
-            <button
-              onClick={loadOggi}
-              disabled={loading}
-              style={{ padding: '6px 14px', borderRadius: 8, border: '1px solid #D1D5DB', background: '#fff', cursor: loading ? 'not-allowed' : 'pointer', fontSize: 13 }}
-            >
-              {loading ? 'Aggiorno…' : 'Aggiorna'}
+      <section className={`card ${styles.tableCard}`}>
+        <div className="card-head">
+          <div>
+            <h2 className="card-title">Presenti oggi</h2>
+            {date && <p className="card-desc">{fmtDateLabel(date)}</p>}
+          </div>
+          <div className={styles.cardActions}>
+            <button onClick={loadOggi} disabled={loading} className="btn btn-outline btn-sm">
+              <FiRefreshCw size={14} /> {loading ? 'Aggiorno…' : 'Aggiorna'}
             </button>
-            <button
-              onClick={downloadOggi}
-              style={{ padding: '6px 14px', borderRadius: 8, border: 'none', background: '#D0933C', color: '#fff', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}
-            >
-              Scarica Excel
+            <button onClick={downloadOggi} className="btn btn-primary btn-sm">
+              <FiDownload size={14} /> Scarica Excel
             </button>
           </div>
         </div>
 
-        {error && (
-          <div style={{ padding: '10px 14px', background: '#FEF2F2', color: '#991B1B', borderRadius: 8, marginBottom: 12, fontSize: 14 }}>
-            {error}
-          </div>
-        )}
+        {error && <div className={styles.alertWrap}><div className="alert alert-danger">{error}</div></div>}
 
         {loading ? (
-          <div style={{ color: '#9CA3AF', textAlign: 'center', padding: '32px 0', fontSize: 14 }}>
-            Caricamento…
-          </div>
+          <div className="empty-state">Caricamento…</div>
         ) : employees.length === 0 ? (
-          <div style={{ color: '#9CA3AF', textAlign: 'center', padding: '32px 0', fontSize: 14 }}>
-            Nessuna presenza registrata oggi
+          <div className="empty-state">
+            <span className="empty-state-title">Nessuna presenza registrata oggi</span>
           </div>
         ) : (
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14 }}>
-            <thead>
-              <tr style={{ borderBottom: '2px solid #E5E7EB' }}>
-                {['Dipendente', 'Entrata'].map(h => (
-                  <th key={h} style={{ textAlign: 'left', padding: '8px 12px', color: '#6B7280', fontWeight: 600, fontSize: 12, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {employees.map((emp, i) =>
-                emp.turni.map((t, j) => (
-                  <tr key={`${i}-${j}`} style={{ borderBottom: '1px solid #F3F4F6' }}>
-                    {j === 0 && (
-                      <td rowSpan={emp.turni.length} style={{ padding: '10px 12px', fontWeight: 500, verticalAlign: 'top' }}>
-                        {emp.cognome} {emp.nome}
-                        {emp.turni.length > 1 && (
-                          <span style={{ marginLeft: 6, fontSize: 11, color: '#9CA3AF' }}>({emp.turni.length} turni)</span>
-                        )}
-                      </td>
-                    )}
-                    <td style={{ padding: '10px 12px', color: '#374151' }}>{fmtTime(t.ora_entrata)}</td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
+          <div className={styles.tableScroll}>
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>Dipendente</th>
+                  <th>Entrata</th>
+                </tr>
+              </thead>
+              <tbody>
+                {employees.map((emp, i) =>
+                  emp.turni.map((t, j) => (
+                    <tr key={`${i}-${j}`}>
+                      {j === 0 && (
+                        <td rowSpan={emp.turni.length} className={`cell-strong ${styles.empName}`}>
+                          {emp.cognome} {emp.nome}
+                          {emp.turni.length > 1 && (
+                            <span className={styles.shiftsCount}>{emp.turni.length} turni</span>
+                          )}
+                        </td>
+                      )}
+                      <td className="tabular">{fmtTime(t.ora_entrata)}</td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
         )}
-      </div>
+      </section>
 
-      {/* Export per periodo */}
-      <div style={card}>
-        <h2 style={{ fontSize: 16, fontWeight: 600, margin: '0 0 16px 0' }}>Esporta presenze per periodo</h2>
-        <div style={{ display: 'flex', gap: 12, alignItems: 'flex-end', flexWrap: 'wrap' }}>
+      <section className="card">
+        <div className="card-head">
           <div>
-            <label style={{ display: 'block', fontSize: 12, color: '#6B7280', marginBottom: 4, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Dal</label>
-            <input
-              type="date"
-              value={dateStart}
-              onChange={e => setDateStart(e.target.value)}
-              style={{ padding: '8px 12px', borderRadius: 8, border: '1px solid #D1D5DB', fontSize: 14, outline: 'none' }}
-            />
+            <h2 className="card-title">Esporta presenze per periodo</h2>
+            <p className="card-desc">Scarica in Excel le timbrature delle tue sedi.</p>
           </div>
-          <div>
-            <label style={{ display: 'block', fontSize: 12, color: '#6B7280', marginBottom: 4, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Al</label>
-            <input
-              type="date"
-              value={dateEnd}
-              onChange={e => setDateEnd(e.target.value)}
-              style={{ padding: '8px 12px', borderRadius: 8, border: '1px solid #D1D5DB', fontSize: 14, outline: 'none' }}
-            />
+        </div>
+        <div className="card-body">
+          <div className={styles.exportRow}>
+            <label className="field">
+              <span className="field-label">Dal</span>
+              <input type="date" value={dateStart} onChange={e => setDateStart(e.target.value)} className="input" />
+            </label>
+            <label className="field">
+              <span className="field-label">Al</span>
+              <input type="date" value={dateEnd} onChange={e => setDateEnd(e.target.value)} className="input" />
+            </label>
           </div>
+        </div>
+        <div className="card-foot">
           <button
             onClick={downloadRange}
             disabled={exporting || !dateStart || !dateEnd}
-            style={{
-              padding: '8px 20px',
-              borderRadius: 8,
-              border: 'none',
-              background: (exporting || !dateStart || !dateEnd) ? '#E5E7EB' : '#D0933C',
-              color: (exporting || !dateStart || !dateEnd) ? '#9CA3AF' : '#fff',
-              cursor: (exporting || !dateStart || !dateEnd) ? 'not-allowed' : 'pointer',
-              fontSize: 14,
-              fontWeight: 600,
-            }}
+            className="btn btn-primary"
           >
-            {exporting ? 'Esportando…' : 'Scarica Excel'}
+            <FiDownload size={15} /> {exporting ? 'Esportazione…' : 'Scarica Excel'}
           </button>
         </div>
-      </div>
+      </section>
     </div>
   );
 }

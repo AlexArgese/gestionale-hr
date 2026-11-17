@@ -1,6 +1,9 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import './index.css';
+// stili globali PRIMA dei componenti: così i CSS module dei singoli
+// componenti possono personalizzare le classi globali (.btn, .modal, .card…)
+import './styles/globals.css';
 import App from './App';
 import reportWebVitals from './reportWebVitals';
 

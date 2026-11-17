@@ -1,8 +1,14 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import styles from "./UtentiTable.module.css";
-import { FiPlus, FiSearch } from "react-icons/fi";
-import { API_BASE } from "../api";
+import { FiPlus, FiSearch, FiChevronUp, FiChevronDown, FiChevronRight } from "react-icons/fi";
+import Pagination from "./ui/Pagination";
+import { API_BASE, getIdToken } from "../api";
+
+async function authHeaders(extra = {}) {
+  const token = await getIdToken();
+  return { ...extra, ...(token ? { Authorization: `Bearer ${token}` } : {}) };
+}
 
 function SediTable({
   fetchUrl = `${API_BASE}/sedi`,
@@ -33,7 +39,7 @@ function SediTable({
         setLoading(true);
         setError(null);
         const res = await fetch(fetchUrl, {
-          headers: { Accept: "application/json, text/plain, */*" },
+          headers: await authHeaders({ Accept: "application/json, text/plain, */*" }),
         });
         const ctype = res.headers.get("content-type") || "";
         const isJson = ctype.includes("application/json");
@@ -91,8 +97,6 @@ function SediTable({
     [filtered, page, pageSize]
   );
 
-  const from = totalItems === 0 ? 0 : (page - 1) * pageSize + 1;
-  const to = totalItems === 0 ? 0 : Math.min(totalItems, page * pageSize);
 
   const toggleSort = (key) => {
     if (key === sortBy) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
@@ -113,147 +117,84 @@ function SediTable({
   };
 
   // barra di paginazione riusata
-  const PaginationBar = () => (
-    <div className={styles.paginationBar}>
-      {/* SELECT PER PAGINA */}
-      <div className={styles.paginationLeft}>
-        <label className={styles.pageSizeLabel}>Mostra</label>
-        <select
-          className={styles.pageSizeSelect}
-          value={pageSize}
-          onChange={(e) => {
-            const newSize = Number(e.target.value);
-            setPage(1);
-            setPageSize(newSize);
-          }}
-        >
-          <option value={25}>25</option>
-          <option value={50}>50</option>
-          <option value={100}>100</option>
-        </select>
-      </div>
-
-      {/* INFO CENTRATE */}
-      <div className={styles.paginationCenter}>
-        <span>Totale: {totalItems}</span>
-        <span className={styles.dot}>•</span>
-        <span>Mostrati {from}–{to}</span>
-        <span className={styles.dot}>•</span>
-        <span>
-          Pagina {page} di {totalPages}
-        </span>
-      </div>
-
-      {/* FRECCE A DESTRA */}
-      <div className={styles.paginationControls}>
-        <button
-          className={styles.pageBtn}
-          disabled={page === 1}
-          onClick={() => setPage((p) => p - 1)}
-        >
-          ←
-        </button>
-
-        <button
-          className={styles.pageBtn}
-          disabled={page === totalPages || totalItems === 0}
-          onClick={() => setPage((p) => p + 1)}
-        >
-          →
-        </button>
-      </div>
-    </div>
-  );
-
   return (
     <div className={styles.container}>
-      {/* Header: titolo a sx, CTA a dx */}
-      <div className={styles.header}>
-        <h1 className={styles.title}>Sedi</h1>
-        <div className={styles.headerCta}>
-          <button className={`btn btn-primary ${styles.addBtn}`} onClick={goAdd}>
-            <FiPlus /> Nuova sede
+      <div className={styles.toolbar}>
+        <div className={styles.filters}>
+          <div className={`search ${styles.searchBox}`}>
+            <FiSearch size={15} />
+            <input
+              className="input"
+              placeholder="Cerca sede"
+              value={q}
+              onChange={(e) => {
+                setQ(e.target.value);
+                setPage(1);
+              }}
+            />
+          </div>
+        </div>
+        <div className={styles.actions}>
+          <button className="btn btn-primary" onClick={goAdd}>
+            <FiPlus size={16} /> Nuova sede
           </button>
         </div>
       </div>
 
-      <div className={styles.underline} />
-
-      {/* Toolbar: solo search */}
-      <div className={styles.toolbar}>
-        <div className={styles.searchWrap}>
-          {q === "" ? <FiSearch className={styles.searchIcon} /> : null}
-          <input
-            className={`input ${styles.search}`}
-            placeholder="     Cerca sede…"
-            value={q}
-            onChange={(e) => {
-              setQ(e.target.value);
-              setPage(1);
-            }}
-          />
-        </div>
-
-        {/* Nessun filtro a dx per ora */}
-        <div className={styles.filters} />
-      </div>
-
-      {/* Tabella in card */}
       <div className={`card ${styles.tableCard}`}>
-        {loading && <div className={styles.empty}>Caricamento…</div>}
-        {error && !loading && <div className={styles.empty}>Errore: {error}</div>}
+        {loading && <div className="empty-state">Caricamento…</div>}
+        {error && !loading && <div className="empty-state">Errore: {error}</div>}
 
         {!loading && !error && (
           <>
-            <PaginationBar />
-
-            <table className={styles.table}>
-              <thead className={styles.thead}>
-                <tr>
-                  <th
-                    className={styles.th}
-                    onClick={() => toggleSort("nome")}
-                    style={{ cursor: "pointer" }}
-                  >
-                    Nome sede{" "}
-                    {sortBy === "nome" ? (sortDir === "asc" ? "↑" : "↓") : ""}
-                  </th>
-                  <th className={styles.th} style={{ width: 50 }}>
-                    {" "}
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {pageItems.map((s) => (
-                  <tr
-                    key={s?.id || s?.nome}
-                    className={styles.row}
-                    onClick={() => handleRowClick(s)}
-                  >
-                    <td className={styles.td}>{s?.nome || "—"}</td>
-                    <td
-                      className={styles.td}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                      }}
-                    >
-                      {/* azioni future */}
-                    </td>
-                  </tr>
-                ))}
-                {!pageItems.length && (
+            <div className={styles.tableScroll}>
+              <table className="data-table">
+                <thead>
                   <tr>
-                    <td className={styles.td} colSpan={2}>
-                      <div className={styles.empty}>
-                        Nessuna sede trovata con i filtri correnti.
-                      </div>
-                    </td>
+                    <th
+                      className={styles.sortable}
+                      onClick={() => toggleSort("nome")}
+                      aria-sort={sortBy === "nome" ? (sortDir === "asc" ? "ascending" : "descending") : "none"}
+                    >
+                      <span className={styles.thInner}>
+                        Nome sede
+                        {sortBy === "nome" ? (sortDir === "asc" ? <FiChevronUp size={13} /> : <FiChevronDown size={13} />) : null}
+                      </span>
+                    </th>
+                    <th style={{ width: 48 }} aria-label="Apri" />
                   </tr>
-                )}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {pageItems.map((s) => (
+                    <tr
+                      key={s?.id || s?.nome}
+                      className={styles.row}
+                      onClick={() => handleRowClick(s)}
+                    >
+                      <td className="cell-strong">{s?.nome || "—"}</td>
+                      <td className={styles.chevronCell}><FiChevronRight size={16} /></td>
+                    </tr>
+                  ))}
+                  {!pageItems.length && (
+                    <tr>
+                      <td colSpan={2}>
+                        <div className="empty-state">Nessuna sede trovata.</div>
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
 
-            <PaginationBar />
+            <Pagination
+              page={page}
+              totalPages={totalPages}
+              totalItems={totalItems}
+              pageSize={pageSize}
+              onPageChange={setPage}
+              onPageSizeChange={(n) => { setPage(1); setPageSize(n); }}
+              itemLabel="sedi"
+            />
           </>
         )}
       </div>

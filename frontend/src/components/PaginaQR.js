@@ -48,19 +48,25 @@ function PaginaQR() {
 
   return (
     <div className="qr-container">
-      <h1>Scansiona per timbrare la presenza</h1>
+      <div className="qr-panel">
+        <img src="/Logo_esteso.png" alt="ClockEasy" className="qr-logo" />
+        <h1>Inquadra il codice per timbrare</h1>
+        <p className="qr-sub">Apri l’app ClockEasy e scansiona il QR code.</p>
 
-      {error && <p className="qr-error">{error}</p>}
+        {error && <div className="alert alert-danger qr-error">{error}</div>}
 
-      {qrImage ? (
-        <img src={qrImage} alt="QR Code Presenza" className="qr-code" />
-      ) : (
-        <p>Caricamento QR...</p>
-      )}
+        <div className="qr-frame">
+          {qrImage ? (
+            <img src={qrImage} alt="QR Code presenza" className="qr-code" />
+          ) : (
+            <span className="qr-loading">Caricamento…</span>
+          )}
+        </div>
 
-      <p className="qr-timer">
-        ⚠️ Questo QR scade tra: <strong>{formatTime(timeLeft)}</strong>
-      </p>
+        <p className="qr-timer">
+          Il codice si rinnova tra <strong>{formatTime(timeLeft)}</strong>
+        </p>
+      </div>
     </div>
   );
 }

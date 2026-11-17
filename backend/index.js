@@ -65,6 +65,7 @@ const authRoutes = require('./routes/auth');
 const profileRoutes = require('./routes/profilo');
 const sediRoutes = require('./routes/sedi');
 const firmaRoutes = require("./routes/firma");
+const assistenteHrRoutes = require("./routes/assistenteHr");
 
 const pushRoutes = require("./routes/push");
 
@@ -86,6 +87,7 @@ app.use('/auth', authRoutes);
 app.use('/profilo', profileRoutes);
 app.use('/sedi', sediRoutes);
 app.use("/firma", firmaRoutes);
+app.use("/assistente-hr", assistenteHrRoutes);
 app.use("/push", pushRoutes);
 
 
@@ -98,9 +100,11 @@ app.use('/wb', wbAttachRoutes);
 const { startWbDeadlinesJob } = require('./jobs/wb_deadlines');
 const { startWbRetentionJob } = require('./jobs/wb_retention');
 const { startTLReminderJob } = require('./jobs/tl_reminder');
+const { startHrAssistantRetentionJob } = require('./jobs/hr_assistant_retention');
 startWbDeadlinesJob();
 startWbRetentionJob();
 startTLReminderJob();
+startHrAssistantRetentionJob();
 
 const PORT = process.env.PORT || 3001;
 const db = require('./db');
@@ -140,6 +144,9 @@ async function runMigrations() {
       ])
     )
   `).catch(e => console.warn('migrate wb status constraint:', e.message));
+
+  await require('./services/hrAssistant/schema').ensureSchema()
+    .catch(e => console.warn('migrate assistente HR:', e.message));
 
   await db.query(`ALTER TABLE wb_messages DROP CONSTRAINT IF EXISTS wb_messages_sender_role_check`)
     .catch(e => console.warn('migrate drop sender_role chk:', e.message));

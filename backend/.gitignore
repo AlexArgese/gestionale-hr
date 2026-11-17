@@ -28,4 +28,5 @@ pnpm-debug.log*
 # ===== OS =====
 .DS_Store
 
-scripts/
+scripts/*
+!scripts/evalAssistenteHr.js

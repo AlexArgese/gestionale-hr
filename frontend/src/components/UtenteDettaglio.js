@@ -3,26 +3,22 @@ import { useLocation, useNavigate, useParams } from "react-router-dom";
 import styles from "./UtenteDettaglio.module.css";
 import {
   FiArrowLeft,
-  FiArrowRight,
   FiChevronLeft,
   FiChevronRight,
   FiSave,
-  FiUser,
-  FiAtSign,
-  FiCalendar,
-  FiMapPin,
-  FiHome,
-  FiPhone,
-  FiHash,
-  FiBriefcase,
-  FiGrid,
-  FiStar,
+  FiX,
 } from "react-icons/fi";
 import DocumentiUtente from "./DocumentiUtente";
 import PresenzeExportUtente from "./PresenzeExportUtente";
-import { API_BASE } from "../api";
+import { API_BASE, getIdToken } from "../api";
+import { CONTRACT_OPTIONS } from "../constants/contracts";
 
 const API = API_BASE;
+
+async function authHeaders(extra = {}) {
+  const token = await getIdToken();
+  return { ...extra, ...(token ? { Authorization: `Bearer ${token}` } : {}) };
+}
 
 function UtenteDettaglio({
   fetchUrlBase = `${API}/utenti`,
@@ -40,8 +36,10 @@ function UtenteDettaglio({
   const [saving, setSaving] = useState(false);
   const [msgError, setMsgError] = useState("");
   const [msgOk, setMsgOk] = useState("");
+  const [sezione, setSezione] = useState("profilo");
   const [sediFromApi, setSediFromApi] = useState([]);
   const [navIds, setNavIds] = useState([]);
+  const [fieldErrors, setFieldErrors] = useState({});
 
   // opzioni: sedi/ruoli opzionali, società da API se esiste
   const [societa, setSocieta] = useState([]);
@@ -60,7 +58,7 @@ function UtenteDettaglio({
     (async () => {
       try {
         setLoading(true);
-        const res = await fetch(`${fetchUrlBase}/${id}`, { headers: { Accept: "application/json" } });
+        const res = await fetch(`${fetchUrlBase}/${id}`, { headers: await authHeaders({ Accept: "application/json" }) });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const data = await res.json();
 
@@ -102,7 +100,7 @@ function UtenteDettaglio({
     (async () => {
       try {
         if (!societaUrl) return;
-        const res = await fetch(societaUrl, { headers: { Accept: "application/json" } });
+        const res = await fetch(societaUrl, { headers: await authHeaders({ Accept: "application/json" }) });
         const ok = res.ok && (res.headers.get("content-type") || "").includes("application/json");
         const data = ok ? await res.json() : [];
         if (alive) setSocieta(Array.isArray(data) ? data : (data?.items || []));
@@ -134,11 +132,7 @@ function UtenteDettaglio({
   };
 
   const handleBackToList = () => {
-    navigate(location.state?.backTo || "/utenti", {
-      state: {
-        activeTab: location.state?.activeTab || "utenti",
-      },
-    });
+    navigate(location.state?.backTo || "/utenti");
   };
 
   const handleRemoveSede = (nomeSede) => {
@@ -170,11 +164,38 @@ function UtenteDettaglio({
 
   const normalizeDateOrNull = (v) => (v && /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : null);
 
+  const validEmail = (v) => /^\S+@\S+\.\S+$/.test(v);
+
+  const FIELD_VALIDATORS = {
+    email: (v) => (v && !validEmail(v) ? "Email non valida" : ""),
+    codice_fiscale: (v) =>
+      v && !/^[A-Za-z]{6}\d{2}[A-Za-z]\d{2}[A-Za-z]\d{3}[A-Za-z]$/.test(v)
+        ? "Codice fiscale non valido (16 caratteri)"
+        : "",
+    cap_residenza: (v) => (v && !/^\d{5}$/.test(v) ? "CAP non valido (5 cifre)" : ""),
+  };
+
+  const validateField = (key) => {
+    const validator = FIELD_VALIDATORS[key];
+    if (!validator) return;
+    setFieldErrors((prev) => ({ ...prev, [key]: validator(form[key]) }));
+  };
+
   const handleSubmit = async () => {
     setMsgError(""); setMsgOk("");
 
     if (form.team_leader_sedi?.trim() && !form.sede?.trim()) {
       setMsgError("Il dipendente deve avere almeno una sede per essere Team Leader");
+      return;
+    }
+
+    const nextFieldErrors = {};
+    Object.keys(FIELD_VALIDATORS).forEach((key) => {
+      nextFieldErrors[key] = FIELD_VALIDATORS[key](form[key]);
+    });
+    setFieldErrors(nextFieldErrors);
+    if (Object.values(nextFieldErrors).some(Boolean)) {
+      setMsgError("Controlla i campi evidenziati prima di salvare.");
       return;
     }
 
@@ -207,7 +228,7 @@ function UtenteDettaglio({
 
       const res = await fetch(`${fetchUrlBase}/${id}`, {
         method: "PUT",
-        headers: { "Content-Type": "application/json", Accept: "application/json" },
+        headers: await authHeaders({ "Content-Type": "application/json", Accept: "application/json" }),
         body: JSON.stringify(payload),
       });
 
@@ -235,7 +256,7 @@ function UtenteDettaglio({
     (async () => {
       try {
         const res = await fetch(`${API}/sedi`, {
-          headers: { Accept: "application/json" },
+          headers: await authHeaders({ Accept: "application/json" }),
         });
         const ok = res.ok && (res.headers.get("content-type") || "").includes("application/json");
         const data = ok ? await res.json() : [];
@@ -267,8 +288,8 @@ function UtenteDettaglio({
     }
   }, [location.state, id]);
 
-  if (loading) return <div className={styles.container}>Caricamento…</div>;
-  if (!form) return <div className={styles.container}>Utente non trovato</div>;
+  if (loading) return <div className="empty-state">Caricamento…</div>;
+  if (!form) return <div className="card empty-state"><span className="empty-state-title">Dipendente non trovato</span></div>;
 
   const currentIdNum = Number(id);
   const currentIndex = navIds.findIndex((x) => Number(x) === currentIdNum);
@@ -292,389 +313,422 @@ function UtenteDettaglio({
     });
   };
 
-  return (
-    <div className={styles.container}>
-      {/* Header */}
-      <div className={styles.header}>
-        <div>
-          <h1 className={styles.title}>
-            Dettaglio utente: {form.nome} {form.cognome}
-          </h1>
+  const sedeTesto = getSelectedSedi().join(", ");
 
+  return (
+    <div className="page">
+      <header className="page-header">
+        <div className="page-header-text">
+          <button type="button" className="page-eyebrow" onClick={handleBackToList}>
+            <FiArrowLeft size={14} /> Dipendenti
+          </button>
+          <h1 className="page-title">{`${form.nome || ""} ${form.cognome || ""}`.trim() || "Dipendente"}</h1>
+          <div className={styles.meta}>
+            {form.stato_attivo
+              ? <span className="badge badge-success">Attivo</span>
+              : <span className="badge">Non attivo</span>}
+            {form.email && <span>{form.email}</span>}
+            {sedeTesto && <span>{sedeTesto}</span>}
+          </div>
+        </div>
+
+        <div className="page-actions">
           {currentIndex >= 0 && navIds.length > 0 && (
-            <div className={styles.note} style={{ marginTop: 6 }}>
-              Utente {currentIndex + 1} di {navIds.length} nella lista corrente
+            <div className={styles.pager}>
+              <span className={styles.pagerInfo}>{currentIndex + 1} di {navIds.length}</span>
+              <button
+                type="button"
+                className="btn btn-outline btn-icon"
+                onClick={goPrev}
+                disabled={!prevId}
+                title="Dipendente precedente"
+                aria-label="Dipendente precedente"
+              >
+                <FiChevronLeft size={16} />
+              </button>
+              <button
+                type="button"
+                className="btn btn-outline btn-icon"
+                onClick={goNext}
+                disabled={!nextId}
+                title="Dipendente successivo"
+                aria-label="Dipendente successivo"
+              >
+                <FiChevronRight size={16} />
+              </button>
             </div>
           )}
+          {sezione === "profilo" && (
+            <button className="btn btn-primary" onClick={handleSubmit} disabled={saving}>
+              <FiSave size={15} /> {saving ? "Salvataggio…" : "Salva modifiche"}
+            </button>
+          )}
         </div>
+      </header>
 
-        <div className={styles.headerCta}>
-          <button className={`btn btn-outline`} onClick={handleBackToList}>
-            <FiArrowLeft /> Indietro
-          </button>
-
+      <div className="tabs" role="tablist">
+        {[
+          ["profilo", "Profilo"],
+          ["presenze", "Presenze"],
+          ["documenti", "Documenti"],
+        ].map(([k, label]) => (
           <button
+            key={k}
             type="button"
-            className="btn btn-outline"
-            onClick={goPrev}
-            disabled={!prevId}
-            title="Dipendente precedente"
+            role="tab"
+            aria-selected={sezione === k}
+            className="tab"
+            onClick={() => setSezione(k)}
           >
-            <FiChevronLeft />
+            {label}
           </button>
-
-          <button
-            type="button"
-            className="btn btn-outline"
-            onClick={goNext}
-            disabled={!nextId}
-            title="Dipendente successivo"
-          >
-            <FiChevronRight />
-          </button>
-
-          <button
-            className={`btn ${styles.btnPrimary}`}
-            onClick={handleSubmit}
-            disabled={saving}
-          >
-            <FiSave /> {saving ? "Salvataggio…" : "Salva"}
-          </button>
-        </div>
+        ))}
       </div>
 
-      <div className={styles.underline} />
+      {msgError && <div className="alert alert-danger">{msgError}</div>}
+      {msgOk && <div className="alert alert-success">{msgOk}</div>}
 
-      {msgError && <div className={styles.error}>{msgError}</div>}
-      {msgOk && <div className={styles.success}>{msgOk}</div>}
+      {sezione === "profilo" && (
+      <div className={styles.card}>
+        {/* === Dati principali === */}
+        <div className={styles.formSection}>
+          <div className={styles.formSectionHead}>
+            <h3 className={styles.formSectionTitle}>Dati principali</h3>
+          </div>
+          <div className={styles.grid}>
+            <div className={styles.group}>
+              <label className={styles.label}>Nome</label>
+              <div className={styles.inputIcon}>
+                <input className="input" value={form.nome} onChange={onChange("nome")} />
+              </div>
+            </div>
+            <div className={styles.group}>
+              <label className={styles.label}>Cognome</label>
+              <div className={styles.inputIcon}>
+                <input className="input" value={form.cognome} onChange={onChange("cognome")} />
+              </div>
+            </div>
+            <div className={styles.group}>
+              <label className={styles.label}>Email</label>
+              <div className={`${styles.inputIcon} ${fieldErrors.email ? styles.hasError : ""}`}>
+                <input
+                  className="input"
+                  value={form.email}
+                  onChange={onChange("email")}
+                  onBlur={() => validateField("email")}
+                />
+              </div>
+              {fieldErrors.email && <span className={styles.fieldError}>{fieldErrors.email}</span>}
+            </div>
 
-      {/* --- CARD: Form utente --- */}
-      <div className={`card ${styles.card}`}>
-        <div className={styles.grid}>
-          {/* Nome */}
-          <div className={styles.group}>
-            <label className={styles.label}>Nome</label>
-            <div className={styles.inputIcon}>
-              <FiUser className={styles.icon}/>
-              <input className="input" value={form.nome} onChange={onChange("nome")} />
-            </div>
           </div>
-          {/* Cognome */}
-          <div className={styles.group}>
-            <label className={styles.label}>Cognome</label>
-            <div className={styles.inputIcon}>
-              <FiUser className={styles.icon}/>
-              <input className="input" value={form.cognome} onChange={onChange("cognome")} />
-            </div>
-          </div>
-          {/* Email */}
-          <div className={styles.group}>
-            <label className={styles.label}>Email</label>
-            <div className={styles.inputIcon}>
-              <FiAtSign className={styles.icon}/>
-              <input className="input" value={form.email} onChange={onChange("email")} />
-            </div>
-          </div>
+        </div>
 
-          {/* Ruolo: select se hai ruoliOptions, altrimenti input testo */}
-          <div className={styles.group}>
-            <label className={styles.label}>Ruolo</label>
-            <div className={styles.inputIcon}>
-              <FiBriefcase className={styles.icon}/>
-              {ruoli.length ? (
-                <select className="select" value={form.ruolo} onChange={onChange("ruolo")}>
-                  <option value="">Seleziona ruolo</option>
-                  {ruoli.map((r) => <option key={r} value={r}>{r}</option>)}
+        {/* === Rapporto di lavoro === */}
+        <div className={styles.formSection}>
+          <div className={styles.formSectionHead}>
+            <h3 className={styles.formSectionTitle}>Rapporto di lavoro</h3>
+          </div>
+          <div className={styles.grid}>
+            {/* Ruolo: select se hai ruoliOptions, altrimenti input testo */}
+            <div className={styles.group}>
+              <label className={styles.label}>Ruolo</label>
+              <div className={styles.inputIcon}>
+                {ruoli.length ? (
+                  <select className="select" value={form.ruolo} onChange={onChange("ruolo")}>
+                    <option value="">Seleziona ruolo</option>
+                    {ruoli.map((r) => <option key={r} value={r}>{r}</option>)}
+                  </select>
+                ) : (
+                  <input className="input" value={form.ruolo} onChange={onChange("ruolo")} placeholder="Ruolo"/>
+                )}
+              </div>
+            </div>
+
+            {/* Sedi: multi-selezione da dropdown, salvate come stringa separata da virgole */}
+            <div className={styles.group}>
+              <label className={styles.label}>Sedi</label>
+
+              <div className={styles.inputIcon}>
+                <select
+                  className="select"
+                  value="" // sempre vuoto così puoi aggiungere più sedi
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    if (value) {
+                      handleAddSede(value);
+                      e.target.value = "";
+                    }
+                  }}
+                >
+                  <option value="">Aggiungi sede…</option>
+                  {sediList.map((s) => (
+                    <option key={s} value={s}>
+                      {s}
+                    </option>
+                  ))}
                 </select>
-              ) : (
-                <input className="input" value={form.ruolo} onChange={onChange("ruolo")} placeholder="Ruolo"/>
-              )}
-            </div>
-          </div>
+              </div>
 
-          {/* Sedi: multi-selezione da dropdown, salvate come stringa separata da virgole */}
-          <div className={styles.group}>
-            <label className={styles.label}>Sedi</label>
+              <div className={styles.sediSelectedWrap}>
+                {getSelectedSedi().length === 0 && (
+                  <span className={styles.note}>Nessuna sede assegnata</span>
+                )}
 
-            {/* Dropdown: ogni scelta aggiunge una sede */}
-            <div className={styles.inputIcon}>
-              <FiMapPin className={styles.icon} />
-              <select
-                className="select"
-                value="" // sempre vuoto così puoi aggiungere più sedi
-                onChange={(e) => {
-                  const value = e.target.value;
-                  if (value) {
-                    handleAddSede(value);
-                    e.target.value = "";
-                  }
-                }}
-              >
-                <option value="">Aggiungi sede…</option>
-                {sediList.map((s) => (
-                  <option key={s} value={s}>
-                    {s}
-                  </option>
-                ))}
-              </select>
+                {getSelectedSedi().length > 0 && (
+                  <>
+                    <div className={styles.sediChips}>
+                      {getSelectedSedi().map((s) => (
+                        <span key={s} className={styles.sedeChip}>
+                          {s}
+                          <button
+                            type="button"
+                            className={styles.sedeChipRemove}
+                            onClick={() => handleRemoveSede(s)}
+                          >
+                            <FiX size={12} />
+                          </button>
+                        </span>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </div>
             </div>
 
-            {/* Sedi attualmente collegate all'utente (editabili) */}
-            <div className={styles.sediSelectedWrap}>
-              {getSelectedSedi().length === 0 && (
-                <span className={styles.note}>Nessuna sede assegnata</span>
-              )}
-
-              {getSelectedSedi().length > 0 && (
-                <>
-                  <div className={styles.sediChips}>
-                    {getSelectedSedi().map((s) => (
-                      <span key={s} className={styles.sedeChip}>
-                        {s}
-                        <button
-                          type="button"
-                          className={styles.sedeChipRemove}
-                          onClick={() => handleRemoveSede(s)}
-                        >
-                          ×
-                        </button>
-                      </span>
+            {/* Società (select se disponibile) */}
+            <div className={styles.group}>
+              <label className={styles.label}>Società</label>
+              <div className={styles.inputIcon}>
+                {societa.length ? (
+                  <select className="select" value={form.societa_id} onChange={onChange("societa_id")}>
+                    <option value="">Seleziona società</option>
+                    {societa.map((s) => (
+                      <option key={valueSocieta(s)} value={valueSocieta(s)}>{labelSocieta(s)}</option>
                     ))}
+                  </select>
+                ) : (
+                  <input className="input" value={form.societa_id} onChange={onChange("societa_id")} placeholder="ID società"/>
+                )}
+              </div>
+            </div>
+
+            {/* Tipo contratto */}
+            <div className={styles.group}>
+              <label className={styles.label}>Tipo contratto</label>
+              <div className={styles.inputIcon}>
+                <select
+                  className="select"
+                  value={form.tipo_contratto}
+                  onChange={(e) =>
+                    setForm((f) => ({ ...f, tipo_contratto: e.target.value }))
+                  }
+                >
+                  {CONTRACT_OPTIONS.map((opt) => (
+                    <option key={opt.value} value={opt.value}>{opt.label}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            {/* Stato attivo */}
+            <div className={styles.group}>
+              <label className={styles.label}>Stato</label>
+              <div className={styles.inline}>
+                <input id="chk-attivo" className={styles.check} type="checkbox" checked={!!form.stato_attivo} onChange={onChange("stato_attivo")} />
+                <label htmlFor="chk-attivo" className={styles.checkLabel}>Dipendente attivo</label>
+              </div>
+              <div className={styles.note}>Se non attivo, il dipendente non può accedere all’app.</div>
+            </div>
+
+            {/* Team Leader sedi */}
+            <div className={styles.group}>
+              <label className={styles.label}>
+                Team leader delle sedi
+              </label>
+
+              {getSelectedSedi().length === 0 ? (
+                <div className={styles.note}>
+                  Assegna prima almeno una sede per poter impostare il ruolo di Team Leader.
+                </div>
+              ) : (
+                <>
+                  <div className={styles.inputIcon}>
+                    <select
+                      className="select"
+                      value=""
+                      onChange={(e) => {
+                        if (e.target.value) handleAddTLSede(e.target.value);
+                        e.target.value = "";
+                      }}
+                    >
+                      <option value="">Aggiungi sede come team leader…</option>
+                      {getSelectedSedi()
+                        .filter(s => !getSelectedTLSedi().includes(s))
+                        .map(s => (
+                          <option key={s} value={s}>{s}</option>
+                        ))}
+                    </select>
                   </div>
 
-                  {/* Rappresentazione "raw" come stringa, esattamente come verrà salvata nel DB */}
-                  <div className={styles.note} style={{ marginTop: 6 }}>
-                    Valore salvato:{" "}
-                    <span className={styles.mono}>
-                      {getSelectedSedi().join(", ")}
-                    </span>
+                  <div className={styles.sediSelectedWrap}>
+                    {getSelectedTLSedi().length === 0 ? (
+                      <span className={styles.note}>Nessuna sede come Team Leader</span>
+                    ) : (
+                      <div className={styles.sediChips}>
+                        {getSelectedTLSedi().map(s => (
+                          <span key={s} className={`${styles.sedeChip} ${styles.sedeChipTl}`}>
+                            {s}
+                            <button
+                              type="button"
+                              className={styles.sedeChipRemove}
+                              onClick={() => handleRemoveTLSede(s)}
+                            >
+                                <FiX size={12} />
+                            </button>
+                          </span>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 </>
               )}
             </div>
           </div>
+        </div>
 
-          {/* Società (select se disponibile) */}
-          <div className={styles.group}>
-            <label className={styles.label}>Società</label>
-            <div className={styles.inputIcon}>
-              <FiGrid className={styles.icon}/>
-              {societa.length ? (
-                <select className="select" value={form.societa_id} onChange={onChange("societa_id")}>
-                  <option value="">Seleziona società</option>
-                  {societa.map((s) => (
-                    <option key={valueSocieta(s)} value={valueSocieta(s)}>{labelSocieta(s)}</option>
-                  ))}
-                </select>
-              ) : (
-                <input className="input" value={form.societa_id} onChange={onChange("societa_id")} placeholder="ID società"/>
-              )}
-            </div>
+        {/* === Anagrafica === */}
+        <div className={styles.formSection}>
+          <div className={styles.formSectionHead}>
+            <h3 className={styles.formSectionTitle}>Anagrafica</h3>
           </div>
-
-          {/* Data nascita */}
-          <div className={styles.group}>
-            <label className={styles.label}>Data di nascita</label>
-            <div className={styles.inputIcon}>
-              <FiCalendar className={styles.icon}/>
-              <input className="input" type="date" value={form.data_nascita || ""} onChange={onChange("data_nascita")} />
-            </div>
-          </div>
-
-          {/* Luogo nascita */}
-          <div className={styles.group}>
-            <label className={styles.label}>Luogo di nascita</label>
-            <div className={styles.inputIcon}>
-              <FiHome className={styles.icon}/>
-              <input className="input" value={form.luogo_nascita} onChange={onChange("luogo_nascita")} />
-            </div>
-          </div>
-
-          {/* Provincia nascita */}
-          <div className={styles.group}>
-            <label className={styles.label}>Provincia di nascita</label>
-            <div className={styles.inputIcon}>
-              <FiHome className={styles.icon}/>
-              <input className="input" value={form.provincia_nascita} onChange={onChange("provincia_nascita")} />
-            </div>
-          </div>
-
-          {/* Codice fiscale */}
-          <div className={styles.group}>
-            <label className={styles.label}>Codice fiscale</label>
-            <div className={styles.inputIcon}>
-              <FiHash className={styles.icon}/>
-              <input className="input" value={form.codice_fiscale} onChange={onChange("codice_fiscale")} />
-            </div>
-          </div>
-
-          {/* Residenza */}
-          <div className={styles.group}>
-            <label className={styles.label}>Indirizzo di residenza</label>
-            <div className={styles.inputIcon}>
-              <FiHome className={styles.icon}/>
-              <input className="input" value={form.indirizzo_residenza} onChange={onChange("indirizzo_residenza")} />
-            </div>
-          </div>
-
-          <div className={styles.group}>
-            <label className={styles.label}>Città di residenza</label>
-            <div className={styles.inputIcon}>
-              <FiHome className={styles.icon}/>
-              <input className="input" value={form.citta_residenza} onChange={onChange("citta_residenza")} />
-            </div>
-          </div>
-
-          <div className={styles.group}>
-            <label className={styles.label}>Provincia di residenza</label>
-            <div className={styles.inputIcon}>
-              <FiHome className={styles.icon}/>
-              <input className="input" value={form.provincia_residenza} onChange={onChange("provincia_residenza")} />
-            </div>
-          </div>
-
-          <div className={styles.group}>
-            <label className={styles.label}>CAP di residenza</label>
-            <div className={styles.inputIcon}>
-              <FiHome className={styles.icon}/>
-              <input className="input" value={form.cap_residenza} onChange={onChange("cap_residenza")} />
-            </div>
-          </div>
-
-          {/* IBAN */}
-          <div className={styles.group}>
-            <label className={styles.label}>IBAN</label>
-            <div className={styles.inputIcon}>
-              <FiHash className={styles.icon}/>
-              <input className="input" value={form.iban} onChange={onChange("iban")} />
-            </div>
-          </div>
-
-          {/* Contatti */}
-          <div className={styles.group}>
-            <label className={styles.label}>Cellulare</label>
-            <div className={styles.inputIcon}>
-              <FiPhone className={styles.icon}/>
-              <input className="input" value={form.cellulare} onChange={onChange("cellulare")} />
-            </div>
-          </div>
-
-          <div className={styles.group}>
-            <label className={styles.label}>Contatto emergenza</label>
-            <div className={styles.inputIcon}>
-              <FiPhone className={styles.icon}/>
-              <input className="input" value={form.contatto_emergenza} onChange={onChange("contatto_emergenza")} />
-            </div>
-          </div>
-
-          {/* Tipo contratto */}
-          <div className={styles.group}>
-            <label className={styles.label}>Tipo contratto</label>
-            <div className={styles.inputIcon}>
-              <FiBriefcase className={styles.icon}/>
-              <select
-                className="select"
-                value={form.tipo_contratto}
-                onChange={(e) =>
-                  setForm((f) => ({ ...f, tipo_contratto: e.target.value }))
-                }
-              >
-                <option value="full_time">Full time 6,40</option>
-                <option value="part_time_2">Part time 2</option>
-                <option value="part_time_3">Part time 3</option>
-                <option value="part_time_4">Part time 4</option>
-                <option value="part_time_6">Part time 6</option>
-                <option value="part_time_8">Part time 8</option>
-                <option value="chiamata_6">Chiamata 6</option>
-              </select>
-            </div>
-          </div>
-
-          {/* Stato attivo */}
-          <div className={styles.group}>
-            <label className={styles.label}>Stato</label>
-            <div className={styles.inline}>
-              <input id="chk-attivo" type="checkbox" checked={!!form.stato_attivo} onChange={onChange("stato_attivo")} />
-              <label htmlFor="chk-attivo">Dipendente attivo</label>
-            </div>
-            <div className={styles.note}>Se disattivato, l’utente non potrà accedere all’app.</div>
-          </div>
-
-          {/* Team Leader sedi */}
-          <div className={styles.group}>
-            <label className={styles.label}>
-              <FiStar size={13} style={{ marginRight: 4, verticalAlign: "middle", color: getSelectedTLSedi().length ? "#f59e0b" : "inherit" }} />
-              Team Leader di
-            </label>
-
-            {getSelectedSedi().length === 0 ? (
-              <div className={styles.note}>
-                Assegna prima almeno una sede per poter impostare il ruolo di Team Leader.
+          <div className={styles.grid}>
+            <div className={styles.group}>
+              <label className={styles.label}>Data di nascita</label>
+              <div className={styles.inputIcon}>
+                <input className="input" type="date" value={form.data_nascita || ""} onChange={onChange("data_nascita")} />
               </div>
-            ) : (
-              <>
-                <div className={styles.inputIcon}>
-                  <FiStar className={styles.icon} style={{ color: "#f59e0b" }} />
-                  <select
-                    className="select"
-                    value=""
-                    onChange={(e) => {
-                      if (e.target.value) handleAddTLSede(e.target.value);
-                      e.target.value = "";
-                    }}
-                  >
-                    <option value="">Aggiungi sede Team Leader…</option>
-                    {getSelectedSedi()
-                      .filter(s => !getSelectedTLSedi().includes(s))
-                      .map(s => (
-                        <option key={s} value={s}>{s}</option>
-                      ))}
-                  </select>
-                </div>
+            </div>
 
-                <div className={styles.sediSelectedWrap}>
-                  {getSelectedTLSedi().length === 0 ? (
-                    <span className={styles.note}>Nessuna sede come Team Leader</span>
-                  ) : (
-                    <div className={styles.sediChips}>
-                      {getSelectedTLSedi().map(s => (
-                        <span key={s} className={styles.sedeChip} style={{ background: "rgba(245,158,11,0.12)", borderColor: "rgba(245,158,11,0.4)", color: "#92400e" }}>
-                          <FiStar size={10} style={{ marginRight: 3 }} />
-                          {s}
-                          <button
-                            type="button"
-                            className={styles.sedeChipRemove}
-                            onClick={() => handleRemoveTLSede(s)}
-                          >
-                            ×
-                          </button>
-                        </span>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </>
-            )}
+            <div className={styles.group}>
+              <label className={styles.label}>Luogo di nascita</label>
+              <div className={styles.inputIcon}>
+                <input className="input" value={form.luogo_nascita} onChange={onChange("luogo_nascita")} />
+              </div>
+            </div>
+
+            <div className={styles.group}>
+              <label className={styles.label}>Provincia di nascita</label>
+              <div className={styles.inputIcon}>
+                <input className="input" value={form.provincia_nascita} onChange={onChange("provincia_nascita")} />
+              </div>
+            </div>
+
+            <div className={styles.group}>
+              <label className={styles.label}>Codice fiscale</label>
+              <div className={`${styles.inputIcon} ${fieldErrors.codice_fiscale ? styles.hasError : ""}`}>
+                <input
+                  className="input"
+                  value={form.codice_fiscale}
+                  onChange={onChange("codice_fiscale")}
+                  onBlur={() => validateField("codice_fiscale")}
+                />
+              </div>
+              {fieldErrors.codice_fiscale && <span className={styles.fieldError}>{fieldErrors.codice_fiscale}</span>}
+            </div>
+          </div>
+        </div>
+
+        {/* === Residenza === */}
+        <div className={styles.formSection}>
+          <div className={styles.formSectionHead}>
+            <h3 className={styles.formSectionTitle}>Residenza</h3>
+          </div>
+          <div className={styles.grid}>
+            <div className={styles.group}>
+              <label className={styles.label}>Indirizzo di residenza</label>
+              <div className={styles.inputIcon}>
+                <input className="input" value={form.indirizzo_residenza} onChange={onChange("indirizzo_residenza")} />
+              </div>
+            </div>
+
+            <div className={styles.group}>
+              <label className={styles.label}>Città di residenza</label>
+              <div className={styles.inputIcon}>
+                <input className="input" value={form.citta_residenza} onChange={onChange("citta_residenza")} />
+              </div>
+            </div>
+
+            <div className={styles.group}>
+              <label className={styles.label}>Provincia di residenza</label>
+              <div className={styles.inputIcon}>
+                <input className="input" value={form.provincia_residenza} onChange={onChange("provincia_residenza")} />
+              </div>
+            </div>
+
+            <div className={styles.group}>
+              <label className={styles.label}>CAP di residenza</label>
+              <div className={`${styles.inputIcon} ${fieldErrors.cap_residenza ? styles.hasError : ""}`}>
+                <input
+                  className="input"
+                  value={form.cap_residenza}
+                  onChange={onChange("cap_residenza")}
+                  onBlur={() => validateField("cap_residenza")}
+                />
+              </div>
+              {fieldErrors.cap_residenza && <span className={styles.fieldError}>{fieldErrors.cap_residenza}</span>}
+            </div>
+          </div>
+        </div>
+
+        {/* === Contatti === */}
+        <div className={styles.formSection}>
+          <div className={styles.formSectionHead}>
+            <h3 className={styles.formSectionTitle}>Contatti</h3>
+          </div>
+          <div className={styles.grid}>
+            <div className={styles.group}>
+              <label className={styles.label}>Cellulare</label>
+              <div className={styles.inputIcon}>
+                <input className="input" value={form.cellulare} onChange={onChange("cellulare")} />
+              </div>
+            </div>
+
+            <div className={styles.group}>
+              <label className={styles.label}>Contatto emergenza</label>
+              <div className={styles.inputIcon}>
+                <input className="input" value={form.contatto_emergenza} onChange={onChange("contatto_emergenza")} />
+              </div>
+            </div>
+
+            <div className={styles.group}>
+              <label className={styles.label}>IBAN</label>
+              <div className={styles.inputIcon}>
+                <input className="input" value={form.iban} onChange={onChange("iban")} />
+              </div>
+            </div>
           </div>
         </div>
 
         <div className={styles.actions}>
-          <button type="button" className={`btn btn-outline`} onClick={handleBackToList}>
+          <button type="button" className="btn btn-outline" onClick={handleBackToList}>
             Annulla
           </button>
-          <button type="button" className={`btn ${styles.btnPrimary}`} onClick={handleSubmit} disabled={saving}>
-            <FiSave /> {saving ? "Salvataggio…" : "Salva modifiche"}
+          <button type="button" className="btn btn-primary" onClick={handleSubmit} disabled={saving}>
+            <FiSave size={15} /> {saving ? "Salvataggio…" : "Salva modifiche"}
           </button>
         </div>
       </div>
+      )}
 
-      <PresenzeExportUtente
-        userId={id}
-        nome={form ? `${form.nome} ${form.cognome}` : ""}
-      />
+      {sezione === "presenze" && (
+        <PresenzeExportUtente
+          userId={id}
+          nome={form ? `${form.nome} ${form.cognome}` : ""}
+        />
+      )}
 
-      {/* --- SEZIONE: Documenti utente (senza card wrapper) --- */}
-      <DocumentiUtente userId={id} />
+      {sezione === "documenti" && <DocumentiUtente userId={id} />}
     </div>
   );
 }

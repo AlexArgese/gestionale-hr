@@ -4,10 +4,19 @@ import * as pdfjsLib from "pdfjs-dist";
 import Tesseract from "tesseract.js";
 import SelettoreDipendenti from "./SelettoreDipendenti";
 import ConfermaCaricamentoDocumenti from "./ConfermaCaricamentoDocumenti";
+import CategoriaDocumentoInput from "./documenti/CategoriaDocumentoInput";
+import UploadDropzone from "./documenti/UploadDropzone";
+import { buildDefaultFileName } from "../utils/documenti";
+import { FiX } from "react-icons/fi";
 import styles from "./DocumentiCaricaDirettoCF.module.css";
-import { API_BASE } from "../api";
+import { API_BASE, getIdToken } from "../api";
 
 const API = API_BASE;
+
+async function authHeaders(extra = {}) {
+  const token = await getIdToken();
+  return { ...extra, ...(token ? { Authorization: `Bearer ${token}` } : {}) };
+}
 
 pdfjsLib.GlobalWorkerOptions.workerSrc =
   `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
@@ -161,12 +170,6 @@ async function ensureThumbOnly(file) {
   }
 }
 
-function buildDefaultFileName(u, tipoDocumento, fallbackName = "Documento") {
-  const fullName = [u?.cognome, u?.nome].filter(Boolean).join(" ").trim();
-  const tipo = String(tipoDocumento || "").trim();
-  return [fullName || fallbackName, tipo].filter(Boolean).join(" ").trim();
-}
-
 export default function DocumentiCaricaDirettoCF({ tipi = [] }) {
   const [tipoDocumento, setTipoDocumento] = useState("");
   const [dataScadenza, setDataScadenza] = useState("");
@@ -174,7 +177,7 @@ export default function DocumentiCaricaDirettoCF({ tipi = [] }) {
   // CF map veloce
   const [utentiCF, setUtentiCF] = useState([]);
   useEffect(() => {
-    fetch(`${API}/utenti/cf/all`)
+    authHeaders().then((headers) => fetch(`${API}/utenti/cf/all`, { headers }))
       .then((r) => r.json())
       .then((rows) => setUtentiCF(rows || []))
       .catch(console.error);
@@ -197,7 +200,7 @@ export default function DocumentiCaricaDirettoCF({ tipi = [] }) {
   // elenco utenti completo (per mostrare nomi)
   const [utentiFull, setUtentiFull] = useState([]);
   useEffect(() => {
-    fetch(`${API}/utenti`)
+    authHeaders().then((headers) => fetch(`${API}/utenti`, { headers }))
       .then((r) => r.json())
       .then(setUtentiFull)
       .catch(console.error);
@@ -206,7 +209,6 @@ export default function DocumentiCaricaDirettoCF({ tipi = [] }) {
   // files
   const [items, setItems] = useState([]);
   const inputRef = useRef(null);
-  const [dragOver, setDragOver] = useState(false);
 
   // selezione manuale
   const [assegnaMode, setAssegnaMode] = useState("some"); // 'one' | 'some' | 'all'
@@ -615,28 +617,17 @@ export default function DocumentiCaricaDirettoCF({ tipi = [] }) {
       {/* 1. Tipo documento + scadenza */}
       <div className={styles.formGrid}>
         <div className={styles.formRow}>
-        <label className={styles.label}>1. Seleziona il tipo documento</label>
-          <div className={styles.formRow}>
-            <input
-              className={`input ${styles.field}`}
-              list="tipi-documento-esistenti"
-              value={tipoDocumento}
-              onChange={(e) => setTipoDocumento(e.target.value.toUpperCase())}
-              placeholder="Es. CUD, CONTRATTO, VERBALE DISCIPLINARE…"
-              required
-            />
-            <datalist id="tipi-documento-esistenti">
-              {tipi.map((t) => (
-                <option key={t} value={t} />
-              ))}
-            </datalist>
-          </div>
+          <label className={styles.label}>1. Seleziona il tipo documento</label>
+          <CategoriaDocumentoInput
+            value={tipoDocumento}
+            onChange={(v) => setTipoDocumento(v.toUpperCase())}
+            options={tipi}
+            placeholder="Es. CUD, CONTRATTO, VERBALE DISCIPLINARE…"
+          />
         </div>
 
         <div className={styles.formRow}>
-          <label className={styles.label}>
-            2. Imposta data scadenza (opzionale)
-          </label>
+          <label className={styles.label}>2. Scadenza (opzionale)</label>
           <input
             className={`input ${styles.field}`}
             type="date"
@@ -646,158 +637,122 @@ export default function DocumentiCaricaDirettoCF({ tipi = [] }) {
         </div>
       </div>
 
-      {/* 3. Dropzone */}
+      {/* 3. Seleziona file + lista */}
       <div className={styles.formRow}>
         <label className={styles.label}>3. Seleziona file</label>
-        <div
-          className={`${styles.dropzone} ${
-            dragOver ? styles.dropzoneOver : ""
-          }`}
-          onDragOver={(e) => {
-            e.preventDefault();
-            setDragOver(true);
-          }}
-          onDragLeave={() => setDragOver(false)}
-          onDrop={(e) => {
-            e.preventDefault();
-            setDragOver(false);
-            addFiles(e.dataTransfer.files);
-          }}
+        <UploadDropzone
+          inputRef={inputRef}
+          accept="application/pdf,image/*"
+          multiple
+          onFiles={addFiles}
+          isEmpty={items.length === 0}
+          promptText="Trascina qui PDF/immagini oppure"
         >
-          <p className={styles.dropText}>Trascina qui PDF/immagini oppure</p>
-          <button
-            type="button"
-            className={`btn ${styles.secondaryBtn}`}
-            onClick={() => inputRef.current?.click()}
-          >
-            Scegli file…
-          </button>
-          <input
-            ref={inputRef}
-            type="file"
-            accept="application/pdf,image/*"
-            multiple
-            onChange={(e) => addFiles(e.target.files)}
-            style={{ display: "none" }}
-          />
-        </div>
+          <div className={styles.cardsHeader}>
+            <span>
+              {items.length} file selezionat{items.length === 1 ? "o" : "i"}
+            </span>
+            <button
+              type="button"
+              className={`btn btn-outline`}
+              onClick={clearItems}
+            >
+              Rimuovi tutti
+            </button>
+          </div>
+          <div className={styles.cards}>
+            {items.map((it) => {
+              const u = it.utenteId
+                ? utentiFull.find((x) => x.id === it.utenteId)
+                : null;
+              return (
+                <div
+                  className={`card ${styles.fileCard} ${
+                    it.utenteId ? styles.fileCardOk : ""
+                  }`}
+                  key={it.id}
+                >
+                  <button
+                    type="button"
+                    className={styles.removeBtn}
+                    onClick={() => removeItem(it.id)}
+                    title="Rimuovi dalla selezione"
+                    aria-label="Rimuovi dalla selezione"
+                  >
+                    <FiX size={12} />
+                  </button>
+                  <div className={styles.thumb}>
+                    {it.thumb ? (
+                      <img src={it.thumb} alt={it.name} />
+                    ) : (
+                      <div className={styles.thumbPlaceholder}>Anteprima</div>
+                    )}
+                  </div>
+                  <div className={styles.meta}>
+                    <div className={styles.fileTitle} title={it.name}>
+                      {it.name}
+                    </div>
+                    <div className={styles.fileSub}>
+                      CF:{" "}
+                      {it.cf ? (
+                        <b>{it.cf}</b>
+                      ) : (
+                        <span className={styles.muted}>non rilevato</span>
+                      )}
+                    </div>
+                    <div className={styles.assignInline}>
+                      {u ? (
+                        <span className={styles.chip}>
+                          {u.cognome} {u.nome}
+                        </span>
+                      ) : (
+                        <span className={styles.muted}>
+                          Nessun dipendente abbinato
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </UploadDropzone>
       </div>
 
-      {/* 4. Opzioni CF */}
+      {/* 4. Analizza */}
       <div className={styles.formRow}>
         <label className={styles.label}>4. Analizza</label>
-        <div className={styles.dashedBox}>
-          <div className={styles.actionsRow}>
-            <div className={styles.cfBox}>
-              <label className={styles.switch}>
-                <input
-                  type="checkbox"
-                  checked={useCF}
-                  onChange={(e) => setUseCF(e.target.checked)}
-                />
-                <span>
-                  Abbina automaticamente per Codice Fiscale (se rilevato)
-                </span>
-              </label>
-              <label
-                className={`${styles.switch} ${
-                  !useCF ? styles.switchDisabled : ""
-                }`}
-              >
-                <input
-                  type="checkbox"
-                  checked={fallbackToSelected}
-                  disabled={!useCF}
-                  onChange={(e) => setFallbackToSelected(e.target.checked)}
-                />
-                <span>Se non trovato, assegna ai selezionati</span>
-              </label>
-            </div>
-
-            <div className={styles.actionsButtons}>
-              <button className={`btn ${styles.secondaryBtn}`} onClick={analizza}>
-                Analizza & abbina per CF
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Lista file */}
-      {items.length > 0 && (
-        <div className={styles.cardsHeader}>
-          <span>
-            {items.length} file selezionat{items.length === 1 ? "o" : "i"}
-          </span>
-          <button
-            type="button"
-            className={`btn ${styles.secondaryBtn}`}
-            onClick={clearItems}
+        <div className={styles.cfBox}>
+          <label className={styles.switch}>
+            <input
+              type="checkbox"
+              checked={useCF}
+              onChange={(e) => setUseCF(e.target.checked)}
+            />
+            <span>
+              Abbina automaticamente per Codice Fiscale (se rilevato)
+            </span>
+          </label>
+          <label
+            className={`${styles.switch} ${
+              !useCF ? styles.switchDisabled : ""
+            }`}
           >
-            Rimuovi tutti
+            <input
+              type="checkbox"
+              checked={fallbackToSelected}
+              disabled={!useCF}
+              onChange={(e) => setFallbackToSelected(e.target.checked)}
+            />
+            <span>Se non trovato, assegna ai selezionati</span>
+          </label>
+        </div>
+
+        <div className={styles.stepFooter}>
+          <button className={`btn btn-outline`} onClick={analizza}>
+            Analizza & abbina per CF
           </button>
         </div>
-      )}
-      <div className={styles.cards}>
-        {items.map((it) => {
-          const u = it.utenteId
-            ? utentiFull.find((x) => x.id === it.utenteId)
-            : null;
-          return (
-            <div
-              className={`card ${styles.fileCard} ${
-                it.utenteId ? styles.fileCardOk : ""
-              }`}
-              key={it.id}
-            >
-              <button
-                type="button"
-                className={styles.removeBtn}
-                onClick={() => removeItem(it.id)}
-                title="Rimuovi dalla selezione"
-                aria-label="Rimuovi dalla selezione"
-              >
-                ×
-              </button>
-              <div className={styles.thumb}>
-                {it.thumb ? (
-                  <img src={it.thumb} alt={it.name} />
-                ) : (
-                  <div className={styles.thumbPlaceholder}>Anteprima</div>
-                )}
-              </div>
-              <div className={styles.meta}>
-                <div className={styles.fileTitle} title={it.name}>
-                  {it.name}
-                </div>
-                <div className={styles.fileSub}>
-                  CF:{" "}
-                  {it.cf ? (
-                    <b>{it.cf}</b>
-                  ) : (
-                    <span className={styles.muted}>non rilevato</span>
-                  )}
-                </div>
-                <div className={styles.assignInline}>
-                  {u ? (
-                    <span className={styles.chip}>
-                      {u.cognome} {u.nome}
-                    </span>
-                  ) : (
-                    <span className={styles.muted}>
-                      Nessun dipendente abbinato
-                    </span>
-                  )}
-                </div>
-              </div>
-            </div>
-          );
-        })}
-        {!items.length && (
-          <div className={styles.emptyHint}>
-            Nessun file aggiunto. Trascina qui i PDF/immagini per iniziare.
-          </div>
-        )}
       </div>
 
       {/* 5. Assegna a */}
@@ -843,7 +798,7 @@ export default function DocumentiCaricaDirettoCF({ tipi = [] }) {
             <div className={styles.assignBottom}>
               <button
                 type="button"
-                className={`btn ${styles.secondaryBtn}`}
+                className={`btn btn-outline`}
                 onClick={() => setShowPicker(true)}
               >
                 Cerca e seleziona dipendenti
@@ -862,7 +817,7 @@ export default function DocumentiCaricaDirettoCF({ tipi = [] }) {
                         )
                       }
                     >
-                      ×
+                      <FiX size={12} />
                     </button>
                   </span>
                 ))}
@@ -889,7 +844,7 @@ export default function DocumentiCaricaDirettoCF({ tipi = [] }) {
           <span>{banner.text}</span>
           <button
             type="button"
-            className={`btn ${styles.bannerClose}`}
+            className={`btn btn-ghost btn-sm`}
             onClick={() => setBanner(null)}
           >
             Chiudi
@@ -928,7 +883,7 @@ export default function DocumentiCaricaDirettoCF({ tipi = [] }) {
       )}
 
       <button
-        className={`btn-primary ${styles.primaryBtn}`}
+        className={`btn btn-primary ${styles.primaryBtn}`}
         onClick={handleOpenPreview}
         disabled={loading || previewPreparing}
       >

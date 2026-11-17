@@ -4,6 +4,10 @@ const pool = require('../db');
 const fs = require('fs');
 const path = require('path');
 const archiver = require('archiver');
+const requireAuth = require('../middleware/requireAuth');
+const { allowRoles } = require('../middleware/rbac');
+
+router.use(requireAuth, allowRoles('admin'));
 
 // --- 1. METRICHE ----------------------------------------------------------
 router.get('/metriche', async (_, res) => {

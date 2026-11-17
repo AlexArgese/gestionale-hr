@@ -1,8 +1,17 @@
 import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { API_BASE } from "../api";
+import styles from "./UtenteDettaglio.module.css";
+import { FiArrowLeft, FiSave } from "react-icons/fi";
+import SedeDipendentiPicker from "./SedeDipendentiPicker";
+import { API_BASE, getIdToken } from "../api";
 
 const API = API_BASE;
+
+async function authHeaders(extra = {}) {
+  const token = await getIdToken();
+  return { ...extra, ...(token ? { Authorization: `Bearer ${token}` } : {}) };
+}
+
 function SedeNuova() {
   const navigate = useNavigate();
 
@@ -12,74 +21,86 @@ function SedeNuova() {
 
   const [utenti, setUtenti] = useState([]);
   const [selectedUtenti, setSelectedUtenti] = useState([]);
+  const [teamLeaderIds, setTeamLeaderIds] = useState(new Set());
   const [filterUtente, setFilterUtente] = useState("");
 
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState(null);
+  const [msgError, setMsgError] = useState("");
 
   // carico società e utenti (per selezione)
   useEffect(() => {
     let alive = true;
-
     (async () => {
       try {
-        setError(null);
+        setMsgError("");
 
-        // 1) Società (endpoint che già usi per altri form tipo utente nuovo)
         const resSoc = await fetch(`${API}/societa`, {
-          headers: { Accept: "application/json, text/plain, */*" },
+          headers: await authHeaders({ Accept: "application/json, text/plain, */*" }),
         });
         const socJson = await resSoc.json();
         if (alive) setSocietaList(Array.isArray(socJson) ? socJson : socJson.items || []);
 
-        // 2) Utenti
         const resU = await fetch(`${API}/utenti`, {
-          headers: { Accept: "application/json, text/plain, */*" },
+          headers: await authHeaders({ Accept: "application/json, text/plain, */*" }),
         });
         const utentiJson = await resU.json();
         if (alive) setUtenti(Array.isArray(utentiJson) ? utentiJson : utentiJson.items || []);
       } catch (e) {
-        if (alive) setError(e.message || "Errore di caricamento iniziale");
+        if (alive) setMsgError(e.message || "Errore di caricamento iniziale");
       }
     })();
-
     return () => {
       alive = false;
     };
   }, []);
 
-  const handleToggleUtente = (id) => {
-    setSelectedUtenti((prev) =>
-      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
-    );
+  const toggleUtente = (uid) => {
+    setSelectedUtenti((prev) => {
+      if (prev.includes(uid)) {
+        setTeamLeaderIds((tls) => {
+          if (!tls.has(uid)) return tls;
+          const next = new Set(tls);
+          next.delete(uid);
+          return next;
+        });
+        return prev.filter((x) => x !== uid);
+      }
+      return [...prev, uid];
+    });
+  };
+
+  const toggleTeamLeader = (uid) => {
+    setTeamLeaderIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(uid)) next.delete(uid);
+      else next.add(uid);
+      return next;
+    });
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!nome.trim()) {
-      setError("Inserisci un nome per la sede");
+      setMsgError("Inserisci un nome per la sede");
       return;
     }
     if (!societaId) {
-      setError("Seleziona una società");
+      setMsgError("Seleziona una società");
       return;
     }
 
     try {
       setSaving(true);
-      setError(null);
+      setMsgError("");
 
       // 1) crea la sede
       const res = await fetch(`${API}/sedi`, {
         method: "POST",
-        headers: {
+        headers: await authHeaders({
           "Content-Type": "application/json",
           Accept: "application/json, text/plain, */*",
-        },
-        body: JSON.stringify({
-          nome: nome.trim(),
-          societa_id: societaId,
         }),
+        body: JSON.stringify({ nome: nome.trim(), societa_id: societaId }),
       });
 
       const data = await res.json();
@@ -88,18 +109,17 @@ function SedeNuova() {
       }
 
       const sedeId = data.id;
+      const sedeNome = nome.trim();
 
       // 2) collega gli utenti selezionati a questa sede
       if (selectedUtenti.length > 0) {
         const res2 = await fetch(`${API}/sedi/${sedeId}/utenti`, {
           method: "POST",
-          headers: {
+          headers: await authHeaders({
             "Content-Type": "application/json",
             Accept: "application/json, text/plain, */*",
-          },
-          body: JSON.stringify({
-            utenti_ids: selectedUtenti,
           }),
+          body: JSON.stringify({ utenti_ids: selectedUtenti }),
         });
 
         const data2 = await res2.json();
@@ -108,102 +128,74 @@ function SedeNuova() {
         }
       }
 
-      // ok, torna alla lista sedi
-      navigate("/utenti", { replace: true }); // vai sulla pagina con tab Sedi
+      // 3) imposta i Team Leader selezionati per questa sede
+      for (const uid of teamLeaderIds) {
+        const u = utenti.find((x) => x.id === uid);
+        if (!u) continue;
+        const existing = (u.team_leader_sedi || "").split(",").map((s) => s.trim()).filter(Boolean);
+        if (existing.includes(sedeNome)) continue;
+        const newTLSedi = [...existing, sedeNome].join(", ");
+
+        const r = await fetch(`${API}/utenti/${uid}/team-leader`, {
+          method: "PATCH",
+          headers: await authHeaders({ "Content-Type": "application/json", Accept: "application/json" }),
+          body: JSON.stringify({ team_leader_sedi: newTLSedi }),
+        });
+        if (!r.ok) {
+          const body = await r.json().catch(() => null);
+          throw new Error(body?.error || `Errore impostazione Team Leader per dipendente #${uid}`);
+        }
+      }
+
+      navigate("/utenti?tab=sedi", { replace: true });
     } catch (e) {
       console.error("Errore salvataggio sede:", e);
-      setError(e.message || "Errore nel salvataggio");
+      setMsgError(e.message || "Errore nel salvataggio");
     } finally {
       setSaving(false);
     }
   };
 
-  // filtra utenti per testo libero (nome/cognome/email)
   const filteredUtenti = utenti.filter((u) => {
     const q = filterUtente.trim().toLowerCase();
     if (!q) return true;
-    const testo = [
-      u?.nome || "",
-      u?.cognome || "",
-      u?.email || "",
-      u?.sede || "",
-    ]
+    const testo = [u?.nome || "", u?.cognome || "", u?.email || "", u?.sede || ""]
       .join(" ")
       .toLowerCase();
     return testo.includes(q);
   });
 
   return (
-    <div className="card">
-      <div className="card-head">
-        <div>
-          <h2 className="h2">Nuova sede</h2>
-          <p className="small">Crea una nuova sede e associa i dipendenti.</p>
-        </div>
-        <div style={{ display: "flex", gap: 8 }}>
-          <button
-            type="button"
-            className="btn btn-outline"
-            onClick={() => navigate(-1)}
-          >
-            Annulla
+    <form className="page" onSubmit={handleSubmit}>
+      <header className="page-header">
+        <div className="page-header-text">
+          <button type="button" className="page-eyebrow" onClick={() => navigate(-1)}>
+            <FiArrowLeft size={14} /> Sedi
           </button>
-          <button
-            type="button"
-            className="btn btn-primary"
-            onClick={handleSubmit}
-            disabled={saving}
-          >
-            {saving ? "Salvataggio…" : "Salva sede"}
-          </button>
+          <h1 className="page-title">Nuova sede</h1>
+          <p className="page-subtitle">Crea la sede e associa i dipendenti che vi lavorano.</p>
         </div>
-      </div>
+      </header>
 
-      <div className="card-body">
-        {error && (
-          <div
-            style={{
-              marginBottom: 16,
-              padding: 10,
-              borderRadius: 8,
-              border: "1px solid #FECACA",
-              background: "#FEF2F2",
-              color: "#B91C1C",
-              fontSize: 14,
-            }}
-          >
-            {error}
-          </div>
-        )}
+      {msgError && <div className="alert alert-danger">{msgError}</div>}
 
-        <form onSubmit={handleSubmit}>
-          {/* NOME SEDE */}
-          <div style={{ marginBottom: 16 }}>
-            <label
-              style={{ display: "block", fontWeight: 600, marginBottom: 6 }}
-            >
-              Nome sede
-            </label>
+      <div className={styles.formSection}>
+        <div className={styles.formSectionHead}>
+          <h3 className={styles.formSectionTitle}>Dati della sede</h3>
+        </div>
+        <div className={styles.grid}>
+          <div className={styles.group}>
+            <label className={styles.label}>Nome sede</label>
             <input
               className="input"
               value={nome}
               onChange={(e) => setNome(e.target.value)}
-              placeholder="Es. AMMINISTRAZIONE, FASANOLANDIA..."
+              placeholder="Es. Amministrazione"
             />
           </div>
-
-          {/* SOCIETA */}
-          <div style={{ marginBottom: 24 }}>
-            <label
-              style={{ display: "block", fontWeight: 600, marginBottom: 6 }}
-            >
-              Società di appartenenza
-            </label>
-            <select
-              className="select"
-              value={societaId}
-              onChange={(e) => setSocietaId(e.target.value)}
-            >
+          <div className={styles.group}>
+            <label className={styles.label}>Società di appartenenza</label>
+            <select className="select" value={societaId} onChange={(e) => setSocietaId(e.target.value)}>
               <option value="">Seleziona una società…</option>
               {societaList.map((s) => (
                 <option key={s.id} value={s.id}>
@@ -212,78 +204,28 @@ function SedeNuova() {
               ))}
             </select>
           </div>
-
-          {/* LISTA UTENTI */}
-          <div style={{ marginBottom: 12 }}>
-            <label
-              style={{ display: "block", fontWeight: 600, marginBottom: 6 }}
-            >
-              Dipendenti di questa sede
-            </label>
-            <p className="small" style={{ marginBottom: 8 }}>
-              Seleziona i dipendenti che devono appartenere a questa sede.
-            </p>
-
-            {/* filtro rapida */}
-            <input
-              className="input"
-              placeholder="Filtra dipendenti per nome, cognome, email…"
-              value={filterUtente}
-              onChange={(e) => setFilterUtente(e.target.value)}
-              style={{ marginBottom: 10 }}
-            />
-
-            <div
-              style={{
-                maxHeight: 260,
-                overflowY: "auto",
-                border: "1px solid var(--border)",
-                borderRadius: 12,
-                padding: 8,
-                background: "#FFFFFF",
-              }}
-            >
-              {filteredUtenti.length === 0 && (
-                <div className="small">Nessun dipendente trovato.</div>
-              )}
-
-              {filteredUtenti.map((u) => {
-                const id = u.id;
-                const nomeCompleto = `${u.cognome || ""} ${u.nome || ""}`.trim();
-                const checked = selectedUtenti.includes(id);
-                return (
-                  <label
-                    key={id}
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 8,
-                      padding: "4px 2px",
-                      cursor: "pointer",
-                      fontSize: 14,
-                    }}
-                  >
-                    <input
-                      type="checkbox"
-                      checked={checked}
-                      onChange={() => handleToggleUtente(id)}
-                    />
-                    <span>
-                      <strong>{nomeCompleto || "—"}</strong>{" "}
-                      <span className="small">
-                        ({u.email || "senza email"}) –{" "}
-                        {u.sede || "nessuna sede"}
-
-                      </span>
-                    </span>
-                  </label>
-                );
-              })}
-            </div>
-          </div>
-        </form>
+        </div>
       </div>
-    </div>
+
+      <SedeDipendentiPicker
+        utenti={filteredUtenti}
+        filter={filterUtente}
+        onFilterChange={setFilterUtente}
+        selectedIds={selectedUtenti}
+        onToggle={toggleUtente}
+        teamLeaderIds={teamLeaderIds}
+        onToggleTeamLeader={toggleTeamLeader}
+      />
+
+      <div className={styles.actions}>
+        <button type="button" className="btn btn-outline" onClick={() => navigate(-1)}>
+          Annulla
+        </button>
+        <button type="submit" className="btn btn-primary" disabled={saving}>
+          <FiSave size={15} /> {saving ? "Salvataggio…" : "Crea sede"}
+        </button>
+      </div>
+    </form>
   );
 }
 

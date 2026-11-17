@@ -5,9 +5,18 @@ import Tesseract from "tesseract.js";
 import { getAuth } from "firebase/auth";
 import SelettoreDipendenti from "./SelettoreDipendenti";
 import ConfermaCaricamentoDocumenti from "./ConfermaCaricamentoDocumenti";
+import CategoriaDocumentoInput from "./documenti/CategoriaDocumentoInput";
+import UploadDropzone from "./documenti/UploadDropzone";
+import { buildDefaultFileName } from "../utils/documenti";
+import { FiX, FiChevronLeft, FiChevronRight } from "react-icons/fi";
 import styles from "./DocumentiSplitCF.module.css";
 
-import { API_BASE } from "../api";
+import { API_BASE, getIdToken } from "../api";
+
+async function authHeaders(extra = {}) {
+  const token = await getIdToken();
+  return { ...extra, ...(token ? { Authorization: `Bearer ${token}` } : {}) };
+}
 
 const API = API_BASE;
 
@@ -85,20 +94,17 @@ export default function DocumentiSplitCF({ tipi = [] }) {
 
   const pdfRef = useRef(null);
 
-  // drag&drop stato
-  const [dragOver, setDragOver] = useState(false);
-
   // overlay di conferma caricamento
   const [showPreview, setShowPreview] = useState(false);
 
   /* Carica utenti (selettore) e utentiCF (mapping certo) */
   useEffect(() => {
-    fetch(`${API}/utenti`)
+    authHeaders().then((headers) => fetch(`${API}/utenti`, { headers }))
       .then((r) => r.json())
       .then(setUtenti)
       .catch(console.error);
 
-    fetch(`${API}/utenti/cf/all`)
+    authHeaders().then((headers) => fetch(`${API}/utenti/cf/all`, { headers }))
       .then((r) => r.json())
       .then(setUtentiCF)
       .catch(console.error);
@@ -398,13 +404,6 @@ export default function DocumentiSplitCF({ tipi = [] }) {
     });
   }, [bucketMap, utenti, utentiCF, thumbs, tipoDocumento, customFileNames]);
 
-  function buildDefaultFileName(u, tipoDocumento) {
-    const nome = [u?.cognome, u?.nome].filter(Boolean).join(" ").trim();
-    const tipo = String(tipoDocumento || "").trim();
-    return [nome, tipo].filter(Boolean).join(" ").trim();
-  }
-  
-
   const handleConfermaUpload = async ({
     require_signature,
     signature_placements,
@@ -684,93 +683,59 @@ export default function DocumentiSplitCF({ tipi = [] }) {
       <div className={styles.formGrid}>
         <div className={styles.formRow}>
           <label className={styles.label}>1. Seleziona il tipo documento</label>
-          <input
-            className={`input ${styles.field}`}
-            list="tipi-documento-split"
+          <CategoriaDocumentoInput
             value={tipoDocumento}
-            onChange={(e) => setTipoDocumento(e.target.value.toUpperCase())}
+            onChange={(v) => setTipoDocumento(v.toUpperCase())}
+            options={tipi}
             placeholder="Es. CUD, CONTRATTO, CIRCOLARE…"
-            required
           />
-          <datalist id="tipi-documento-split">
-            {tipi.map((t) => (
-              <option key={t} value={t} />
-            ))}
-          </datalist>
         </div>
-      </div>
 
-      <div className={styles.formRow}>
-          <label className={styles.label}>
-            2. Imposta data scadenza (opzionale)
-          </label>
+        <div className={styles.formRow}>
+          <label className={styles.label}>2. Scadenza (opzionale)</label>
           <input
             type="date"
             className={`input ${styles.field}`}
             value={dataScadenza}
             onChange={(e) => setDataScadenza(e.target.value)}
           />
+        </div>
       </div>
 
       {/* FILE / DROPZONE */}
       <div className={styles.formRow}>
-        <label className={styles.label}>3. Seleziona PDF da splittare</label>
-        <div
-          className={`${styles.dropzone} ${
-            dragOver ? styles.dropzoneOver : ""
-          }`}
-          onDragOver={(e) => {
-            e.preventDefault();
-            setDragOver(true);
-          }}
-          onDragLeave={() => setDragOver(false)}
-          onDrop={(e) => {
-            e.preventDefault();
-            setDragOver(false);
-            handleFiles(e.dataTransfer.files);
-          }}
+        <label className={styles.label}>3. Seleziona il PDF da dividere</label>
+        <UploadDropzone
+          inputRef={inputRef}
+          accept="application/pdf"
+          multiple={false}
+          onFiles={handleFiles}
+          isEmpty={!pdfFile}
+          promptText="Trascina qui il PDF oppure"
+          condensedLabel="Cambia file"
         >
-          <p className={styles.dropText}>Trascina qui il PDF oppure</p>
-          <button
-            type="button"
-            className={`btn ${styles.secondaryBtn}`}
-            onClick={() => inputRef.current?.click()}
-          >
-            Scegli file…
-          </button>
-          <input
-            ref={inputRef}
-            type="file"
-            accept="application/pdf"
-            onChange={(e) => handleFiles(e.target.files)}
-            style={{ display: "none" }}
-          />
-        </div>
-        {pdfFile && (
-          <div className={styles.selectedFileInfo}>
-            <span>
-              File selezionato: <b>{pdfFile.name}</b>
-            </span>
-          </div>
-        )}
+          {pdfFile && (
+            <div className={styles.selectedFileInfo}>
+              <span>
+                File selezionato: <b>{pdfFile.name}</b>
+              </span>
+            </div>
+          )}
+        </UploadDropzone>
       </div>
 
       {/* ANALISI */}
       <div className={styles.formRow}>
         <label className={styles.label}>4. Analizza e abbina</label>
-        <div className={styles.dashedBox}>
-          <div className={styles.actionsRow}>
-            <div className={styles.actionsButtons}>
-              <button
-                className={`btn ${styles.primaryBtn}`}
-                onClick={estraiTestoEAnteprime}
-                disabled={!pdfFile || loading}
-                type="button"
-              >
-                {loading ? "Analizzo..." : "Analizza e propone abbinamenti"}
-              </button>
-            </div>
-          </div>
+        <div className={styles.stepFooter}>
+          <button
+            className={`btn btn-primary ${styles.primaryBtn}`}
+            onClick={estraiTestoEAnteprime}
+            disabled={!pdfFile || loading}
+            type="button"
+          >
+            {loading ? "Analizzo..." : "Analizza e propone abbinamenti"}
+          </button>
         </div>
       </div>
 
@@ -787,7 +752,7 @@ export default function DocumentiSplitCF({ tipi = [] }) {
         >
           <span>{banner.text}</span>
           <button
-            className={`btn ${styles.bannerClose}`}
+            className={`btn btn-ghost btn-sm`}
             onClick={() => setBanner(null)}
             type="button"
           >
@@ -808,7 +773,7 @@ export default function DocumentiSplitCF({ tipi = [] }) {
           <span>Selezionate: {bulkSelection.size}</span>
           <div className={styles.flexSpacer} />
           <button
-            className={`btn ${styles.secondaryBtn}`}
+            className={`btn btn-outline`}
             disabled={bulkSelection.size === 0}
             onClick={() => {
               setAssignMode({ type: "bulk", pageIdx: null });
@@ -819,7 +784,7 @@ export default function DocumentiSplitCF({ tipi = [] }) {
             Assegna selezionate…
           </button>
           <button
-            className={`btn ${styles.secondaryBtn}`}
+            className={`btn btn-outline`}
             disabled={bulkSelection.size === 0}
             onClick={clearBulk}
             type="button"
@@ -884,7 +849,7 @@ export default function DocumentiSplitCF({ tipi = [] }) {
                         <span>Seleziona</span>
                       </label>
                       <button
-                        className={`btn ${styles.smallBtn} ${styles.secondaryBtn}`}
+                        className={`btn btn-outline btn-sm`}
                         onClick={() => {
                           setAssignMode({
                             type: "single",
@@ -912,7 +877,7 @@ export default function DocumentiSplitCF({ tipi = [] }) {
       {bucketKeyList.length > 0 && (
         <div className={styles.actionsRow}>
           <button
-            className={`btn ${styles.primaryBtn}`}
+            className={`btn btn-primary ${styles.primaryBtn}`}
             onClick={openPreview}
             disabled={loading}
             type="button"
@@ -926,35 +891,40 @@ export default function DocumentiSplitCF({ tipi = [] }) {
       {viewerOpen && (
         <div className={styles.viewerOverlay} onClick={closeViewer}>
           <aside
+            role="dialog"
+            aria-modal="true"
             className={styles.viewerPanel}
             onClick={(e) => e.stopPropagation()}
           >
             <div className={styles.viewerHeader}>
-              <b>Pagina #{(viewerPageIdx ?? 0) + 1}</b>
+              <div className={styles.viewerTitleWrap}>
+                <h3 className="modal-title">Pagina {(viewerPageIdx ?? 0) + 1}</h3>
+                <span className={styles.viewerSub}>Usa ← → per scorrere le pagine</span>
+              </div>
               <div className={styles.flexSpacer} />
               <button
-                className={styles.iconBtn}
+                className="btn btn-outline btn-sm btn-icon"
                 onClick={prevPage}
-                title="Precedente"
+                aria-label="Pagina precedente"
                 type="button"
               >
-                ←
+                <FiChevronLeft size={16} />
               </button>
               <button
-                className={styles.iconBtn}
+                className="btn btn-outline btn-sm btn-icon"
                 onClick={nextPage}
-                title="Successiva"
+                aria-label="Pagina successiva"
                 type="button"
               >
-                →
+                <FiChevronRight size={16} />
               </button>
               <button
-                className={styles.iconBtn}
+                className="modal-close"
                 onClick={closeViewer}
-                title="Chiudi"
+                aria-label="Chiudi"
                 type="button"
               >
-                ✕
+                <FiX size={18} />
               </button>
             </div>
             <div className={styles.viewerBody}>
@@ -965,9 +935,9 @@ export default function DocumentiSplitCF({ tipi = [] }) {
               )}
             </div>
             <div className={styles.viewerFooter}>
-              <div>
-                Attuale:{" "}
-                <b>{getBucketName(findBucketOf(viewerPageIdx)) || "-"}</b>
+              <div className={styles.viewerCurrent}>
+                Assegnata a{" "}
+                <b>{getBucketName(findBucketOf(viewerPageIdx)) || "nessuno"}</b>
               </div>
               <div className={styles.flexSpacer} />
               <button

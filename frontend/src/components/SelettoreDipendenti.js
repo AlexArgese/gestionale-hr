@@ -1,8 +1,14 @@
 import React, { useEffect, useMemo, useState, useRef } from "react";
+import { FiX, FiSearch } from "react-icons/fi";
 import styles from "./SelettoreDipendenti.module.css";
-import { API_BASE } from "../api";
+import { API_BASE, getIdToken } from "../api";
 
 const API = API_BASE;
+
+async function authHeaders(extra = {}) {
+  const token = await getIdToken();
+  return { ...extra, ...(token ? { Authorization: `Bearer ${token}` } : {}) };
+}
 /**
  * Modal per scegliere 1/N dipendenti con:
  * - ricerca nome/cognome/email
@@ -34,7 +40,8 @@ export default function SelettoreDipendenti({
   const masterCheckboxRef = useRef(null);
 
   useEffect(() => {
-    fetch(`${API}/utenti`)
+    authHeaders()
+      .then((headers) => fetch(`${API}/utenti`, { headers }))
       .then((r) => r.json())
       .then(setUtenti)
       .catch(console.error);
@@ -163,35 +170,37 @@ export default function SelettoreDipendenti({
   ).length;
 
   return (
-    <div className={styles["sel-overlay"]} role="dialog" aria-modal="true">
-      <div className={styles["sel-panel"]}>
+    <div className={styles["sel-overlay"]} role="dialog" aria-modal="true" aria-labelledby="sel-title" onClick={onClose}>
+      <div className={styles["sel-panel"]} onClick={(e) => e.stopPropagation()}>
         {/* HEADER */}
         <div className={styles["sel-header"]}>
           <div className={styles["sel-header-main"]}>
-            <h3 className={styles["sel-title"]}>Seleziona dipendenti</h3>
+            <h3 id="sel-title" className={styles["sel-title"]}>Seleziona dipendenti</h3>
             <span className={styles["sel-subtitle"]}>
-              Usa ricerca e filtri per restringere l&apos;elenco, poi seleziona
-              uno o più dipendenti.
+              Cerca o filtra l&apos;elenco, poi seleziona uno o più dipendenti.
             </span>
           </div>
           <button
-            className={styles["sel-close"]}
+            className="modal-close"
             onClick={onClose}
             aria-label="Chiudi"
+            type="button"
           >
-            ✕
+            <FiX size={18} />
           </button>
         </div>
 
         {/* TOOLBAR (search + ordinamento) */}
         <div className={styles["sel-toolbar"]}>
-          <div className={styles["sel-search-wrap"]}>
+          <div className={`search ${styles["sel-search-wrap"]}`}>
+            <FiSearch size={15} />
             <input
               type="text"
-              placeholder="Cerca per nome, cognome o email…"
+              placeholder="Cerca per nome, cognome o email"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className={styles["sel-search"]}
+              className="input"
+              autoFocus
             />
           </div>
 
@@ -202,7 +211,7 @@ export default function SelettoreDipendenti({
             <select
               value={ordinamento}
               onChange={(e) => setOrdinamento(e.target.value)}
-              className={styles["sel-select"]}
+              className={`select ${styles["sel-select"]}`}
             >
               <option value="alfabetico">Cognome (A-Z)</option>
               <option value="inserimento">Ultima aggiunta</option>
@@ -216,7 +225,7 @@ export default function SelettoreDipendenti({
           <select
             value={filtroSocieta}
             onChange={(e) => setFiltroSocieta(e.target.value)}
-            className={styles["sel-select"]}
+            className={`select ${styles["sel-select"]}`}
           >
             <option value="">Tutte le società</option>
             {societaUniche.map((x, i) => (
@@ -229,7 +238,7 @@ export default function SelettoreDipendenti({
           <select
             value={filtroSede}
             onChange={(e) => setFiltroSede(e.target.value)}
-            className={styles["sel-select"]}
+            className={`select ${styles["sel-select"]}`}
           >
             <option value="">Tutte le sedi</option>
             {sediUniche.map((x, i) => (
@@ -243,7 +252,7 @@ export default function SelettoreDipendenti({
           <select
             value={filtroAttivo}
             onChange={(e) => setFiltroAttivo(e.target.value)}
-            className={styles["sel-select"]}
+            className={`select ${styles["sel-select"]}`}
           >
             <option value="">Tutti gli stati</option>
             <option value="true">Attivi</option>
@@ -270,10 +279,8 @@ export default function SelettoreDipendenti({
                     }
                   />
                 </th>
-                <th>Cognome</th>
-                <th>Nome</th>
+                <th>Dipendente</th>
                 <th>Email</th>
-                <th>Ruolo</th>
                 <th>Sede</th>
                 <th>Società</th>
                 <th>Stato</th>
@@ -301,17 +308,15 @@ export default function SelettoreDipendenti({
                         disabled={!allowMultiple && !isSelected}
                       />
                     </td>
-                    <td>{u.cognome}</td>
-                    <td>{u.nome}</td>
-                    <td>{u.email}</td>
-                    <td>{u.ruolo}</td>
-                    <td>{u.sede}</td>
+                    <td className={styles["sel-strong"]}>{`${u.cognome || ""} ${u.nome || ""}`.trim()}</td>
+                    <td className={styles["sel-muted"]}>{u.email}</td>
+                    <td>{u.sede || "—"}</td>
                     <td>{u.societa_nome}</td>
                     <td>
                       {u.stato_attivo ? (
-                        <span className={styles["sel-badge-ok"]}>Attivo</span>
+                        <span className="badge badge-success">Attivo</span>
                       ) : (
-                        <span className={styles["sel-badge-no"]}>
+                        <span className="badge">
                           Non attivo
                         </span>
                       )}
@@ -321,7 +326,7 @@ export default function SelettoreDipendenti({
               })}
               {filtered.length === 0 && (
                 <tr>
-                  <td colSpan={8} className={styles["sel-empty"]}>
+                  <td colSpan={6} className={styles["sel-empty"]}>
                     Nessun risultato con i filtri correnti.
                   </td>
                 </tr>
@@ -340,14 +345,14 @@ export default function SelettoreDipendenti({
           </span>
           <div className={styles["sel-spacer"]} />
           <button
-            className={`btn btn-secondary ${styles["sel-btn"]}`}
+            className="btn btn-outline"
             onClick={onClose}
             type="button"
           >
             Annulla
           </button>
           <button
-            className={`btn btn-primary ${styles["sel-btn"]}`}
+            className="btn btn-primary"
             onClick={() => onConfirm(Array.from(selected))}
             disabled={selected.size === 0}
             type="button"

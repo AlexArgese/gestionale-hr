@@ -1,18 +1,16 @@
 import React, { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import styles from "./UtenteDettaglio.module.css";
-import {
-  FiArrowLeft,
-  FiSave,
-  FiMapPin,
-  FiGrid,
-  FiUser,
-  FiSearch,
-  FiStar,
-} from "react-icons/fi";
-import { API_BASE } from "../api";
+import { FiArrowLeft, FiSave } from "react-icons/fi";
+import SedeDipendentiPicker from "./SedeDipendentiPicker";
+import { API_BASE, getIdToken } from "../api";
 
 const API = API_BASE;
+
+async function authHeaders(extra = {}) {
+  const token = await getIdToken();
+  return { ...extra, ...(token ? { Authorization: `Bearer ${token}` } : {}) };
+}
 
 function SedeDettaglio({
   fetchUrlBase = `${API}/sedi`,
@@ -52,7 +50,7 @@ function SedeDettaglio({
       try {
         setLoading(true);
         const res = await fetch(`${fetchUrlBase}/${id}`, {
-          headers: { Accept: "application/json" },
+          headers: await authHeaders({ Accept: "application/json" }),
         });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const data = await res.json();
@@ -85,7 +83,7 @@ function SedeDettaglio({
       try {
         if (!societaUrl) return;
         const res = await fetch(societaUrl, {
-          headers: { Accept: "application/json" },
+          headers: await authHeaders({ Accept: "application/json" }),
         });
         const ok =
           res.ok &&
@@ -110,7 +108,7 @@ function SedeDettaglio({
     (async () => {
       try {
         const res = await fetch(utentiUrl, {
-          headers: { Accept: "application/json" },
+          headers: await authHeaders({ Accept: "application/json" }),
         });
         const ok =
           res.ok &&
@@ -224,10 +222,10 @@ function SedeDettaglio({
       // 1) Aggiorno sede
       const res = await fetch(`${fetchUrlBase}/${id}`, {
         method: "PUT",
-        headers: {
+        headers: await authHeaders({
           "Content-Type": "application/json",
           Accept: "application/json",
-        },
+        }),
         body: JSON.stringify({
           nome: form.nome,
           societa_id: societa_id_norm || null,
@@ -250,10 +248,10 @@ function SedeDettaglio({
       if (selectedUtenti.length > 0) {
         const res2 = await fetch(`${fetchUrlBase}/${id}/utenti`, {
           method: "POST",
-          headers: {
+          headers: await authHeaders({
             "Content-Type": "application/json",
             Accept: "application/json",
-          },
+          }),
           body: JSON.stringify({
             utenti_ids: selectedUtenti,
           }),
@@ -296,7 +294,7 @@ function SedeDettaglio({
 
         const r = await fetch(`${utentiUrl}/${uid}/team-leader`, {
           method: "PATCH",
-          headers: { "Content-Type": "application/json", Accept: "application/json" },
+          headers: await authHeaders({ "Content-Type": "application/json", Accept: "application/json" }),
           body: JSON.stringify({ team_leader_sedi: newTLSedi }),
         });
         if (!r.ok) {
@@ -322,249 +320,81 @@ function SedeDettaglio({
 
   if (loading || !form) {
     return (
-      <div className={styles.container}>
+      <div className="empty-state">
         {loading ? "Caricamento…" : "Sede non trovata"}
       </div>
     );
   }
 
   return (
-    <div className={styles.container}>
-      {/* Header */}
-      <div className={styles.header}>
-        <h1 className={styles.title}>Dettaglio sede: {form.nome}</h1>
-        <div className={styles.headerCta}>
-          <button className="btn btn-outline" onClick={() => navigate(-1)}>
-            <FiArrowLeft /> Indietro
+    <div className="page">
+      <header className="page-header">
+        <div className="page-header-text">
+          <button type="button" className="page-eyebrow" onClick={() => navigate(-1)}>
+            <FiArrowLeft size={14} /> Sedi
           </button>
-          <button
-            className={`btn ${styles.btnPrimary}`}
-            onClick={handleSubmit}
-            disabled={saving}
-          >
-            <FiSave /> {saving ? "Salvataggio…" : "Salva"}
+          <h1 className="page-title">{form.nome || "Sede"}</h1>
+          <p className="page-subtitle">Dati della sede e dipendenti associati.</p>
+        </div>
+        <div className="page-actions">
+          <button className="btn btn-primary" onClick={handleSubmit} disabled={saving}>
+            <FiSave size={15} /> {saving ? "Salvataggio…" : "Salva modifiche"}
           </button>
+        </div>
+      </header>
+
+      {msgError && <div className="alert alert-danger">{msgError}</div>}
+      {msgOk && <div className="alert alert-success">{msgOk}</div>}
+
+      <div className={styles.formSection}>
+        <div className={styles.formSectionHead}>
+          <h3 className={styles.formSectionTitle}>Dati della sede</h3>
+        </div>
+        <div className={styles.grid}>
+          <div className={styles.group}>
+            <label className={styles.label}>Nome sede</label>
+            <input className="input" value={form.nome} onChange={onChange("nome")} />
+          </div>
+          <div className={styles.group}>
+            <label className={styles.label}>Società di appartenenza</label>
+            {societa.length ? (
+              <select className="select" value={form.societa_id} onChange={onChange("societa_id")}>
+                <option value="">Seleziona società</option>
+                {societa.map((s) => (
+                  <option key={valueSocieta(s)} value={valueSocieta(s)}>
+                    {labelSocieta(s)}
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <input
+                className="input"
+                value={form.societa_id}
+                onChange={onChange("societa_id")}
+                placeholder="ID società"
+              />
+            )}
+          </div>
         </div>
       </div>
 
-      <div className={styles.underline} />
+      <SedeDipendentiPicker
+        utenti={filteredUtenti}
+        filter={filterUtente}
+        onFilterChange={setFilterUtente}
+        selectedIds={selectedUtenti}
+        onToggle={toggleUtente}
+        teamLeaderIds={teamLeaderIds}
+        onToggleTeamLeader={toggleTeamLeader}
+      />
 
-      {msgError && <div className={styles.error}>{msgError}</div>}
-      {msgOk && <div className={styles.success}>{msgOk}</div>}
-
-      {/* --- CARD: Form sede --- */}
-      <div className={`card ${styles.card}`}>
-        <div className={styles.grid}>
-          {/* Nome sede */}
-          <div className={styles.group}>
-            <label className={styles.label}>Nome sede</label>
-            <div className={styles.inputIcon}>
-              <FiMapPin className={styles.icon} />
-              <input
-                className="input"
-                value={form.nome}
-                onChange={onChange("nome")}
-              />
-            </div>
-          </div>
-
-          {/* Società */}
-          <div className={styles.group}>
-            <label className={styles.label}>Società di appartenenza</label>
-            <div className={styles.inputIcon}>
-              <FiGrid className={styles.icon} />
-              {societa.length ? (
-                <select
-                  className="select"
-                  value={form.societa_id}
-                  onChange={onChange("societa_id")}
-                >
-                  <option value="">Seleziona società</option>
-                  {societa.map((s) => (
-                    <option key={valueSocieta(s)} value={valueSocieta(s)}>
-                      {labelSocieta(s)}
-                    </option>
-                  ))}
-                </select>
-              ) : (
-                <input
-                  className="input"
-                  value={form.societa_id}
-                  onChange={onChange("societa_id")}
-                  placeholder="ID società"
-                />
-              )}
-            </div>
-          </div>
-        </div>
-
-        {/* Dipendenti della sede */}
-        <div style={{ marginTop: 24 }}>
-          <label className={styles.label}>Dipendenti associati alla sede</label>
-          <p className={styles.note} style={{ marginBottom: 8 }}>
-            Spunta i dipendenti che appartengono a questa sede. Il salvataggio
-            aggiornerà il loro campo <span className={styles.mono}>sede</span>.
-          </p>
-
-          {/* filtro */}
-          <div className={styles.inputIcon} style={{ marginBottom: 10 }}>
-            <FiSearch className={styles.icon} />
-            <input
-              className="input"
-              placeholder="Filtra dipendenti per nome, cognome, email…"
-              value={filterUtente}
-              onChange={(e) => setFilterUtente(e.target.value)}
-            />
-          </div>
-
-          {/* intestazione colonne */}
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              padding: "4px 10px 6px",
-              fontSize: 11,
-              fontWeight: 600,
-              color: "var(--color-text-muted, #888)",
-              textTransform: "uppercase",
-              letterSpacing: "0.05em",
-            }}
-          >
-            <span style={{ flex: 1 }}>Dipendente</span>
-            <span style={{ display: "flex", alignItems: "center", gap: 3 }}>
-              <FiStar size={10} /> Team Leader
-            </span>
-          </div>
-
-          <div
-            style={{
-              maxHeight: 300,
-              overflowY: "auto",
-              border: "1px solid var(--border)",
-              borderRadius: 12,
-              padding: "4px 8px",
-              background: "#FFFFFF",
-            }}
-          >
-            {filteredUtenti.length === 0 && (
-              <div className={styles.note} style={{ padding: "8px 4px" }}>
-                Nessun dipendente trovato.
-              </div>
-            )}
-
-            {filteredUtenti.map((u) => {
-              const uid = u.id;
-              const nomeCompleto = `${u.cognome || ""} ${u.nome || ""}`.trim();
-              const checked = selectedUtenti.includes(uid);
-              const isTL = teamLeaderIds.has(uid);
-
-              return (
-                <div
-                  key={uid}
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 8,
-                    padding: "5px 2px",
-                    fontSize: 14,
-                    borderBottom: "1px solid var(--border, #f5f5f5)",
-                  }}
-                >
-                  {/* checkbox sede */}
-                  <input
-                    id={`u-sede-${uid}`}
-                    type="checkbox"
-                    checked={checked}
-                    onChange={() => toggleUtente(uid)}
-                    style={{ flexShrink: 0 }}
-                  />
-                  <label
-                    htmlFor={`u-sede-${uid}`}
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 6,
-                      flex: 1,
-                      cursor: "pointer",
-                      minWidth: 0,
-                    }}
-                  >
-                    <FiUser style={{ opacity: 0.6, flexShrink: 0 }} size={13} />
-                    <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                      <strong>{nomeCompleto || "—"}</strong>{" "}
-                      <span className={styles.note}>
-                        ({u.email || "senza email"})
-                      </span>
-                    </span>
-                  </label>
-
-                  {/* toggle Team Leader — visibile solo se il dipendente è selezionato */}
-                  {checked ? (
-                    <label
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        gap: 4,
-                        flexShrink: 0,
-                        cursor: "pointer",
-                        padding: "2px 8px",
-                        borderRadius: 20,
-                        background: isTL
-                          ? "rgba(245, 158, 11, 0.12)"
-                          : "rgba(0,0,0,0.04)",
-                        border: `1px solid ${isTL ? "rgba(245,158,11,0.5)" : "transparent"}`,
-                        transition: "all 0.15s",
-                      }}
-                      title="Imposta come Team Leader di questa sede"
-                    >
-                      <input
-                        type="checkbox"
-                        checked={isTL}
-                        onChange={() => toggleTeamLeader(uid)}
-                        style={{ width: 12, height: 12 }}
-                      />
-                      <FiStar
-                        size={11}
-                        style={{ color: isTL ? "#f59e0b" : "#bbb", flexShrink: 0 }}
-                      />
-                      <span
-                        style={{
-                          fontSize: 11,
-                          color: isTL ? "#92400e" : "#aaa",
-                          fontWeight: isTL ? 600 : 400,
-                        }}
-                      >
-                        TL
-                      </span>
-                    </label>
-                  ) : (
-                    // placeholder per mantenere l'allineamento
-                    <div style={{ width: 56, flexShrink: 0 }} />
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* Azioni bottom */}
-        <div className={styles.actions}>
-          <button
-            type="button"
-            className="btn btn-outline"
-            onClick={() => navigate(-1)}
-          >
-            Annulla
-          </button>
-          <button
-            type="button"
-            className={`btn ${styles.btnPrimary}`}
-            onClick={handleSubmit}
-            disabled={saving}
-          >
-            <FiSave /> {saving ? "Salvataggio…" : "Salva modifiche"}
-          </button>
-        </div>
+      <div className={styles.actions}>
+        <button type="button" className="btn btn-outline" onClick={() => navigate(-1)}>
+          Annulla
+        </button>
+        <button type="button" className="btn btn-primary" onClick={handleSubmit} disabled={saving}>
+          <FiSave size={15} /> {saving ? "Salvataggio…" : "Salva modifiche"}
+        </button>
       </div>
     </div>
   );

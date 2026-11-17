@@ -3,6 +3,10 @@ const express = require("express");
 const router = express.Router();
 const yousignClient = require("../services/yousignClient");
 const path = require("path");
+const requireAuth = require("../middleware/requireAuth");
+const { allowRoles } = require("../middleware/rbac");
+
+router.use(requireAuth, allowRoles('admin'));
 
 console.log("✅ YOUSIGN CLIENT IMPORT:", yousignClient);
 

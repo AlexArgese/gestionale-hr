@@ -1,0 +1,15 @@
+.row {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 220px));
+  gap: var(--sp-4);
+}
+.checkRow {
+  display: flex; align-items: flex-start; gap: 10px;
+  margin-top: var(--sp-5);
+  font-size: var(--fs-md); color: var(--txt-strong);
+  cursor: pointer;
+}
+.checkRow input { width: 16px; height: 16px; margin-top: 2px; accent-color: var(--accent); }
+.hint { display: block; font-size: var(--fs-sm); color: var(--txt-muted); }
+
+@media (max-width: 560px) { .row { grid-template-columns: 1fr; } }

@@ -1,27 +1,33 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { FiPlus, FiSearch } from "react-icons/fi";
+import { FiPlus, FiSearch, FiChevronRight } from "react-icons/fi";
 import styles from "./ComunicazioniPage.module.css";
-import { API_BASE } from "../api";
+import { API_BASE, getIdToken } from "../api";
+import { useToast } from "./ui/Toast";
+
+async function authHeaders(extra = {}) {
+  const token = await getIdToken();
+  return { ...extra, ...(token ? { Authorization: `Bearer ${token}` } : {}) };
+}
 
 export default function ComunicazioniPage() {
   const navigate = useNavigate();
+  const toast = useToast();
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [q, setQ] = useState("");
 
   useEffect(() => {
-    fetch(`${API_BASE}/comunicazioni`, {
-      headers: { Accept: "application/json, text/plain, */*" },
-    })
+    authHeaders({ Accept: "application/json, text/plain, */*" })
+      .then((headers) => fetch(`${API_BASE}/comunicazioni`, { headers }))
       .then((r) => {
         if (!r.ok) throw new Error(`HTTP ${r.status} @ /comunicazioni`);
         return r.json();
       })
       .then((data) => setItems(Array.isArray(data) ? data : (data?.items || [])))
-      .catch((e) => alert(e.message))
+      .catch((e) => toast.error(e.message))
       .finally(() => setLoading(false));
-  }, []);
+  }, [toast]);
 
   const filtered = useMemo(() => {
     const s = q.trim().toLowerCase();
@@ -34,71 +40,66 @@ export default function ComunicazioniPage() {
   }, [items, q]);
 
   return (
-    <div className={styles.container}>
-      <div className={styles.header}>
-        <h2 className={styles.title}>Comunicazioni</h2>
-        <button
-          type="button"
-          className={styles.btnNuova}
-          onClick={() => navigate(`/comunicazioni/nuova`)}   // ✅ frontend route
-          title="Nuova comunicazione"
-        >
-          <FiPlus />&nbsp;Nuova
-        </button>
-      </div>
-
-      <div className={styles.underline} />
+    <div className="page">
+      <header className="page-header">
+        <div className="page-header-text">
+          <h1 className="page-title">Comunicazioni</h1>
+          <p className="page-subtitle">Avvisi e messaggi inviati ai dipendenti tramite l’app.</p>
+        </div>
+        <div className="page-actions">
+          <button
+            type="button"
+            className="btn btn-primary"
+            onClick={() => navigate(`/comunicazioni/nuova`)}
+          >
+            <FiPlus size={16} /> Nuova comunicazione
+          </button>
+        </div>
+      </header>
 
       <div className={styles.toolbar}>
-        <div className={styles.searchWrap}>
-          <FiSearch className={styles.searchIcon} />
+        <div className={`search ${styles.searchBox}`}>
+          <FiSearch size={15} />
           <input
-            className={styles.search}
-            placeholder="Cerca per titolo o testo…"
+            className="input"
+            placeholder="Cerca per titolo o testo"
             value={q}
             onChange={(e) => setQ(e.target.value)}
           />
         </div>
       </div>
 
-      {loading ? (
-        <p>Caricamento…</p>
-      ) : filtered.length ? (
-        <ul className={styles.list}>
-          {filtered.map((c) => (
-            <li key={c.id} className={styles.item}>
-              <div className={styles.itemHead}>
-                <Link
-                  to={`/comunicazioni/${c.id}`}               // ✅ frontend route
-                  className={styles.itemTitle}
-                >
-                  {c.titolo || "Senza titolo"}
+      <section className={`card ${styles.listCard}`}>
+        {loading ? (
+          <div className="empty-state">Caricamento…</div>
+        ) : filtered.length ? (
+          <ul className={styles.list}>
+            {filtered.map((c) => (
+              <li key={c.id}>
+                <Link to={`/comunicazioni/${c.id}`} className={styles.item}>
+                  <span className={styles.itemMain}>
+                    <span className={styles.itemTitle}>{c.titolo || "Senza titolo"}</span>
+                    <span className={styles.itemExcerpt}>{c.contenuto || ""}</span>
+                  </span>
+                  <span className={styles.date}>
+                    {c.data_pubblicazione
+                      ? new Date(c.data_pubblicazione).toLocaleDateString("it-IT", { day: "numeric", month: "short", year: "numeric" })
+                      : ""}
+                  </span>
+                  <FiChevronRight className={styles.chev} size={16} />
                 </Link>
-                <span className={styles.date}>
-                  {c.data_pubblicazione
-                    ? new Date(c.data_pubblicazione).toLocaleDateString()
-                    : ""}
-                </span>
-              </div>
-
-              <p className={styles.content}>{c.contenuto || ""}</p>
-
-              <div className={styles.itemActions}>
-                <Link
-                  to={`/comunicazioni/${c.id}`}               // ✅ frontend route
-                  className={styles.btnOutline}
-                >
-                  Apri
-                </Link>
-              </div>
-            </li>
-          ))}
-        </ul>
-      ) : (
-        <div className={styles.empty}>
-          Nessuna comunicazione {q ? "per questa ricerca" : ""}.
-        </div>
-      )}
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <div className="empty-state">
+            <span className="empty-state-title">
+              {q ? "Nessun risultato" : "Nessuna comunicazione"}
+            </span>
+            <span>{q ? "Prova con un’altra ricerca." : "Le comunicazioni inviate compariranno qui."}</span>
+          </div>
+        )}
+      </section>
     </div>
   );
 }

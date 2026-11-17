@@ -1,13 +1,16 @@
 import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import styles from "./UtenteNuovo.module.css";
-import {
-  FiArrowLeft, FiSave, FiUser, FiAtSign, FiCalendar,
-  FiMapPin, FiHome, FiPhone, FiHash, FiBriefcase, FiGrid
-} from "react-icons/fi";
-import { API_BASE } from "../api";
+import styles from "./UtenteDettaglio.module.css";
+import { FiArrowLeft, FiSave, FiX } from "react-icons/fi";
+import { API_BASE, getIdToken } from "../api";
+import { CONTRACT_OPTIONS } from "../constants/contracts";
 
 const API = API_BASE;
+
+async function authHeaders(extra = {}) {
+  const token = await getIdToken();
+  return { ...extra, ...(token ? { Authorization: `Bearer ${token}` } : {}) };
+}
 
 function UtenteNuovo({
   postUrl = `${API}/utenti`,
@@ -54,12 +57,12 @@ function UtenteNuovo({
   const [submitting, setSubmitting] = useState(false);
   const [msgError, setMsgError] = useState("");
   const [msgOk, setMsgOk] = useState("");
+  const [fieldErrors, setFieldErrors] = useState({});
 
   // helpers label/value sicuri
   const labelSocieta = (s) => s?.ragione_sociale || s?.nome || s?.denominazione || String(s?.id ?? s ?? "");
   const valueSocieta = (s) => s?.id ?? s;
   const labelSede = (s) => s?.nome || s?.label || String(s ?? "");
-  const valueSede = (s) => s?.id ?? s;
   const labelRuolo = (r) => r?.nome || r?.label || String(r ?? "");
   const valueRuolo = (r) => r?.id ?? r;
 
@@ -68,7 +71,7 @@ function UtenteNuovo({
     let alive = true;
     async function load(url, setter) {
       try {
-        const res = await fetch(url, { headers: { Accept: "application/json" } });
+        const res = await fetch(url, { headers: await authHeaders({ Accept: "application/json" }) });
         const ok = res.ok && (res.headers.get("content-type") || "").includes("application/json");
         const data = ok ? await res.json() : [];
         if (alive) setter(Array.isArray(data) ? data : (data?.items || []));
@@ -107,6 +110,21 @@ function UtenteNuovo({
   const validEmail = (v) => /^\S+@\S+\.\S+$/.test(v);
   const normalizeDateOrNull = (v) => (v && /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : null);
 
+  const FIELD_VALIDATORS = {
+    email: (v) => (v && !validEmail(v) ? "Email non valida" : ""),
+    codice_fiscale: (v) =>
+      v && !/^[A-Za-z]{6}\d{2}[A-Za-z]\d{2}[A-Za-z]\d{3}[A-Za-z]$/.test(v)
+        ? "Codice fiscale non valido (16 caratteri)"
+        : "",
+    cap_residenza: (v) => (v && !/^\d{5}$/.test(v) ? "CAP non valido (5 cifre)" : ""),
+  };
+
+  const validateField = (key) => {
+    const validator = FIELD_VALIDATORS[key];
+    if (!validator) return;
+    setFieldErrors((prev) => ({ ...prev, [key]: validator(form[key]) }));
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setMsgError(""); setMsgOk("");
@@ -116,8 +134,14 @@ function UtenteNuovo({
       setMsgError("Nome e cognome sono obbligatori.");
       return;
     }
-    if (form.email && !validEmail(form.email)) {
-      setMsgError("Email non valida.");
+
+    const nextFieldErrors = {};
+    Object.keys(FIELD_VALIDATORS).forEach((key) => {
+      nextFieldErrors[key] = FIELD_VALIDATORS[key](form[key]);
+    });
+    setFieldErrors(nextFieldErrors);
+    if (Object.values(nextFieldErrors).some(Boolean)) {
+      setMsgError("Controlla i campi evidenziati prima di salvare.");
       return;
     }
 
@@ -136,7 +160,7 @@ function UtenteNuovo({
       setSubmitting(true);
       const res = await fetch(postUrl, {
         method: "POST",
-        headers: { "Content-Type": "application/json", Accept: "application/json" },
+        headers: await authHeaders({ "Content-Type": "application/json", Accept: "application/json" }),
         body: JSON.stringify(payload),
       });
 
@@ -160,244 +184,269 @@ function UtenteNuovo({
   };
 
   return (
-    <div className={styles.container}>
-      {/* Header */}
-      <div className={styles.header}>
-        <h1 className={styles.title}>Nuovo utente</h1>
-        <div className={styles.headerCta}>
-          <button className={`btn btn-outline ${styles.backBtn}`} onClick={() => navigate(-1)}>
-            <FiArrowLeft /> Indietro
+    <div className="page">
+      <header className="page-header">
+        <div className="page-header-text">
+          <button type="button" className="page-eyebrow" onClick={() => navigate(-1)}>
+            <FiArrowLeft size={14} /> Dipendenti
           </button>
-          <button className={`btn ${styles.btnPrimary}`} onClick={handleSubmit} disabled={submitting}>
-            <FiSave /> {submitting ? "Salvataggio..." : "Salva"}
-          </button>
+          <h1 className="page-title">Nuovo dipendente</h1>
+          <p className="page-subtitle">Compila i dati principali: il resto si può completare in seguito.</p>
         </div>
-      </div>
+      </header>
 
-      <div className={styles.underline} />
-
-      {/* Messaggi */}
-      {msgError && <div className={styles.error}>{msgError}</div>}
-      {msgOk && <div className={styles.success}>{msgOk}</div>}
+      {msgError && <div className="alert alert-danger">{msgError}</div>}
+      {msgOk && <div className="alert alert-success">{msgOk}</div>}
 
       {/* Card form */}
-      <form className={`card ${styles.card}`} onSubmit={handleSubmit}>
-        <div className={styles.grid}>
-          {/* === Base === */}
-          <div className={styles.group}>
-            <label className={styles.label}>Nome</label>
-            <div className={styles.inputIcon}>
-              <FiUser className={styles.icon} />
-              <input className="input" value={form.nome} onChange={onChange("nome")} placeholder="Mario" />
+      <form className={styles.card} onSubmit={handleSubmit}>
+
+        {/* === Dati principali === */}
+        <div className={styles.formSection}>
+          <div className={styles.formSectionHead}>
+            <h3 className={styles.formSectionTitle}>Dati principali</h3>
+          </div>
+          <div className={styles.grid}>
+            <div className={styles.group}>
+              <label className={styles.label}>Nome</label>
+              <div className={styles.inputIcon}>
+                <input className="input" value={form.nome} onChange={onChange("nome")} placeholder="Mario" />
+              </div>
+            </div>
+
+            <div className={styles.group}>
+              <label className={styles.label}>Cognome</label>
+              <div className={styles.inputIcon}>
+                <input className="input" value={form.cognome} onChange={onChange("cognome")} placeholder="Rossi" />
+              </div>
+            </div>
+
+            <div className={styles.group}>
+              <label className={styles.label}>Email</label>
+              <div className={`${styles.inputIcon} ${fieldErrors.email ? styles.hasError : ""}`}>
+                <input
+                  className="input"
+                  value={form.email}
+                  onChange={onChange("email")}
+                  onBlur={() => validateField("email")}
+                  placeholder="mario.rossi@azienda.it"
+                />
+              </div>
+              {fieldErrors.email && <span className={styles.fieldError}>{fieldErrors.email}</span>}
+            </div>
+
+          </div>
+        </div>
+
+        {/* === Rapporto di lavoro === */}
+        <div className={styles.formSection}>
+          <div className={styles.formSectionHead}>
+            <h3 className={styles.formSectionTitle}>Rapporto di lavoro</h3>
+          </div>
+          <div className={styles.grid}>
+            <div className={styles.group}>
+              <label className={styles.label}>Ruolo</label>
+              <div className={styles.inputIcon}>
+                <select className="select" value={form.ruolo} onChange={onChange("ruolo")}>
+                  <option value="">Seleziona ruolo</option>
+                  {ruoli.map((r) => (
+                    <option key={valueRuolo(r)} value={valueRuolo(r)}>{labelRuolo(r)}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            <div className={styles.group}>
+              <label className={styles.label}>Sedi</label>
+              <div className={styles.inputIcon}>
+                <select
+                  className="select"
+                  value=""
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    if (value) { handleAddSede(value); e.target.value = ""; }
+                  }}
+                >
+                  <option value="">Aggiungi sede…</option>
+                  {sediList.map((s) => (
+                    <option key={s} value={s}>{s}</option>
+                  ))}
+                </select>
+              </div>
+              <div className={styles.sediSelectedWrap}>
+                {getSelectedSedi().length === 0 && (
+                  <span className={styles.note}>Nessuna sede assegnata</span>
+                )}
+                {getSelectedSedi().length > 0 && (
+                  <>
+                    <div className={styles.sediChips}>
+                      {getSelectedSedi().map((s) => (
+                        <span key={s} className={styles.sedeChip}>
+                          {s}
+                          <button type="button" className={styles.sedeChipRemove} onClick={() => handleRemoveSede(s)} aria-label={`Rimuovi ${s}`}><FiX size={12} /></button>
+                        </span>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
+
+            <div className={styles.group}>
+              <label className={styles.label}>Società</label>
+              <div className={styles.inputIcon}>
+                <select className="select" value={form.societa_id} onChange={onChange("societa_id")}>
+                  <option value="">Seleziona società</option>
+                  {societa.map((s) => (
+                    <option key={valueSocieta(s)} value={valueSocieta(s)}>{labelSocieta(s)}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            <div className={styles.group}>
+              <label className={styles.label}>Tipo contratto</label>
+              <div className={styles.inputIcon}>
+                <select
+                  className="select"
+                  value={form.tipo_contratto}
+                  onChange={(e) =>
+                    setForm((f) => ({ ...f, tipo_contratto: e.target.value }))
+                  }
+                >
+                  {CONTRACT_OPTIONS.map((opt) => (
+                    <option key={opt.value} value={opt.value}>{opt.label}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            <div className={styles.group}>
+              <label className={styles.label}>Stato</label>
+              <div className={styles.inline}>
+                <input id="chk-attivo" className={styles.check} type="checkbox" checked={form.stato_attivo} onChange={onChange("stato_attivo")} />
+                <label htmlFor="chk-attivo" className={styles.checkLabel}>Dipendente attivo</label>
+              </div>
+              <div className={styles.note}>Se non attivo, il dipendente non può accedere all’app.</div>
             </div>
           </div>
+        </div>
 
-          <div className={styles.group}>
-            <label className={styles.label}>Cognome</label>
-            <div className={styles.inputIcon}>
-              <FiUser className={styles.icon} />
-              <input className="input" value={form.cognome} onChange={onChange("cognome")} placeholder="Rossi" />
+        {/* === Anagrafica === */}
+        <div className={styles.formSection}>
+          <div className={styles.formSectionHead}>
+            <h3 className={styles.formSectionTitle}>Anagrafica</h3>
+          </div>
+          <div className={styles.grid}>
+            <div className={styles.group}>
+              <label className={styles.label}>Data di nascita</label>
+              <div className={styles.inputIcon}>
+                <input className="input" type="date" value={form.data_nascita} onChange={onChange("data_nascita")} />
+              </div>
+            </div>
+
+            <div className={styles.group}>
+              <label className={styles.label}>Luogo di nascita</label>
+              <div className={styles.inputIcon}>
+                <input className="input" value={form.luogo_nascita} onChange={onChange("luogo_nascita")} placeholder="Comune" />
+              </div>
+            </div>
+
+            <div className={styles.group}>
+              <label className={styles.label}>Provincia di nascita</label>
+              <div className={styles.inputIcon}>
+                <input className="input" value={form.provincia_nascita} onChange={onChange("provincia_nascita")} placeholder="MI, RM, ..." />
+              </div>
+            </div>
+
+            <div className={styles.group}>
+              <label className={styles.label}>Codice fiscale</label>
+              <div className={`${styles.inputIcon} ${fieldErrors.codice_fiscale ? styles.hasError : ""}`}>
+                <input
+                  className="input"
+                  value={form.codice_fiscale}
+                  onChange={onChange("codice_fiscale")}
+                  onBlur={() => validateField("codice_fiscale")}
+                  placeholder="RSSMRA..."
+                />
+              </div>
+              {fieldErrors.codice_fiscale && <span className={styles.fieldError}>{fieldErrors.codice_fiscale}</span>}
             </div>
           </div>
+        </div>
 
-          <div className={styles.group}>
-            <label className={styles.label}>Email</label>
-            <div className={styles.inputIcon}>
-              <FiAtSign className={styles.icon} />
-              <input className="input" value={form.email} onChange={onChange("email")} placeholder="mario.rossi@azienda.it" />
+        {/* === Residenza === */}
+        <div className={styles.formSection}>
+          <div className={styles.formSectionHead}>
+            <h3 className={styles.formSectionTitle}>Residenza</h3>
+          </div>
+          <div className={styles.grid}>
+            <div className={styles.group}>
+              <label className={styles.label}>Indirizzo di residenza</label>
+              <div className={styles.inputIcon}>
+                <input className="input" value={form.indirizzo_residenza} onChange={onChange("indirizzo_residenza")} placeholder="Via / Piazza..." />
+              </div>
+            </div>
+
+            <div className={styles.group}>
+              <label className={styles.label}>Città di residenza</label>
+              <div className={styles.inputIcon}>
+                <input className="input" value={form.citta_residenza} onChange={onChange("citta_residenza")} placeholder="Città" />
+              </div>
+            </div>
+
+            <div className={styles.group}>
+              <label className={styles.label}>Provincia di residenza</label>
+              <div className={styles.inputIcon}>
+                <input className="input" value={form.provincia_residenza} onChange={onChange("provincia_residenza")} placeholder="MI, RM, ..." />
+              </div>
+            </div>
+
+            <div className={styles.group}>
+              <label className={styles.label}>CAP di residenza</label>
+              <div className={`${styles.inputIcon} ${fieldErrors.cap_residenza ? styles.hasError : ""}`}>
+                <input
+                  className="input"
+                  value={form.cap_residenza}
+                  onChange={onChange("cap_residenza")}
+                  onBlur={() => validateField("cap_residenza")}
+                  placeholder="20100"
+                />
+              </div>
+              {fieldErrors.cap_residenza && <span className={styles.fieldError}>{fieldErrors.cap_residenza}</span>}
             </div>
           </div>
+        </div>
 
-          <div className={styles.group}>
-            <label className={styles.label}>Ruolo</label>
-            <div className={styles.inputIcon}>
-              <FiBriefcase className={styles.icon} />
-              <select className="select" value={form.ruolo} onChange={onChange("ruolo")}>
-                <option value="">Seleziona ruolo</option>
-                {ruoli.map((r) => (
-                  <option key={valueRuolo(r)} value={valueRuolo(r)}>{labelRuolo(r)}</option>
-                ))}
-              </select>
-            </div>
+        {/* === Contatti === */}
+        <div className={styles.formSection}>
+          <div className={styles.formSectionHead}>
+            <h3 className={styles.formSectionTitle}>Contatti</h3>
           </div>
+          <div className={styles.grid}>
+            <div className={styles.group}>
+              <label className={styles.label}>Cellulare</label>
+              <div className={styles.inputIcon}>
+                <input className="input" value={form.cellulare} onChange={onChange("cellulare")} placeholder="+39 ..." />
+              </div>
+            </div>
 
-          <div className={styles.group}>
-            <label className={styles.label}>Sedi</label>
-            <div className={styles.inputIcon}>
-              <FiMapPin className={styles.icon} />
-              <select
-                className="select"
-                value=""
-                onChange={(e) => {
-                  const value = e.target.value;
-                  if (value) { handleAddSede(value); e.target.value = ""; }
-                }}
-              >
-                <option value="">Aggiungi sede…</option>
-                {sediList.map((s) => (
-                  <option key={s} value={s}>{s}</option>
-                ))}
-              </select>
+            <div className={styles.group}>
+              <label className={styles.label}>Contatto emergenza</label>
+              <div className={styles.inputIcon}>
+                <input className="input" value={form.contatto_emergenza} onChange={onChange("contatto_emergenza")} placeholder="Nome + telefono" />
+              </div>
             </div>
-            <div className={styles.sediSelectedWrap}>
-              {getSelectedSedi().length === 0 && (
-                <span className={styles.note}>Nessuna sede assegnata</span>
-              )}
-              {getSelectedSedi().length > 0 && (
-                <>
-                  <div className={styles.sediChips}>
-                    {getSelectedSedi().map((s) => (
-                      <span key={s} className={styles.sedeChip}>
-                        {s}
-                        <button type="button" className={styles.sedeChipRemove} onClick={() => handleRemoveSede(s)}>×</button>
-                      </span>
-                    ))}
-                  </div>
-                  <div className={styles.note} style={{ marginTop: 6 }}>
-                    Valore salvato: <span className={styles.mono}>{getSelectedSedi().join(", ")}</span>
-                  </div>
-                </>
-              )}
-            </div>
-          </div>
-
-          <div className={styles.group}>
-            <label className={styles.label}>Società</label>
-            <div className={styles.inputIcon}>
-              <FiGrid className={styles.icon} />
-              <select className="select" value={form.societa_id} onChange={onChange("societa_id")}>
-                <option value="">Seleziona società</option>
-                {societa.map((s) => (
-                  <option key={valueSocieta(s)} value={valueSocieta(s)}>{labelSocieta(s)}</option>
-                ))}
-              </select>
-            </div>
-          </div>
-
-          {/* === Anagrafica === */}
-          <div className={styles.group}>
-            <label className={styles.label}>Data di nascita</label>
-            <div className={styles.inputIcon}>
-              <FiCalendar className={styles.icon} />
-              <input className="input" type="date" value={form.data_nascita} onChange={onChange("data_nascita")} />
-            </div>
-          </div>
-
-          <div className={styles.group}>
-            <label className={styles.label}>Luogo di nascita</label>
-            <div className={styles.inputIcon}>
-              <FiHome className={styles.icon} />
-              <input className="input" value={form.luogo_nascita} onChange={onChange("luogo_nascita")} placeholder="Comune" />
-            </div>
-          </div>
-
-          <div className={styles.group}>
-            <label className={styles.label}>Provincia di nascita</label>
-            <div className={styles.inputIcon}>
-              <FiHome className={styles.icon} />
-              <input className="input" value={form.provincia_nascita} onChange={onChange("provincia_nascita")} placeholder="MI, RM, ..." />
-            </div>
-          </div>
-
-          <div className={styles.group}>
-            <label className={styles.label}>Codice fiscale</label>
-            <div className={styles.inputIcon}>
-              <FiHash className={styles.icon} />
-              <input className="input" value={form.codice_fiscale} onChange={onChange("codice_fiscale")} placeholder="RSSMRA..." />
-            </div>
-          </div>
-
-          {/* === Residenza === */}
-          <div className={styles.group}>
-            <label className={styles.label}>Indirizzo di residenza</label>
-            <div className={styles.inputIcon}>
-              <FiHome className={styles.icon} />
-              <input className="input" value={form.indirizzo_residenza} onChange={onChange("indirizzo_residenza")} placeholder="Via / Piazza..." />
-            </div>
-          </div>
-
-          <div className={styles.group}>
-            <label className={styles.label}>Città di residenza</label>
-            <div className={styles.inputIcon}>
-              <FiHome className={styles.icon} />
-              <input className="input" value={form.citta_residenza} onChange={onChange("citta_residenza")} placeholder="Città" />
-            </div>
-          </div>
-
-          <div className={styles.group}>
-            <label className={styles.label}>Provincia di residenza</label>
-            <div className={styles.inputIcon}>
-              <FiHome className={styles.icon} />
-              <input className="input" value={form.provincia_residenza} onChange={onChange("provincia_residenza")} placeholder="MI, RM, ..." />
-            </div>
-          </div>
-
-          <div className={styles.group}>
-            <label className={styles.label}>CAP di residenza</label>
-            <div className={styles.inputIcon}>
-              <FiHome className={styles.icon} />
-              <input className="input" value={form.cap_residenza} onChange={onChange("cap_residenza")} placeholder="20100" />
-            </div>
-          </div>
-
-          {/* === Contatti === */}
-          <div className={styles.group}>
-            <label className={styles.label}>Cellulare</label>
-            <div className={styles.inputIcon}>
-              <FiPhone className={styles.icon} />
-              <input className="input" value={form.cellulare} onChange={onChange("cellulare")} placeholder="+39 ..." />
-            </div>
-          </div>
-
-          <div className={styles.group}>
-            <label className={styles.label}>Contatto emergenza</label>
-            <div className={styles.inputIcon}>
-              <FiPhone className={styles.icon} />
-              <input className="input" value={form.contatto_emergenza} onChange={onChange("contatto_emergenza")} placeholder="Nome + telefono" />
-            </div>
-          </div>
-
-          {/* Tipo contratto */}
-          <div className={styles.group}>
-            <label className={styles.label}>Tipo contratto</label>
-            <div className={styles.inputIcon}>
-              <FiBriefcase className={styles.icon} />
-              <select
-                className="select"
-                value={form.tipo_contratto}
-                onChange={(e) =>
-                  setForm((f) => ({ ...f, tipo_contratto: e.target.value }))
-                }
-              >
-                <option value="full_time">Full time 6,40</option>
-                <option value="part_time_2">Part time 2</option>
-                <option value="part_time_3">Part time 3</option>
-                <option value="part_time_4">Part time 4</option>
-                <option value="part_time_6">Part time 6</option>
-                <option value="part_time_8">Part time 8</option>
-                <option value="chiamata_6">Chiamata 6</option>
-              </select>
-            </div>
-          </div>
-
-          {/* Stato */}
-          <div className={styles.group}>
-            <label className={styles.label}>Stato</label>
-            <div className={styles.inline}>
-              <input id="chk-attivo" type="checkbox" checked={form.stato_attivo} onChange={onChange("stato_attivo")} />
-              <label htmlFor="chk-attivo">Dipendente attivo</label>
-            </div>
-            <div className={styles.note}>Se disattivato, l’utente non potrà accedere all’app.</div>
           </div>
         </div>
 
         {/* Azioni */}
         <div className={styles.actions}>
-          <button type="button" className={`btn ${styles.btnOutline}`} onClick={() => navigate(-1)}>
+          <button type="button" className="btn btn-outline" onClick={() => navigate(-1)}>
             Annulla
           </button>
-          <button type="submit" className={`btn ${styles.btnPrimary}`} disabled={submitting}>
-            <FiSave /> {submitting ? "Salvataggio..." : "Salva utente"}
+          <button type="submit" className="btn btn-primary" disabled={submitting}>
+            <FiSave size={15} /> {submitting ? "Salvataggio…" : "Crea dipendente"}
           </button>
         </div>
       </form>

@@ -1,18 +1,27 @@
 import React, { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { FiArrowLeft, FiFilePlus, FiScissors, FiLayers } from "react-icons/fi";
+import { FiArrowLeft } from "react-icons/fi";
 import DocumentiCaricaDirettoCF from "./DocumentiCaricaDirettoCF";
 import DocumentiSplitCF from "./DocumentiSplitCF";
 import DocumentiMerge from "./DocumentiMerge";
-import { API_BASE } from "../api";
+import { API_BASE, getIdToken } from "../api";
 import styles from "./DocumentiPage.module.css";
 
 const API = API_BASE;
 
 const META = {
-  carica: { label: "Carica diretto",         Icon: FiFilePlus  },
-  split:  { label: "Split automatico (CF)",   Icon: FiScissors  },
-  merge:  { label: "Merge PDF",               Icon: FiLayers    },
+  carica: {
+    label: "Carica documenti",
+    desc: "Carica uno o più file e assegnali ai dipendenti tramite codice fiscale.",
+  },
+  split: {
+    label: "Dividi PDF per dipendente",
+    desc: "Separa un PDF di più pagine e assegna ogni parte al dipendente giusto.",
+  },
+  merge: {
+    label: "Unisci PDF",
+    desc: "Unisci più PDF in un unico file e assegnalo a un dipendente.",
+  },
 };
 
 export default function DocumentiOperazionePage() {
@@ -21,9 +30,10 @@ export default function DocumentiOperazionePage() {
   const [tipi, setTipi] = useState([]);
 
   useEffect(() => {
-    fetch(`${API}/documenti/tipi`, {
-      headers: { Authorization: localStorage.getItem("token") || "" },
-    })
+    getIdToken()
+      .then((token) => fetch(`${API}/documenti/tipi`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      }))
       .then(r => r.ok ? r.json() : [])
       .then(data => setTipi(Array.isArray(data) ? data : []))
       .catch(() => {});
@@ -35,25 +45,19 @@ export default function DocumentiOperazionePage() {
     return null;
   }
 
-  const { label, Icon } = meta;
+  const { label, desc } = meta;
 
   return (
-    <div className={styles.container}>
-      <div className={styles.header}>
-        <div className={styles.opHeader}>
-          <button
-            className={styles.backBtn}
-            onClick={() => navigate("/documenti")}
-          >
-            <FiArrowLeft /> Indietro
+    <div className="page">
+      <header className="page-header">
+        <div className="page-header-text">
+          <button type="button" className="page-eyebrow" onClick={() => navigate("/documenti")}>
+            <FiArrowLeft size={14} /> Documenti
           </button>
-          <div className={styles.opTitleWrap}>
-            <div className={styles.opIconWrap}><Icon /></div>
-            <h1 className={styles.title}>{label}</h1>
-          </div>
+          <h1 className="page-title">{label}</h1>
+          <p className="page-subtitle">{desc}</p>
         </div>
-      </div>
-      <div className={styles.underline} />
+      </header>
 
       <div className={`card ${styles.contentCard}`}>
         {mode === "carica" && <DocumentiCaricaDirettoCF tipi={tipi} />}
